@@ -13,7 +13,7 @@ import sys
 import os
 import zipfile
 import xml.etree.ElementTree as ET
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from collections import defaultdict
 from decimal import Decimal
 import re
@@ -173,6 +173,60 @@ def sql_date(value, default="NULL"):
         return default
 
 
+# ---------------------------- Spanish date parsing ----------------------------
+
+SPANISH_MONTHS = {
+    'enero': 1, 'ene': 1,
+    'febrero': 2, 'feb': 2,
+    'marzo': 3, 'mar': 3,
+    'abril': 4, 'abr': 4,
+    'mayo': 5, 'may': 5,
+    'junio': 6, 'jun': 6,
+    'julio': 7, 'jul': 7,
+    'agosto': 8, 'ago': 8,
+    'septiembre': 9, 'sept': 9, 'set': 9,
+    'octubre': 10, 'oct': 10,
+    'noviembre': 11, 'nov': 11,
+    'diciembre': 12, 'dic': 12,
+}
+
+
+def parse_spanish_date(text: str):
+    if not text:
+        return None
+    norm = text.strip().upper()
+    m = re.match(r'^(\d{1,2})\s+DE\s+(\w+)$', norm)
+    if m:
+        day = int(m.group(1))
+        month = SPANISH_MONTHS.get(m.group(2).lower())
+        if month:
+            try:
+                return date(2026, month, day)
+            except ValueError:
+                return None
+    if norm.lower() in SPANISH_MONTHS:
+        return date(2026, SPANISH_MONTHS[norm.lower()], 1)
+    return None
+
+
+def parse_spanish_range(text: str):
+    if not text or '_' not in text:
+        return None, None
+    parts = text.upper().split('_')
+    sm = SPANISH_MONTHS.get(parts[0].lower())
+    em = SPANISH_MONTHS.get(parts[1].lower())
+    if not sm or not em:
+        return None, None
+    last_day = 31 if em == 12 else (date(2026, em + 1, 1) - timedelta(days=1)).day
+    return (date(2026, sm, 1), date(2026, em, last_day))
+
+
+def _fix_inverted_dates(start, end):
+    if start and end and end < start:
+        return end, start
+    return start, end
+
+
 # ---------------------------- Main ETL ----------------------------
 
 def main(xlsx_path: str, out_path: str):
@@ -267,6 +321,9 @@ def main(xlsx_path: str, out_path: str):
     out.append("-- CAMPAÑAS")
     out.append("-- Nota: el codigo se genera como CAMP-<idx>-<año>")
     camp_ids = []
+    issues_buffer = []
+    camp_id_to_name = {}
+    camp_id_to_client = {}
     for idx, r in enumerate(data_rows, start=1):
         c = (r.get("O") or "").strip()
         b = (r.get("Q") or "").strip()
@@ -278,8 +335,48 @@ def main(xlsx_path: str, out_path: str):
         obj_raw = (r.get("V") or "").strip().upper()
         obj = OBJETIVO_MAP.get(obj_raw, "AWARENESS")
         tiers = parse_inf_types(r.get("U"))
-        start_d = sql_date(r.get("G"))
-        end_d = sql_date(r.get("H"))
+        g_text = (r.get("G") or "").strip()
+        h_text = (r.get("H") or "").strip()
+        orig_start_d = sql_date(g_text)
+        orig_end_d = sql_date(h_text)
+        start_d = orig_start_d
+        end_d = orig_end_d
+        was_inverted = False
+
+        if start_d == "NULL" and g_text:
+            rng = parse_spanish_range(g_text)
+            if rng[0]:
+                start_d = sql_date(rng[0].isoformat())
+                end_d = sql_date(rng[1].isoformat())
+            else:
+                single = parse_spanish_date(g_text)
+                if single:
+                    start_d = sql_date(single.isoformat())
+
+        if end_d == "NULL" and h_text:
+            single = parse_spanish_date(h_text)
+            if single:
+                end_d = sql_date(single.isoformat())
+
+        def _to_date(s):
+            s = s.strip("'")
+            if s == "NULL":
+                return None
+            try:
+                return date.fromisoformat(s)
+            except ValueError:
+                return None
+
+        orig_s = _to_date(orig_start_d)
+        orig_e = _to_date(orig_end_d)
+        if orig_s and orig_e and orig_e < orig_s:
+            was_inverted = True
+
+        s_obj = _to_date(start_d)
+        e_obj = _to_date(end_d)
+        s_obj, e_obj = _fix_inverted_dates(s_obj, e_obj)
+        start_d = sql_date(s_obj.isoformat()) if s_obj else "NULL"
+        end_d = sql_date(e_obj.isoformat()) if e_obj else "NULL"
         budget = sql_num(r.get("I"))
         n_inf = int(float(r["J"])) if r.get("J") else 0
 
@@ -298,6 +395,12 @@ def main(xlsx_path: str, out_path: str):
             f"ON CONFLICT (id) DO NOTHING;"
         )
         camp_ids.append(camp_id)
+        camp_id_to_name[camp_id] = name
+        camp_id_to_client[camp_id] = c
+        if was_inverted:
+            issues_buffer.append((name, camp_id, 'inverted_dates', 'warning',
+                f'Fechas invertidas en campana: start_date={g_text}, end_date={h_text}. Intercambiadas automaticamente.',
+                f'original_start={g_text}, original_end={h_text}'))
 
         # KPI values
         kpi_map = {
@@ -369,6 +472,18 @@ def main(xlsx_path: str, out_path: str):
                     f"INSERT INTO campaign_links (campaign_id, link_type, title, url) "
                     f"VALUES ({camp_id}, {sql_str(actual_type)}, {sql_str(v[:80])}, {sql_str(v)}) ON CONFLICT DO NOTHING;"
                 )
+
+    if issues_buffer:
+        out.append("")
+        out.append("-- DATA QUALITY ISSUES")
+        out.append(f"-- Total issues detectados: {len(issues_buffer)}")
+        for camp_name, camp_id, issue_type, severity, description, raw_value in issues_buffer:
+            out.append(
+                f"INSERT INTO data_quality_issues (resource_type, resource_id, issue_type, severity, description, raw_value, source) "
+                f"VALUES ('campaign', {camp_id}, {sql_str(issue_type)}, {sql_str(severity)}, "
+                f"{sql_str(description)}, {sql_str(raw_value)}, 'excel_migration') "
+                f"ON CONFLICT DO NOTHING;"
+            )
 
     out.append("")
     out.append(f"-- Total campanas migradas: {len(camp_ids)}")
