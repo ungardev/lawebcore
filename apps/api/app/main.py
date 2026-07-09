@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.db import close_db, init_db
@@ -71,7 +72,7 @@ async def readiness():
     from app.core.db import db_session
     try:
         async with db_session() as session:
-            await session.execute("SELECT 1")
+            await session.execute(text("SELECT 1"))
         return {"status": "ready", "db": "ok"}
     except Exception as e:
         return JSONResponse(
