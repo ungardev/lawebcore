@@ -122,10 +122,21 @@ STATUS_MAP = {
     "CONTACTANDO":      "CONTACTANDO",
     "PLAN DE CUENTAS":  "PLAN_DE_CUENTAS",
     "PULL":             "PULL",
-    "CAMPAÑA INTERNA":  "CAMPAÑA INTERNA",   # el seed espera CAMPAÑA INTERNA
+    "CAMPAÑA INTERNA":  "CAMPAÑA_INTERNA",
     "REPORTE":          "REPORTE",
     "TERMINADA":        "TERMINADA",
 }
+
+
+def normalize_status(raw, camp_name, camp_id):
+    s = (raw or "").strip().upper()
+    mapped = STATUS_MAP.get(s)
+    if mapped:
+        return mapped, None
+    issue = (camp_name, camp_id, 'unknown_status', 'info',
+        f'Status desconocido en campana: "{raw}". Asignado BRIEF por defecto.',
+        f'original={raw}')
+    return 'BRIEF', issue
 
 
 def slugify(text: str) -> str:
@@ -331,7 +342,10 @@ def main(xlsx_path: str, out_path: str):
             continue
         name = (r.get("S") or "").strip() or f"Campana {idx}"
         status_raw = (r.get("AR") or "").strip().upper()
-        status = STATUS_MAP.get(status_raw, "BRIEF")
+        camp_id = f"'40000000-0000-0000-0000-{idx:012d}'"
+        status, status_issue = normalize_status(status_raw, name, camp_id)
+        if status_issue:
+            issues_buffer.append(status_issue)
         obj_raw = (r.get("V") or "").strip().upper()
         obj = OBJETIVO_MAP.get(obj_raw, "AWARENESS")
         tiers = parse_inf_types(r.get("U"))
@@ -382,7 +396,6 @@ def main(xlsx_path: str, out_path: str):
 
         cid = client_ids[c]
         bid = brand_ids[(c, b)]
-        camp_id = f"'40000000-0000-0000-0000-{idx:012d}'"
         code = f"CAMP-2026-{idx:03d}"
         tier_arr = "'{" + ",".join(tiers) + "}'" if tiers else "'{}'"
 
