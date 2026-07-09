@@ -10,9 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY apps/workers/pyproject.toml .
+COPY pyproject.toml .
 RUN pip install --upgrade pip && pip install -e .
 
-COPY apps/workers/ .
+COPY . .
 
 CMD ["arq", "app.worker.WorkerSettings"]
