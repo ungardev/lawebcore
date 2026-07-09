@@ -287,7 +287,7 @@ def main(xlsx_path: str, out_path: str):
         bid = brand_ids[(c, b)]
         camp_id = f"'40000000-0000-0000-0000-{idx:012d}'"
         code = f"CAMP-2026-{idx:03d}"
-        tier_arr = "{" + ",".join(tiers) + "}" if tiers else "{}"
+        tier_arr = "'{" + ",".join(tiers) + "}'" if tiers else "'{}'"
 
         out.append(
             f"INSERT INTO campaigns (id, code, client_id, brand_id, name, objective, influencer_tiers, "
