@@ -97,3 +97,5 @@ secrets/
 
 # Generated types (will be committed selectively)
 packages/shared-types/src/api-generated.ts.bak
+.vercel
+.env*

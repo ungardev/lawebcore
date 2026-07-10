@@ -9,12 +9,14 @@ interface KanbanColumnProps {
   status: string;
   cards: KanbanCardData[];
   totalBudget: number;
+  className?: string;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
   status,
   cards,
   totalBudget,
+  className,
 }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
 
@@ -23,6 +25,7 @@ export const KanbanColumn = memo(function KanbanColumn({
       ref={setNodeRef}
       className={cn(
         'w-72 flex-shrink-0 transition-all rounded-lg',
+        className,
         isOver && 'ring-2 ring-primary ring-offset-2 bg-accent/20'
       )}
     >

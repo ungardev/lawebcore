@@ -178,10 +178,10 @@ export function CampaignKanbanPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Pipeline de Campanas</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">Pipeline de Campanas</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             {totalCards} campanas · Arrastra y suelta para mover entre estados
           </p>
         </div>
@@ -203,18 +203,20 @@ export function CampaignKanbanPage() {
         onDragEnd={handleDragEnd}
       >
         <div className="overflow-x-auto pb-4 -mx-6 px-6
+                        touch-pan-y
                         [&::-webkit-scrollbar]:h-2
                         [&::-webkit-scrollbar-track]:bg-muted
                         [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30
                         [&::-webkit-scrollbar-thumb]:rounded-full
                         hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50">
-          <div className="flex gap-4 min-w-max pb-2">
+          <div className="flex gap-3 md:gap-4 min-w-max pb-2">
             {COLUMNS.map((status) => (
               <KanbanColumn
                 key={status}
                 status={status}
                 cards={filteredColumns[status] || []}
                 totalBudget={columnStats[status] || 0}
+                className="w-64 sm:w-72 flex-shrink-0"
               />
             ))}
           </div>

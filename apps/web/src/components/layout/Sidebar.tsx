@@ -8,6 +8,7 @@ import {
   Tags,
   Sparkles,
   Settings,
+  X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,28 +25,37 @@ const NAV = [
 
 interface SidebarProps {
   collapsed?: boolean;
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ collapsed = false }: SidebarProps) {
+export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'border-r bg-card flex flex-col transition-all duration-200',
-        collapsed ? 'w-16' : 'w-64'
+        'h-full border-r bg-card flex flex-col transition-all duration-200',
+        collapsed ? 'md:w-16' : 'md:w-64',
+        'w-64'
       )}
     >
-      <div className={cn('border-b', collapsed ? 'p-3' : 'p-6')}>
-        <div className="flex items-center gap-3">
+      <div className={cn('border-b flex items-center justify-between', collapsed ? 'md:p-3 p-6' : 'p-6')}>
+        <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-300 via-purple-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
             LW
           </div>
-          {!collapsed && (
-            <div className="overflow-hidden">
-              <h1 className="font-bold text-foreground truncate">La Web Core</h1>
-              <p className="text-xs text-muted-foreground truncate">Figital Agency</p>
-            </div>
-          )}
+          <div className={cn('overflow-hidden', collapsed && 'md:hidden')}>
+            <h1 className="font-bold text-foreground truncate">La Web Core</h1>
+            <p className="text-xs text-muted-foreground truncate">Figital Agency</p>
+          </div>
         </div>
+        {onNavigate && (
+          <button
+            onClick={onNavigate}
+            className="md:hidden p-2 hover:bg-accent rounded-lg"
+            aria-label="Cerrar menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
@@ -55,25 +65,26 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
             to={item.to}
             end={item.end ?? false}
             title={collapsed ? item.label : undefined}
+            onClick={onNavigate}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground font-medium'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
-                collapsed && 'justify-center'
+                collapsed && 'md:justify-center'
               )
             }
           >
             <item.icon className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span className="truncate">{item.label}</span>}
+            <span className={cn('truncate', collapsed && 'md:hidden')}>{item.label}</span>
           </NavLink>
         ))}
       </nav>
 
-      <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'p-2 text-center')}>
-        {!collapsed && <p>v0.1.0 - MVP</p>}
-        {collapsed && <p>v0.1</p>}
+      <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'md:p-2 md:text-center')}>
+        <p className={cn(collapsed && 'md:hidden')}>v0.1.0 - MVP</p>
+        <p className={cn('hidden', collapsed && 'md:block')}>v0.1</p>
       </div>
     </aside>
   );

@@ -40,20 +40,20 @@ export function CampaignDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <Link to="/campaigns" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center mb-2">
             <ArrowLeft className="w-4 h-4 mr-1" /> Campanas
           </Link>
-          <h1 className="text-3xl font-bold">{campaign.name}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">{campaign.name}</h1>
           <p className="text-muted-foreground font-mono text-sm">{campaign.code}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => generate.mutate('brief_generator_v1')} disabled={generate.isPending}>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => generate.mutate('brief_generator_v1')} disabled={generate.isPending} className="w-full sm:w-auto">
             {generate.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
             Generar Brief
           </Button>
-          <Button onClick={() => generate.mutate('post_mortem_v1')} disabled={generate.isPending}>
+          <Button onClick={() => generate.mutate('post_mortem_v1')} disabled={generate.isPending} className="w-full sm:w-auto">
             {generate.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
             Post-Mortem IA
           </Button>
@@ -74,7 +74,7 @@ export function CampaignDetailPage() {
         </Card>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         <Card className="lg:col-span-2">
           <CardHeader><CardTitle>Informacion general</CardTitle></CardHeader>
           <CardContent className="space-y-4">

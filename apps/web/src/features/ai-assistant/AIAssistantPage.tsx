@@ -63,22 +63,22 @@ export function AIAssistantPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)]">
+    <div className="flex flex-col h-[calc(100vh-80px)] md:h-[calc(100vh-100px)]">
       <div className="mb-4">
-        <h1 className="text-3xl font-bold flex items-center gap-2">
-          <Sparkles className="w-7 h-7 text-purple-600" />
+        <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
+          <Sparkles className="w-6 md:w-7 text-purple-600" />
           Asistente IA
         </h1>
-        <p className="text-muted-foreground">Consulta la base de conocimiento de La Web Core</p>
+        <p className="text-sm md:text-base text-muted-foreground hidden sm:block">Consulta la base de conocimiento de La Web Core</p>
       </div>
 
       <Card className="flex-1 flex flex-col p-0 overflow-hidden">
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
           {messages.map((m) => (
             <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
               <div
                 className={cn(
-                  'max-w-[80%] rounded-2xl px-4 py-3',
+                  'max-w-[85%] md:max-w-[80%] rounded-2xl px-4 py-3',
                   m.role === 'user'
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-foreground',
@@ -106,7 +106,7 @@ export function AIAssistantPage() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t p-4 flex gap-2">
+        <div className="border-t p-3 md:p-4 flex gap-2">
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -114,7 +114,7 @@ export function AIAssistantPage() {
             placeholder="Pregunta sobre campanas, marcas, influencers..."
             disabled={loading}
           />
-          <Button onClick={send} disabled={loading || !input.trim()}>
+          <Button onClick={send} disabled={loading || !input.trim()} className="flex-shrink-0">
             <Send className="w-4 h-4" />
           </Button>
         </div>
