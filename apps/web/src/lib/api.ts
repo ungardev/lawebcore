@@ -110,3 +110,30 @@ export const aiApi = {
   generate: async (data: { prompt_code: string; campaign_id: string; extra_context?: Record<string, unknown> }) =>
     (await api.post('/ai/generate', data)).data,
 };
+
+export interface ImportReport {
+  inserted: number;
+  updated: number;
+  skipped: number;
+  errors: Array<{ row: number; reason: string; data?: Record<string, unknown> }>;
+  total_rows: number;
+}
+
+export const importsApi = {
+  uploadCsv: async (formData: FormData): Promise<ImportReport> => {
+    const { data } = await api.post<ImportReport>('/imports/csv', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+  uploadJson: async (payload: unknown[], userEmail?: string): Promise<ImportReport> => {
+    const { data } = await api.post<ImportReport>('/imports/json', payload, {
+      headers: { 'X-User-Email': userEmail || '' },
+    });
+    return data;
+  },
+  getTemplate: async (): Promise<Blob> => {
+    const response = await api.get('/imports/template', { responseType: 'blob' });
+    return response.data;
+  },
+};

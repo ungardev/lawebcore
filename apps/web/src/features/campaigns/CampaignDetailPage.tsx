@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { useState } from 'react';
-import { ArrowLeft, ExternalLink, Sparkles, Loader2, TrendingUp, BarChart3, MessageCircle } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Sparkles, Loader2, TrendingUp, BarChart3, MessageCircle, Upload } from 'lucide-react';
 import { campaignsApi, publicacionesApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -10,9 +10,11 @@ import { STATUS_COLORS, OBJECTIVE_COLORS, formatCurrency, formatNumber, formatPe
 import { KPITrendChart } from './components/KPITrendChart';
 import { SentimentBreakdown } from './components/SentimentBreakdown';
 import { PublicacionesList } from './components/PublicacionesList';
+import { CSVImportButton } from '@/features/imports/CSVImportButton';
+import { JSONImportPanel } from '@/features/imports/JSONImportPanel';
 import { toast } from 'sonner';
 
-type TabKey = 'overview' | 'publicaciones' | 'proyeccion';
+type TabKey = 'overview' | 'publicaciones' | 'importar' | 'proyeccion';
 
 export function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -119,6 +121,7 @@ export function CampaignDetailPage() {
         {([
           ['overview', 'Información', BarChart3],
           ['publicaciones', 'Publicaciones', MessageCircle],
+          ['importar', 'Importar', Upload],
         ] as const).map(([key, label, Icon]) => (
           <button
             key={key}
@@ -315,6 +318,102 @@ export function CampaignDetailPage() {
             <SentimentBreakdown data={(pubStats as any)?.sentimiento_total || { positivo: 0, neutro: 0, negativo: 0 }} />
           </div>
           <PublicacionesList campaignId={id!} />
+        </div>
+      )}
+
+      {activeTab === 'importar' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
+                  Importar CSV / Excel
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Sube un archivo CSV o Excel con las métricas de las publicaciones de{' '}
+                  <strong>{campaign.name}</strong>. El sistema detectará automáticamente las columnas
+                  en español (Google Form) o inglés (Metricool).
+                </p>
+                <CSVImportButton
+                  campaignId={id!}
+                  campaignName={campaign.name}
+                  onSuccess={() => {
+                    qc.invalidateQueries({ queryKey: ['publicaciones-stats', id] });
+                    qc.invalidateQueries({ queryKey: ['publicaciones', id] });
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                    <path d="M10 12l2 2 4-4"/>
+                  </svg>
+                  Importar JSON (Data Contract)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Pega el JSON array siguiendo el formato del Data Contract P.I.A.R.{' '}
+                  <a
+                    href="/13_data_contract_hub.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    Ver especificación →
+                  </a>
+                </p>
+                <JSONImportPanel
+                  onSuccess={() => {
+                    qc.invalidateQueries({ queryKey: ['publicaciones-stats', id] });
+                    qc.invalidateQueries({ queryKey: ['publicaciones', id] });
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Fuentes de datos soportadas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">Google Form (español)</p>
+                  <p className="text-muted-foreground text-xs">Exportar CSV desde el formulario. Mapeo automático.</p>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">Metricool (inglés)</p>
+                  <p className="text-muted-foreground text-xs">Exportar CSV desde Metricool. Mapeo automático.</p>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">HypeAuditor Reports</p>
+                  <p className="text-muted-foreground text-xs">Copiar datos de los reportes públicos. JSON o CSV.</p>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">Meta Graph API</p>
+                  <p className="text-muted-foreground text-xs">Integración directa via API (futuro).</p>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">TikTok Display API</p>
+                  <p className="text-muted-foreground text-xs">Integración directa via API (futuro).</p>
+                </div>
+                <div className="border rounded-lg p-3">
+                  <p className="font-medium mb-1">Manual / JSON</p>
+                  <p className="text-muted-foreground text-xs">Entrada manual via JSON Data Contract.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
