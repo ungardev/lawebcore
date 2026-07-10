@@ -12,6 +12,8 @@ from app.api.v1 import (
     dashboard,
     ai,
     users,
+    projections,
+    publicaciones,
 )
 
 api_router = APIRouter()
@@ -24,3 +26,5 @@ api_router.include_router(influencers.router, prefix="/influencers", tags=["infl
 api_router.include_router(kpis.router, prefix="/kpis", tags=["kpis"])
 api_router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 api_router.include_router(ai.router, prefix="/ai", tags=["ai"])
+api_router.include_router(projections.router, prefix="/projections", tags=["projections"])
+api_router.include_router(publicaciones.router, prefix="/publicaciones", tags=["publicaciones"])

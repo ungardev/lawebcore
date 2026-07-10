@@ -9,7 +9,6 @@ export const api: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach Supabase JWT to every request
 api.interceptors.request.use(async (config) => {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
@@ -19,7 +18,6 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 -> only redirect if there's no active session
 api.interceptors.response.use(
   (r) => r,
   async (error) => {
@@ -33,9 +31,15 @@ api.interceptors.response.use(
   },
 );
 
-// ---- Typed API methods ----
-
-import type { Campaign, CampaignDetail, DashboardKPIs, Client, Brand, Influencer } from '@/types';
+import type {
+  Campaign,
+  CampaignDetail,
+  DashboardKPIs,
+  Client,
+  Brand,
+  Influencer,
+} from '@/types';
+import type { Publicacion, ProjectionCalculateResponse as ProjResp } from '@/types/piar';
 
 export const dashboardApi = {
   summary: async () => (await api.get<DashboardKPIs>('/dashboard/summary')).data,
@@ -74,6 +78,30 @@ export const influencersApi = {
     (await api.get<Influencer[]>('/influencers', { params })).data,
   create: async (data: Partial<Influencer>) =>
     (await api.post<Influencer>('/influencers', data)).data,
+};
+
+export const publicacionesApi = {
+  list: async (params?: { campaign_id?: string; influencer_id?: string; limit?: number }) => {
+    const { data: res } = await api.get<Publicacion[]>('/publicaciones', { params: params as any });
+    return res;
+  },
+  stats: async (campaignId: string) => {
+    const { data } = await api.get(`/publicaciones/stats/${campaignId}`);
+    return data;
+  },
+};
+
+export const projectionsApi = {
+  calculate: async (
+    brand_id: string,
+    posts_per_tier: Record<string, number>,
+  ): Promise<ProjResp> => {
+    const { data } = await api.post<ProjResp>('/projections/calculate', {
+      brand_id,
+      posts_per_tier,
+    });
+    return data;
+  },
 };
 
 export const aiApi = {

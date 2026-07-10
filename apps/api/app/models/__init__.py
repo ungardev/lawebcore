@@ -39,6 +39,8 @@ from app.models.analytics import (
     Webhook,
     Export,
 )
+from app.models.publicacion import Publicacion
+from app.models.comentario import Comentario
 
 __all__ = [
     "Base",
@@ -58,4 +60,6 @@ __all__ = [
     "AIPrompt", "Document", "DocumentChunk", "AIConversation", "AIMessage", "AIJob", "Notification",
     # Analytics
     "Dashboard", "Widget", "ScheduledReport", "AuditLog", "Integration", "Webhook", "Export",
+    # P.I.A.R
+    "Publicacion", "Comentario",
 ]

@@ -304,6 +304,12 @@ class AIGenerateRequest(BaseModel):
 
 # ---------- Dashboard ----------
 
+from app.schemas.projections import (
+    ProjectionCalculateRequest,
+    ProjectionCalculateResponse,
+    ProjectionTierInput,
+)
+
 class DashboardKPIs(BaseModel):
     total_campaigns: int
     active_campaigns: int
