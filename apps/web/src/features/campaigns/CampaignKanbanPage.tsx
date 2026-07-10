@@ -1,20 +1,39 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+} from '@dnd-kit/core';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { campaignsApi, clientsApi } from '@/lib/api';
 import { CAMPAIGN_STATUSES } from '@/lib/utils';
 import { toast } from 'sonner';
 import { KanbanColumn } from './components/KanbanColumn';
 import { KanbanFilters } from './components/KanbanFilters';
-import type { KanbanCardData } from './components/KanbanCard';
+import { KanbanCard, KanbanCardData } from './components/KanbanCard';
 
 const COLUMNS = CAMPAIGN_STATUSES.filter((s) => !['CANCELADA', 'PAUSADA'].includes(s));
 
 export function CampaignKanbanPage() {
   const qc = useQueryClient();
-  const [draggedId, setDraggedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('');
-  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+  const [activeCard, setActiveCard] = useState<KanbanCardData | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const { data: kanban } = useQuery({
     queryKey: ['campaigns-kanban'],
@@ -97,26 +116,64 @@ export function CampaignKanbanPage() {
     [filteredColumns]
   );
 
-  const onDragStart = (e: React.DragEvent, id: string) => {
-    setDraggedId(id);
-    e.dataTransfer.effectAllowed = 'move';
+  const findCard = (id: string): KanbanCardData | undefined => {
+    for (const col of COLUMNS) {
+      const card = (filteredColumns[col] || []).find((c) => c.id === id);
+      if (card) return card;
+    }
+    return undefined;
   };
 
-  const onDragOver = (e: React.DragEvent, status?: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (status) setDragOverColumn(status);
+  const handleDragStart = (event: DragStartEvent) => {
+    const card = findCard(event.active.id as string);
+    if (card) setActiveCard(card);
   };
 
-  const onDragLeave = () => setDragOverColumn(null);
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) return;
 
-  const onDrop = (e: React.DragEvent, to_status: string) => {
-    e.preventDefault();
-    const id = draggedId;
-    setDraggedId(null);
-    setDragOverColumn(null);
-    if (!id) return;
-    changeStatus.mutate({ id, to_status });
+    const activeId = active.id as string;
+    const overId = over.id as string;
+
+    let sourceCol: string | null = null;
+    let targetCol: string | null = null;
+
+    for (const col of COLUMNS) {
+      if ((filteredColumns[col] || []).some((c) => c.id === activeId)) sourceCol = col;
+      if (overId === col || (filteredColumns[col] || []).some((c) => c.id === overId)) targetCol = col;
+    }
+
+    if (!sourceCol || !targetCol || sourceCol === targetCol) return;
+
+    qc.setQueryData<any>(['campaigns-kanban'], (old: any) => {
+      if (!old) return old;
+      const newColumns = { ...old.columns };
+      const idx = (newColumns[sourceCol!] || []).findIndex((c: any) => c.id === activeId);
+      if (idx >= 0) {
+        const [moved] = newColumns[sourceCol!].splice(idx, 1);
+        newColumns[targetCol!] = [...(newColumns[targetCol!] || []), moved];
+      }
+      return { ...old, columns: newColumns };
+    });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveCard(null);
+    const id = active.id as string;
+
+    let finalStatus: string | null = null;
+    for (const col of COLUMNS) {
+      if ((filteredColumns[col] || []).some((c) => c.id === id)) {
+        finalStatus = col;
+        break;
+      }
+    }
+
+    if (finalStatus) {
+      changeStatus.mutate({ id, to_status: finalStatus });
+    }
   };
 
   return (
@@ -138,25 +195,39 @@ export function CampaignKanbanPage() {
         clients={clients.map((c: any) => ({ id: c.id, name: c.name }))}
       />
 
-      <div
-        className="overflow-x-auto pb-4 -mx-6 px-6"
-        onDragLeave={onDragLeave}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 min-w-max pb-2">
-          {COLUMNS.map((status) => (
-            <KanbanColumn
-              key={status}
-              status={status}
-              cards={filteredColumns[status] || []}
-              totalBudget={columnStats[status] || 0}
-              onDragStart={onDragStart}
-              onDragOver={(e) => onDragOver(e, status)}
-              onDrop={onDrop}
-              isDragOver={dragOverColumn === status}
-            />
-          ))}
+        <div className="overflow-x-auto pb-4 -mx-6 px-6
+                        [&::-webkit-scrollbar]:h-2
+                        [&::-webkit-scrollbar-track]:bg-muted
+                        [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30
+                        [&::-webkit-scrollbar-thumb]:rounded-full
+                        hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50">
+          <div className="flex gap-4 min-w-max pb-2">
+            {COLUMNS.map((status) => (
+              <KanbanColumn
+                key={status}
+                status={status}
+                cards={filteredColumns[status] || []}
+                totalBudget={columnStats[status] || 0}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+
+        <DragOverlay>
+          {activeCard ? (
+            <div className="rotate-3 opacity-90 scale-105">
+              <KanbanCard card={activeCard} isOverlay />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }

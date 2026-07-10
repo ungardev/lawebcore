@@ -17,16 +17,18 @@ export interface KanbanCardData {
 interface KanbanCardProps {
   card: KanbanCardData;
   isDragging?: boolean;
-  onDragStart: (e: React.DragEvent, id: string) => void;
+  isOverlay?: boolean;
 }
 
-export const KanbanCard = memo(function KanbanCard({ card, isDragging, onDragStart }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ card, isDragging, isOverlay }: KanbanCardProps) {
   return (
     <Card
-      draggable
-      onDragStart={(e) => onDragStart(e, card.id)}
-      className={`p-3 cursor-move hover:shadow-md transition-all ${
-        isDragging ? 'opacity-50 rotate-2' : ''
+      className={`p-3 transition-all ${
+        isOverlay
+          ? 'rotate-3 opacity-90 shadow-2xl cursor-grabbing'
+          : isDragging
+          ? 'opacity-40'
+          : 'cursor-grab active:cursor-grabbing hover:shadow-md'
       }`}
     >
       <div className="flex items-start justify-between mb-1">

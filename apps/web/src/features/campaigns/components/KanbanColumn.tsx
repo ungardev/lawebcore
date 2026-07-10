@@ -1,34 +1,30 @@
 import { memo } from 'react';
-import { KanbanCard, KanbanCardData } from './KanbanCard';
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableKanbanCard } from './SortableKanbanCard';
+import { KanbanCardData } from './KanbanCard';
 import { STATUS_COLORS, cn } from '@/lib/utils';
 
 interface KanbanColumnProps {
   status: string;
   cards: KanbanCardData[];
   totalBudget: number;
-  onDragStart: (e: React.DragEvent, id: string) => void;
-  onDragOver: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent, status: string) => void;
-  isDragOver?: boolean;
 }
 
 export const KanbanColumn = memo(function KanbanColumn({
   status,
   cards,
   totalBudget,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  isDragOver,
 }: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+
   return (
     <div
+      ref={setNodeRef}
       className={cn(
-        'w-72 flex-shrink-0 transition-all',
-        isDragOver && 'ring-2 ring-primary ring-offset-2 rounded-lg'
+        'w-72 flex-shrink-0 transition-all rounded-lg',
+        isOver && 'ring-2 ring-primary ring-offset-2 bg-accent/20'
       )}
-      onDragOver={onDragOver}
-      onDrop={(e) => onDrop(e, status)}
     >
       <div className={cn('rounded-t-lg border-t-4 p-3 bg-card border', STATUS_COLORS[status])}>
         <div className="flex items-center justify-between">
@@ -44,9 +40,11 @@ export const KanbanColumn = memo(function KanbanColumn({
         )}
       </div>
       <div className="bg-muted/30 p-2 space-y-2 min-h-[500px] rounded-b-lg border border-t-0">
-        {cards.map((card) => (
-          <KanbanCard key={card.id} card={card} onDragStart={onDragStart} />
-        ))}
+        <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+          {cards.map((card) => (
+            <SortableKanbanCard key={card.id} card={card} />
+          ))}
+        </SortableContext>
         {cards.length === 0 && (
           <div className="text-center text-xs text-muted-foreground py-8 border-2 border-dashed rounded">
             Arrastra aqui
