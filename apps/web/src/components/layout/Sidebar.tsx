@@ -36,7 +36,7 @@ export function Sidebar({ collapsed = false }: SidebarProps) {
     >
       <div className={cn('border-b', collapsed ? 'p-3' : 'p-6')}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold flex-shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-300 via-purple-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
             LW
           </div>
           {!collapsed && (
