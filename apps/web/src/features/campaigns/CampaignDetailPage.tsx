@@ -12,6 +12,7 @@ import { SentimentBreakdown } from './components/SentimentBreakdown';
 import { PublicacionesList } from './components/PublicacionesList';
 import { CSVImportButton } from '@/features/imports/CSVImportButton';
 import { JSONImportPanel } from '@/features/imports/JSONImportPanel';
+import { ManualPublicationForm } from '@/features/imports/ManualPublicationForm';
 import { toast } from 'sonner';
 
 type TabKey = 'overview' | 'publicaciones' | 'importar' | 'proyeccion';
@@ -381,6 +382,15 @@ export function CampaignDetailPage() {
             </Card>
           </div>
 
+          <ManualPublicationForm
+            campaignId={id!}
+            campaignName={campaign.name}
+            onSuccess={() => {
+              qc.invalidateQueries({ queryKey: ['publicaciones-stats', id] });
+              qc.invalidateQueries({ queryKey: ['publicaciones', id] });
+            }}
+          />
+
           <Card>
             <CardHeader>
               <CardTitle>Fuentes de datos soportadas</CardTitle>
@@ -409,7 +419,7 @@ export function CampaignDetailPage() {
                 </div>
                 <div className="border rounded-lg p-3">
                   <p className="font-medium mb-1">Manual / JSON</p>
-                  <p className="text-muted-foreground text-xs">Entrada manual via JSON Data Contract.</p>
+                  <p className="text-muted-foreground text-xs">Entrada manual via formulario o JSON Data Contract.</p>
                 </div>
               </div>
             </CardContent>

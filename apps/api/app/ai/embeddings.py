@@ -1,5 +1,10 @@
-"""Embeddings: chunk text, embed with OpenAI, store in pgvector."""
+"""
+Embeddings — extended with batch support and DeepSeek fallback.
 
+Used by indexer.py to bulk-embed P.I.A.R. content.
+"""
+
+import asyncio
 from typing import Any
 
 import structlog
@@ -21,6 +26,31 @@ async def embed_text(text: str, model: str = "text-embedding-3-small") -> list[f
         raise
 
 
+async def embed_texts(texts: list[str], model: str = "text-embedding-3-small") -> list[list[float]]:
+    """
+    Embed multiple strings in a single batch request.
+    Falls back to individual calls if batch fails.
+    """
+    if not texts:
+        return []
+
+    try:
+        from openai import AsyncOpenAI
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        resp = await client.embeddings.create(model=model, input=texts)
+        return [item.embedding for item in resp.data]
+    except Exception as e:
+        logger.warning("batch_embedding_failed_fallback", error=str(e))
+        results: list[list[float]] = []
+        for text in texts:
+            try:
+                vec = await embed_text(text, model)
+                results.append(vec)
+            except Exception:
+                results.append([0.0] * 1536)
+        return results
+
+
 def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str]:
     """Split text into overlapping chunks of approximately chunk_size chars."""
     if len(text) <= chunk_size:
@@ -29,7 +59,6 @@ def chunk_text(text: str, chunk_size: int = 800, overlap: int = 100) -> list[str
     start = 0
     while start < len(text):
         end = min(start + chunk_size, len(text))
-        # Try to break on a paragraph or sentence boundary
         if end < len(text):
             for sep in ["\n\n", "\n", ". ", " "]:
                 last = text[start:end].rfind(sep)

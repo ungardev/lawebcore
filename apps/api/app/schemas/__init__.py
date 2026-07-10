@@ -294,6 +294,7 @@ class AIChatResponse(BaseModel):
     sources: list[dict] = []
     tokens_used: int = 0
     latency_ms: int = 0
+    used_rag: bool = False
 
 
 class AIGenerateRequest(BaseModel):

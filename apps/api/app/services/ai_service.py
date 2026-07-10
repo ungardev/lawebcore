@@ -102,15 +102,25 @@ class AIService:
 
         # 4. Build prompt and call LLM
         system_prompt = (
-            "Eres el asistente IA de La Web Core, la plataforma interna de La Web Figital Agency. "
-            "Respondes con base en la base de conocimiento de la agencia. "
-            "Si no sabes algo, lo dices claramente. Citas siempre las fuentes. "
-            "Respondes en espanol profesional venezolano."
+            "Eres el asistente IA de La Web Core, la plataforma de gestión de campañas de "
+            "marketing de influencers de La Web Figital Agency (Venezuela).\n\n"
+            "REGLAS ESTRICTAS:\n"
+            "1. Solo respondes con información de las fuentes proporcionadas en el contexto.\n"
+            "2. Si ninguna fuente es relevante, responde: "
+            '"No tengo información suficiente en la base de datos para responder esa pregunta."\n'
+            "3. Cuando cites información de una fuente, usa el formato [ref:{tipo}:{id}] al final de la oración.\n"
+            "4. Nunca inventas datos, métricas o nombres de influencers.\n"
+            "5. Todos los números los presentas con formato legible (ej: 1.2M en vez de 1200000).\n"
+            "6. Hablas en español profesional latinoamericano.\n"
+            "7. Para consultas sobre 'mejor influencer', 'top creador', 'mayor ER', siempre operas "
+            "sobre los datos disponibles en la base, no sobre conocimiento general."
         )
         user_prompt = (
             f"Contexto recuperado de la base de conocimiento:\n\n{context_text}\n\n"
             f"---\n\nPregunta del usuario: {message}\n\n"
-            "Responde de forma concisa, profesional y cita las fuentes al final cuando aplique."
+            "Responde basándote EXCLUSIVAMENTE en el contexto de arriba. "
+            "Cita cada afirmación con [ref:{tipo}:{id}]. "
+            "Si no hay información relevante en el contexto, dilo claramente."
         )
 
         try:
@@ -146,6 +156,7 @@ class AIService:
             "message": answer_text,
             "sources": sources,
             "tokens_used": tokens_used,
+            "used_rag": bool(context_text),
         }
 
     async def generate(
