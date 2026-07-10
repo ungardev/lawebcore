@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { Link } from 'react-router-dom';
 import type { ReactNode } from 'react';
 
 interface KpiCardProps {
@@ -8,11 +9,12 @@ interface KpiCardProps {
   icon?: ReactNode;
   trend?: { value: number; positive: boolean };
   className?: string;
+  to?: string;
 }
 
-export function KpiCard({ title, value, hint, icon, trend, className }: KpiCardProps) {
-  return (
-    <div className={cn('rounded-xl border bg-card p-5 shadow-sm', className)}>
+export function KpiCard({ title, value, hint, icon, trend, className, to }: KpiCardProps) {
+  const content = (
+    <>
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
         {icon && <div className="text-muted-foreground">{icon}</div>}
@@ -25,6 +27,22 @@ export function KpiCard({ title, value, hint, icon, trend, className }: KpiCardP
           {trend.value}%
         </p>
       )}
-    </div>
+    </>
   );
+
+  const cardClass = cn(
+    'rounded-xl border bg-card p-5 shadow-sm',
+    to && 'transition-all hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 cursor-pointer',
+    className
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={cardClass}>
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className={cardClass}>{content}</div>;
 }

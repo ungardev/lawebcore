@@ -68,14 +68,14 @@ export function DashboardPage() {
       </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        <KpiCard title="Campanas activas" value={summary?.active_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} hint={`${summary?.total_campaigns ?? 0} totales`} />
-        <KpiCard title="Clientes" value={summary?.total_clients ?? '—'} icon={<Building2 className="w-4 h-4" />} />
-        <KpiCard title="Marcas" value={summary?.total_brands ?? '—'} icon={<Tags className="w-4 h-4" />} />
-        <KpiCard title="Influencers" value={formatNumber(summary?.total_influencers)} icon={<Users className="w-4 h-4" />} />
-        <KpiCard title="Presupuesto total" value={formatCurrency(summary?.total_budget_usd ? Number(summary.total_budget_usd) : 0)} icon={<DollarSign className="w-4 h-4" />} />
-        <KpiCard title="Reach total" value={formatNumber(summary?.total_reach)} icon={<Eye className="w-4 h-4" />} />
-        <KpiCard title="ER promedio" value={summary?.avg_engagement_rate ? formatPercent(Number(summary.avg_engagement_rate)) : '—'} icon={<TrendingUp className="w-4 h-4" />} />
-        <KpiCard title="Campanas terminadas" value={summary?.completed_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} />
+        <KpiCard title="Campanas activas" value={summary?.active_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} hint={`${summary?.total_campaigns ?? 0} totales`} to="/campaigns" />
+        <KpiCard title="Clientes" value={summary?.total_clients ?? '—'} icon={<Building2 className="w-4 h-4" />} to="/clients" />
+        <KpiCard title="Marcas" value={summary?.total_brands ?? '—'} icon={<Tags className="w-4 h-4" />} to="/brands" />
+        <KpiCard title="Influencers" value={formatNumber(summary?.total_influencers)} icon={<Users className="w-4 h-4" />} to="/influencers" />
+        <KpiCard title="Presupuesto total" value={formatCurrency(summary?.total_budget_usd ? Number(summary.total_budget_usd) : 0)} icon={<DollarSign className="w-4 h-4" />} to="/campaigns" />
+        <KpiCard title="Reach total" value={formatNumber(summary?.total_reach)} icon={<Eye className="w-4 h-4" />} to="/campaigns" />
+        <KpiCard title="ER promedio" value={summary?.avg_engagement_rate ? formatPercent(Number(summary.avg_engagement_rate)) : '—'} icon={<TrendingUp className="w-4 h-4" />} to="/campaigns" />
+        <KpiCard title="Campanas terminadas" value={summary?.completed_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} to="/campaigns" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
