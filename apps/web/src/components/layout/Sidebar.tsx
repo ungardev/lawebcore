@@ -37,7 +37,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         'w-64'
       )}
     >
-      <div className={cn('border-b flex items-center justify-between', collapsed ? 'md:p-3 p-6' : 'p-6')}>
+      <div className={cn('border-b h-16 flex items-center justify-between', collapsed ? 'md:px-3 px-6' : 'px-6')}>
         <div className="flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-300 via-purple-400 to-blue-600 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
             LW
