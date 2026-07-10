@@ -16,6 +16,7 @@ from app.api.v1 import (
     publicaciones,
     imports,
     scoring,
+    sentiment,
 )
 
 api_router = APIRouter()
@@ -32,3 +33,4 @@ api_router.include_router(projections.router, prefix="/projections", tags=["proj
 api_router.include_router(publicaciones.router, prefix="/publicaciones", tags=["publicaciones"])
 api_router.include_router(imports.router, prefix="/imports", tags=["imports"])
 api_router.include_router(scoring.router, tags=["scoring"])
+api_router.include_router(sentiment.router, tags=["sentiment"])

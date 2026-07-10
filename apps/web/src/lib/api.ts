@@ -40,6 +40,7 @@ import type {
   Influencer,
 } from '@/types';
 import type { Publicacion, ProjectionCalculateResponse as ProjResp, InfluencerScore } from '@/types/piar';
+import type { SentimentAnalyzeResponse, SentimentAggregateResponse, SentimentReanalyzeResponse } from '@/types/sentiment';
 
 export const dashboardApi = {
   summary: async () => (await api.get<DashboardKPIs>('/dashboard/summary')).data,
@@ -139,5 +140,26 @@ export const importsApi = {
   getTemplate: async (): Promise<Blob> => {
     const response = await api.get('/imports/template', { responseType: 'blob' });
     return response.data;
+  },
+};
+
+export const sentimentApi = {
+  analyze: async (publicacionId: string, comentarios?: string[]): Promise<SentimentAnalyzeResponse> => {
+    const payload: Record<string, unknown> = { publicacion_id: publicacionId };
+    if (comentarios) payload.comentarios = comentarios;
+    const { data } = await api.post<SentimentAnalyzeResponse>('/sentiment/analyze', payload);
+    return data;
+  },
+  get: async (publicacionId: string): Promise<SentimentAnalyzeResponse> => {
+    const { data } = await api.get<SentimentAnalyzeResponse>(`/sentiment/publicacion/${publicacionId}`);
+    return data;
+  },
+  getCampaignAggregate: async (campaignId: string): Promise<SentimentAggregateResponse> => {
+    const { data } = await api.get<SentimentAggregateResponse>(`/sentiment/campaign/${campaignId}/aggregate`);
+    return data;
+  },
+  reanalyzeCampaign: async (campaignId: string): Promise<SentimentReanalyzeResponse> => {
+    const { data } = await api.post<SentimentReanalyzeResponse>(`/sentiment/campaign/${campaignId}/reanalyze`);
+    return data;
   },
 };
