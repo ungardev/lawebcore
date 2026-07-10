@@ -27,46 +27,26 @@ async def list_campaigns(
     limit: int = Query(100, le=500),
 ):
     """List campaigns with filters. Returns lightweight projection."""
-    filters = {"deleted_at": "is.null"}
-    if client_id:
-        filters["client_id"] = client_id
-    if brand_id:
-        filters["brand_id"] = brand_id
-    if status_filter:
-        filters["status"] = status_filter
-    if objective:
-        filters["objective"] = objective
-
-    rows = await supabase_rest.table(
-        "campaigns",
-        select="*",
-        eq_filters=filters if filters != {"deleted_at": "is.null"} else None,
-        limit=limit,
-        order="updated_at.desc",
-    )
-    if filters.get("deleted_at") == "is.null" and "deleted_at" not in filters:
-        all_rows = await supabase_rest.table("campaigns", select="*", limit=10000)
-        filtered = []
-        for r in all_rows:
-            match = True
-            if client_id and str(r.get("client_id") or "") != client_id:
-                match = False
-            if brand_id and str(r.get("brand_id") or "") != brand_id:
-                match = False
-            if status_filter and r.get("status") != status_filter:
-                match = False
-            if objective and r.get("objective") != objective:
-                match = False
-            if search:
-                name = (r.get("name") or "").lower()
-                code = (r.get("code") or "").lower()
-                if search.lower() not in name and search.lower() not in code:
-                    match = False
-            if match:
-                filtered.append(r)
-        return [CampaignRead.model_validate(r) for r in filtered[:limit]]
-
-    return [CampaignRead.model_validate(r) for r in rows]
+    all_rows = await supabase_rest.table("campaigns", select="*", limit=10000)
+    filtered = []
+    for r in all_rows:
+        if r.get("deleted_at") is not None:
+            continue
+        if client_id and str(r.get("client_id") or "") != client_id:
+            continue
+        if brand_id and str(r.get("brand_id") or "") != brand_id:
+            continue
+        if status_filter and r.get("status") != status_filter:
+            continue
+        if objective and r.get("objective") != objective:
+            continue
+        if search:
+            name = (r.get("name") or "").lower()
+            code = (r.get("code") or "").lower()
+            if search.lower() not in name and search.lower() not in code:
+                continue
+        filtered.append(r)
+    return [CampaignRead.model_validate(r) for r in filtered[:limit]]
 
 
 @router.get("/kanban", summary="Campaigns grouped by status (Kanban)")
