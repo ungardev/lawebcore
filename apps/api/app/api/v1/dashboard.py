@@ -12,9 +12,9 @@ router = APIRouter()
 async def summary(user: CurrentUserDep):
     """Returns aggregated KPIs for the executive dashboard."""
     campaigns = await supabase_rest.table("campaigns", select="status,budget_total")
-    clients = await supabase_rest.table("clients", select="id", eq_filters={"deleted_at": "is.null"})
-    brands = await supabase_rest.table("brands", select="id", eq_filters={"deleted_at": "is.null"})
-    influencers = await supabase_rest.table("influencers", select="id", eq_filters={"deleted_at": "is.null"})
+    clients = await supabase_rest.table("clients", select="id", is_null_filters=["deleted_at"])
+    brands = await supabase_rest.table("brands", select="id", is_null_filters=["deleted_at"])
+    influencers = await supabase_rest.table("influencers", select="id", is_null_filters=["deleted_at"])
 
     total_campaigns = len(campaigns)
     active_campaigns = sum(1 for c in campaigns if c.get("status") not in ("TERMINADA", "CANCELADA"))
@@ -68,8 +68,8 @@ async def by_status(user: CurrentUserDep):
 @router.get("/top-clients")
 async def top_clients(user: CurrentUserDep, limit: int = Query(10, ge=1, le=100)):
     """Top clients by number of campaigns and total budget."""
-    clients = await supabase_rest.table("clients", select="id,code,name", eq_filters={"deleted_at": "is.null"}, limit=500)
-    campaigns = await supabase_rest.table("campaigns", select="client_id,budget_total", eq_filters={"deleted_at": "is.null"}, limit=10000)
+    clients = await supabase_rest.table("clients", select="id,code,name", is_null_filters=["deleted_at"], limit=500)
+    campaigns = await supabase_rest.table("campaigns", select="client_id,budget_total", is_null_filters=["deleted_at"], limit=10000)
 
     campaign_count_by_client: dict[str, int] = {}
     budget_by_client: dict[str, Decimal] = {}

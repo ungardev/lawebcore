@@ -58,7 +58,8 @@ async def get_influencer(influencer_id: str, user: CurrentUserDep):
     rows = await supabase_rest.table(
         "influencers",
         select="*",
-        eq_filters={"id": influencer_id, "deleted_at": "is.null"},
+        eq_filters={"id": influencer_id},
+        is_null_filters=["deleted_at"],
     )
     if not rows:
         raise HTTPException(status_code=404, detail="Influencer not found")

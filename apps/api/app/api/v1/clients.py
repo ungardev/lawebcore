@@ -34,7 +34,8 @@ async def create_client(payload: ClientCreate, user: CurrentUserDep):
 
 @router.get("/{client_id}", response_model=ClientRead)
 async def get_client(client_id: str, user: CurrentUserDep):
-    rows = await supabase_rest.table("clients", select="*", eq_filters={"id": client_id, "deleted_at": "is.null"})
+    rows = await supabase_rest.table("clients", select="*",         eq_filters={"id": client_id},
+        is_null_filters=["deleted_at"])
     if not rows:
         raise HTTPException(status_code=404, detail="Client not found")
     return ClientRead.model_validate(rows[0])

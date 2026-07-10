@@ -1,5 +1,6 @@
 """Campaigns endpoints - CRUD + Kanban + Status changes + KPIs + links."""
 
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -59,7 +60,7 @@ async def kanban_view(
     rows = await supabase_rest.table(
         "campaigns",
         select="id,code,name,status,objective,brand_id,client_id,num_influencers,budget_total,end_date,updated_at",
-        eq_filters={"deleted_at": "is.null"},
+        is_null_filters=["deleted_at"],
         limit=10000,
         order="updated_at.desc",
     )
@@ -95,7 +96,8 @@ async def get_campaign(campaign_id: str, user: CurrentUserDep):
     rows = await supabase_rest.table(
         "campaigns",
         select="*",
-        eq_filters={"id": campaign_id, "deleted_at": "is.null"},
+        eq_filters={"id": campaign_id},
+        is_null_filters=["deleted_at"],
     )
     if not rows:
         raise HTTPException(status_code=404, detail="Campaign not found")
@@ -208,5 +210,9 @@ async def change_status(
 
 @router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(campaign_id: str, user: CurrentUserDep):
-    await supabase_rest.update("campaigns", {"deleted_at": "now()"}, {"id": campaign_id})
+    await supabase_rest.update(
+        "campaigns",
+        {"deleted_at": datetime.now(timezone.utc).isoformat()},
+        eq_filters={"id": campaign_id},
+    )
     return None

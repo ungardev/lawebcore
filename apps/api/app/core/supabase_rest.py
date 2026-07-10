@@ -10,7 +10,6 @@ class SupabaseRest:
             "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
             "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "count=exact",
         }
         self.client = httpx.AsyncClient(
             base_url=self.base_url,
@@ -26,6 +25,7 @@ class SupabaseRest:
         table: str,
         select: str = "*",
         eq_filters: dict = None,
+        is_null_filters: list = None,
         limit: int = None,
         order: str = None,
     ):
@@ -33,6 +33,9 @@ class SupabaseRest:
         if eq_filters:
             for key, val in eq_filters.items():
                 params[key] = f"eq.{val}"
+        if is_null_filters:
+            for col in is_null_filters:
+                params[col] = "is.null"
         if limit:
             params["limit"] = limit
         if order:
@@ -49,16 +52,32 @@ class SupabaseRest:
         resp.raise_for_status()
         return resp.json() if return_repr else None
 
-    async def update(self, table: str, data: dict, eq_filters: dict):
-        params = {k: f"eq.{v}" for k, v in eq_filters.items()}
+    async def update(
+        self,
+        table: str,
+        data: dict,
+        eq_filters: dict = None,
+        is_null_filters: list = None,
+    ):
+        params = {}
+        if eq_filters:
+            params.update({k: f"eq.{v}" for k, v in eq_filters.items()})
+        if is_null_filters:
+            for col in is_null_filters:
+                params[col] = "is.null"
         headers = dict(self.headers)
         headers["Prefer"] = "return=representation"
         resp = await self.client.patch(f"/{table}", params=params, json=data, headers=headers)
         resp.raise_for_status()
         return resp.json()
 
-    async def delete(self, table: str, eq_filters: dict):
-        params = {k: f"eq.{v}" for k, v in eq_filters.items()}
+    async def delete(self, table: str, eq_filters: dict = None, is_null_filters: list = None):
+        params = {}
+        if eq_filters:
+            params.update({k: f"eq.{v}" for k, v in eq_filters.items()})
+        if is_null_filters:
+            for col in is_null_filters:
+                params[col] = "is.null"
         resp = await self.client.delete(f"/{table}", params=params)
         resp.raise_for_status()
 
