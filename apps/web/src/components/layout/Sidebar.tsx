@@ -22,18 +22,29 @@ const NAV = [
   { to: '/settings', label: 'Configuracion', icon: Settings },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  collapsed?: boolean;
+}
+
+export function Sidebar({ collapsed = false }: SidebarProps) {
   return (
-    <aside className="w-64 border-r bg-card flex flex-col">
-      <div className="p-6 border-b">
+    <aside
+      className={cn(
+        'border-r bg-card flex flex-col transition-all duration-200',
+        collapsed ? 'w-16' : 'w-64'
+      )}
+    >
+      <div className={cn('border-b', collapsed ? 'p-3' : 'p-6')}>
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white font-bold flex-shrink-0">
             LW
           </div>
-          <div>
-            <h1 className="font-bold text-foreground">La Web Core</h1>
-            <p className="text-xs text-muted-foreground">Figital Agency</p>
-          </div>
+          {!collapsed && (
+            <div className="overflow-hidden">
+              <h1 className="font-bold text-foreground truncate">La Web Core</h1>
+              <p className="text-xs text-muted-foreground truncate">Figital Agency</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -43,23 +54,26 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end ?? false}
+            title={collapsed ? item.label : undefined}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground font-medium'
                   : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                collapsed && 'justify-center'
               )
             }
           >
-            <item.icon className="w-4 h-4" />
-            {item.label}
+            <item.icon className="w-4 h-4 flex-shrink-0" />
+            {!collapsed && <span className="truncate">{item.label}</span>}
           </NavLink>
         ))}
       </nav>
 
-      <div className="p-4 border-t text-xs text-muted-foreground">
-        <p>v0.1.0 - MVP</p>
+      <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'p-2 text-center')}>
+        {!collapsed && <p>v0.1.0 - MVP</p>}
+        {collapsed && <p>v0.1</p>}
       </div>
     </aside>
   );
