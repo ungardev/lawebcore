@@ -15,6 +15,9 @@ build/
 out/
 .turbo/
 *.tsbuildinfo
+# Vite build artifacts (emitted by tsc -b on vite.config.ts)
+apps/web/vite.config.js
+apps/web/vite.config.d.ts
 
 # Python
 __pycache__/
