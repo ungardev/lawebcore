@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -20,8 +20,19 @@ import { toast } from 'sonner';
 import { KanbanColumn } from './components/KanbanColumn';
 import { KanbanFilters } from './components/KanbanFilters';
 import { KanbanCard, KanbanCardData } from './components/KanbanCard';
+import { RotateCcw } from 'lucide-react';
 
 const COLUMNS = CAMPAIGN_STATUSES.filter((s) => !['CANCELADA', 'PAUSADA'].includes(s));
+
+const STATUS_LABELS: Record<string, string> = {
+  BRIEF: 'Brief',
+  PULL: 'Pull',
+  CONTACTANDO: 'Contactando',
+  PLAN_DE_CUENTAS: 'Plan de Cuentas',
+  CAMPAÑA_INTERNA: 'Campaña Interna',
+  REPORTE: 'Reporte',
+  TERMINADA: 'Terminada',
+};
 
 export function CampaignKanbanPage() {
   const qc = useQueryClient();
@@ -29,10 +40,12 @@ export function CampaignKanbanPage() {
   const [clientFilter, setClientFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
   const [activeCard, setActiveCard] = useState<KanbanCardData | null>(null);
+  const [originalStatus, setOriginalStatus] = useState<string | null>(null);
+  const undoRef = useRef<{ id: string; previousStatus: string } | null>(null);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 12 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 10 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -81,7 +94,26 @@ export function CampaignKanbanPage() {
       if (ctx?.previous) qc.setQueryData(['campaigns-kanban'], ctx.previous);
       toast.error('Error al cambiar status');
     },
-    onSuccess: () => toast.success('Status actualizado'),
+    onSuccess: (_data, vars) => {
+      const undo = undoRef.current;
+      toast.success(
+        `Campaña movida a ${STATUS_LABELS[vars.to_status] || vars.to_status}`,
+        {
+          action: undo
+            ? {
+                label: 'Deshacer',
+                onClick: () => {
+                  changeStatus.mutate({ id: undo.id, to_status: undo.previousStatus });
+                  undoRef.current = null;
+                },
+              }
+            : undefined,
+          duration: 5000,
+          icon: undo ? <RotateCcw className="w-4 h-4" /> : undefined,
+        },
+      );
+      undoRef.current = null;
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ['campaigns-kanban'] });
       qc.invalidateQueries({ queryKey: ['campaigns'] });
@@ -95,7 +127,7 @@ export function CampaignKanbanPage() {
     for (const status of COLUMNS) {
       const cards = kanban.columns[status] || [];
       result[status] = cards.filter((c: any) => {
-            if (clientFilter && c.client_id !== clientFilter) return false;
+        if (clientFilter && c.client_id !== clientFilter) return false;
         if (brandFilter && c.brand_id !== brandFilter) return false;
         if (search) {
           const name = (c.name || '').toLowerCase();
@@ -113,7 +145,7 @@ export function CampaignKanbanPage() {
     for (const status of COLUMNS) {
       stats[status] = (filteredColumns[status] || []).reduce(
         (sum, c) => sum + (c.budget_total || 0),
-        0
+        0,
       );
     }
     return stats;
@@ -121,20 +153,25 @@ export function CampaignKanbanPage() {
 
   const totalCards = useMemo(
     () => Object.values(filteredColumns).reduce((sum, arr) => sum + arr.length, 0),
-    [filteredColumns]
+    [filteredColumns],
   );
 
-  const findCard = (id: string): KanbanCardData | undefined => {
+  const findCardColumn = (id: string): string | null => {
     for (const col of COLUMNS) {
-      const card = (filteredColumns[col] || []).find((c) => c.id === id);
-      if (card) return card;
+      if ((filteredColumns[col] || []).some((c) => c.id === id)) return col;
     }
-    return undefined;
+    return null;
   };
 
   const handleDragStart = (event: DragStartEvent) => {
-    const card = findCard(event.active.id as string);
-    if (card) setActiveCard(card);
+    const card = findCardColumn(event.active.id as string);
+    setOriginalStatus(card);
+    const cardData = kanban
+      ? (Object.values(kanban.columns || {}) as any[])
+          .flat()
+          .find((c: any) => c.id === event.active.id) as KanbanCardData | null
+      : null;
+    if (cardData) setActiveCard(cardData);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -171,17 +208,21 @@ export function CampaignKanbanPage() {
     setActiveCard(null);
     const id = active.id as string;
 
-    let finalStatus: string | null = null;
-    for (const col of COLUMNS) {
-      if ((filteredColumns[col] || []).some((c) => c.id === id)) {
-        finalStatus = col;
-        break;
-      }
+    if (!over) {
+      setOriginalStatus(null);
+      return;
     }
 
-    if (finalStatus) {
-      changeStatus.mutate({ id, to_status: finalStatus });
+    const finalStatus = findCardColumn(id);
+
+    if (finalStatus === null || finalStatus === originalStatus) {
+      setOriginalStatus(null);
+      return;
     }
+
+    undoRef.current = { id, previousStatus: originalStatus! };
+    changeStatus.mutate({ id, to_status: finalStatus });
+    setOriginalStatus(null);
   };
 
   return (
@@ -190,7 +231,7 @@ export function CampaignKanbanPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Pipeline de Campanas</h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            {totalCards} campanas · Arrastra y suelta para mover entre estados
+            {totalCards} campanas · Manten click y arrastra para mover · Deshacer disponible por 5s
           </p>
         </div>
       </div>
@@ -213,13 +254,15 @@ export function CampaignKanbanPage() {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="overflow-x-auto pb-4 -mx-6 px-6
-                        touch-pan-y
-                        [&::-webkit-scrollbar]:h-2
-                        [&::-webkit-scrollbar-track]:bg-muted
-                        [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30
-                        [&::-webkit-scrollbar-thumb]:rounded-full
-                        hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50">
+        <div
+          className="overflow-x-auto pb-4 -mx-6 px-6
+                          touch-pan-y
+                          [&::-webkit-scrollbar]:h-2
+                          [&::-webkit-scrollbar-track]:bg-muted
+                          [&::-webkit-scrollbar-thumb]:bg-muted-foreground/30
+                          [&::-webkit-scrollbar-thumb]:rounded-full
+                          hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50"
+        >
           <div className="flex gap-3 md:gap-4 min-w-max pb-2">
             {COLUMNS.map((status) => (
               <KanbanColumn
