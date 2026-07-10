@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter } from 'lucide-react';
 import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
@@ -11,8 +12,17 @@ import { Brand, Client } from '@/types';
 const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4'];
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [clientFilter, setClientFilter] = useState<string>('');
+
+  const handlePieClick = (data: any) => {
+    if (data?.name) navigate(`/clients?search=${encodeURIComponent(data.name)}`);
+  };
+
+  const handleBarClick = (data: any) => {
+    if (data?.status) navigate(`/campaigns?status=${encodeURIComponent(data.status)}`);
+  };
 
   const { data: summary } = useQuery({ queryKey: ['dashboard-summary'], queryFn: dashboardApi.summary });
   const { data: byStatus } = useQuery({ queryKey: ['dashboard-by-status'], queryFn: dashboardApi.byStatus });
@@ -89,7 +99,7 @@ export function DashboardPage() {
                 <XAxis dataKey="status" tick={{ fontSize: 11 }} angle={window.innerWidth < 640 ? -45 : -15} textAnchor={window.innerWidth < 640 ? 'end' : 'end'} height={70} />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} onClick={handleBarClick} style={{ cursor: 'pointer' }} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -102,7 +112,7 @@ export function DashboardPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={240} className="md:!h-[280px]">
               <PieChart>
-                <Pie data={topClients || []} dataKey="campaign_count" nameKey="name" cx="50%" cy="50%" outerRadius={window.innerWidth < 640 ? 60 : 90} label={(e) => e.name}>
+                <Pie data={topClients || []} dataKey="campaign_count" nameKey="name" cx="50%" cy="50%" outerRadius={window.innerWidth < 640 ? 60 : 90} label={(e) => e.name} onClick={handlePieClick} style={{ cursor: 'pointer' }}>
                   {(topClients || []).map((_: any, i: number) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}

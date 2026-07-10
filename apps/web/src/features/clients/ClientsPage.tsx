@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { clientsApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,7 +8,8 @@ import { useState } from 'react';
 import { ResponsiveTable } from '@/components/data-table/ResponsiveTable';
 
 export function ClientsPage() {
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get('search') || '');
   const { data: clients, isLoading } = useQuery({
     queryKey: ['clients', { search }],
     queryFn: () => clientsApi.list({ search: search || undefined }),

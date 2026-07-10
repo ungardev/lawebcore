@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import { campaignsApi, clientsApi, brandsApi } from '@/lib/api';
@@ -13,8 +13,9 @@ import { NewCampaignModal } from './components/NewCampaignModal';
 
 export function CampaignsListPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>(searchParams.get('status') || '');
   const [newCampaignOpen, setNewCampaignOpen] = useState(false);
 
   const { data: campaigns, isLoading } = useQuery({
