@@ -1,14 +1,14 @@
 {
-  "buildCommand": "cd ../.. && pnpm install && cd apps/web && pnpm build",
+  "buildCommand": "pnpm build",
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "env": {
-    "VITE_API_URL": "@vite_api_url",
-    "VITE_SUPABASE_URL": "@vite_supabase_url",
-    "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
+    "VITE_API_URL": "https://lawebcore-production.up.railway.app",
+    "VITE_SUPABASE_URL": "https://sdrsxeweobcnnqdxqhjb.supabase.co",
+    "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkcnN4ZXdlb2Jjbm5xZHhxaGpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MTI5ODEsImV4cCI6MjA5OTE4ODk4MX0.o575lFqXbBd-xKZlu5UEw3BJZnmyAcBlWC0UmDYy0R0",
     "VITE_APP_NAME": "La Web Core"
   }
 }

@@ -56,7 +56,7 @@ export function DashboardPage() {
             <ResponsiveContainer width="100%" height={280}>
               <PieChart>
                 <Pie data={topClients || []} dataKey="campaign_count" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(e) => e.name}>
-                  {(topClients || []).map((_, i) => (
+                  {(topClients || []).map((_: any, i: number) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>

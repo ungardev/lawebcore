@@ -52,7 +52,7 @@ export function CampaignKanbanPage() {
       <div className="overflow-x-auto pb-4">
         <div className="flex gap-4 min-w-max">
           {COLUMNS.map((status) => {
-            const cards = kanban?.columns?.[status] || [];
+            const cards: any[] = kanban?.columns?.[status] || [];
             return (
               <div
                 key={status}
@@ -67,7 +67,7 @@ export function CampaignKanbanPage() {
                   </div>
                 </div>
                 <div className="bg-muted/30 p-2 space-y-2 min-h-[500px] rounded-b-lg border border-t-0">
-                  {cards.map((card) => (
+                  {cards.map((card: any) => (
                     <Card
                       key={card.id}
                       draggable
