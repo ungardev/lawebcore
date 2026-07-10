@@ -53,7 +53,7 @@ export function LoginPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="tu@lawebfigital.com"
+              placeholder="nombre.apellido@hacemosloquenosgusta.com"
             />
           </div>
 
