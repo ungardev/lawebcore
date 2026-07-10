@@ -16,6 +16,8 @@ from dateutil.relativedelta import relativedelta
 
 from app.core.piar_constants import (
     ESCENARIOS,
+    ESCENARIOS_CONSERVADOR_AJUSTADO,
+    ESCENARIOS_OPTIMISTA_AJUSTADO,
     FACTOR_ALCANCE,
     MAX_CAMPANAS_CONSIDERADAS,
     MESES_RECIENTE,
@@ -23,6 +25,8 @@ from app.core.piar_constants import (
     PESO_ANTIGUO,
     PESO_RECIENTE,
     TASA_VIRAL_ESPERADA,
+    UMBRAL_DESCARTAR_PARA_AJUSTE,
+    UMBRAL_ESCALAR_PARA_AJUSTE,
 )
 
 logger = structlog.get_logger(__name__)
@@ -36,6 +40,59 @@ class PiarEngine:
 
     def __init__(self, supabase_rest_client: Any):
         self._rest = supabase_rest_client
+
+    async def _determinar_ajuste_scoring(
+        self,
+        publicaciones: list[dict[str, Any]],
+    ) -> tuple[dict[str, float], str, float | None]:
+        """
+        Analiza los influencers del histórico y determina el ajuste de escenarios.
+
+        Returns:
+            (escenarios_a_usar, decision_dominante, score_promedio)
+        """
+        influencer_ids = list({
+            str(p.get("influencer_id")) for p in publicaciones
+            if p.get("influencer_id")
+        })
+
+        if not influencer_ids:
+            return ESCENARIOS, "SIN_DATOS", None
+
+        try:
+            from app.core.piar_scoring import calcular_score, ScoringMode, ScoreDecision
+        except ImportError:
+            return ESCENARIOS, "ERROR_IMPORT", None
+
+        decisions: list[str] = []
+        scores: list[float] = []
+
+        for inf_id in influencer_ids[:20]:
+            try:
+                result = await calcular_score(inf_id, ScoringMode.BY_PROFILE)
+                if result.decision != ScoreDecision.DATOS_INSUFICIENTES:
+                    decisions.append(result.decision.value)
+                    if result.score_final is not None:
+                        scores.append(result.score_final)
+            except Exception:
+                continue
+
+        if not decisions:
+            return ESCENARIOS, "DATOS_INSUFICIENTES", None
+
+        escalar_pct = decisions.count("ESCALAR") / len(decisions)
+        optimizar_pct = decisions.count("OPTIMIZAR") / len(decisions)
+        descartar_pct = decisions.count("DESCARTAR") / len(decisions)
+        score_promedio = sum(scores) / len(scores) if scores else None
+
+        if escalar_pct >= UMBRAL_ESCALAR_PARA_AJUSTE:
+            return ESCENARIOS_OPTIMISTA_AJUSTADO, "ESCALAR", score_promedio
+        if descartar_pct >= UMBRAL_DESCARTAR_PARA_AJUSTE:
+            return ESCENARIOS_CONSERVADOR_AJUSTADO, "DESCARTAR", score_promedio
+        if optimizar_pct >= 0.5:
+            return ESCENARIOS, "OPTIMIZAR", score_promedio
+
+        return ESCENARIOS, "MIXTO", score_promedio
 
     async def calcular_proyeccion(
         self,
@@ -53,6 +110,7 @@ class PiarEngine:
 
         Returns:
             dict con resultados por tier + totales en 3 escenarios + auditoría
+            Incluye ajuste de escenarios según calidad de creadores del histórico.
         """
         if reference_date is None:
             reference_date = datetime.now(timezone.utc)
@@ -61,6 +119,7 @@ class PiarEngine:
         client_id = brand_info["client_id"]
         industry = await self._get_industry(client_id)
 
+        all_publicaciones: list[dict[str, Any]] = []
         resultados_por_tier: list[dict[str, Any]] = []
 
         for tier, num_posts in posts_per_tier.items():
@@ -68,6 +127,7 @@ class PiarEngine:
                 continue
 
             historico = await self._seleccionar_historico(brand_id, tier, industry, reference_date)
+            all_publicaciones.extend(historico.get("publicaciones", []))
 
             if not historico["publicaciones"]:
                 logger.warning(
@@ -92,6 +152,16 @@ class PiarEngine:
                 "escenarios": escenarios,
             })
 
+        escenarios_a_usar, decision_dominante, score_promedio = await self._determinar_ajuste_scoring(
+            all_publicaciones
+        )
+
+        ajuste_aplicado = "base"
+        if escenarios_a_usar is ESCENARIOS_OPTIMISTA_AJUSTADO:
+            ajuste_aplicado = "optimista_ajustado"
+        elif escenarios_a_usar is ESCENARIOS_CONSERVADOR_AJUSTADO:
+            ajuste_aplicado = "conservador_ajustado"
+
         total_escenarios = self._agregar_escenarios(resultados_por_tier)
 
         return {
@@ -100,6 +170,11 @@ class PiarEngine:
             "client_id": client_id,
             "industry": industry,
             "reference_date": reference_date.isoformat(),
+            "calidad_creadores": {
+                "decision_dominante": decision_dominante,
+                "score_promedio": round(score_promedio, 2) if score_promedio is not None else None,
+                "ajuste_aplicado": ajuste_aplicado,
+            },
             "resultados_por_tier": resultados_por_tier,
             "total": total_escenarios,
         }

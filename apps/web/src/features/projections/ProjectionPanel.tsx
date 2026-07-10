@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calculator, Info } from 'lucide-react';
+import { Calculator, Info, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { TierSliders } from './TierSliders';
@@ -7,7 +7,6 @@ import { ScenarioComparison } from './ScenarioComparison';
 import { projectionsApi } from '@/lib/api';
 import { ProjectionCalculateResponse } from '@/types/piar';
 import { toast } from 'sonner';
-import { INFLUENCER_TIERS } from '@/lib/utils';
 
 interface ProjectionPanelProps {
   brandId: string;
@@ -109,6 +108,44 @@ export function ProjectionPanel({ brandId, brandName, onClose }: ProjectionPanel
                       Fallback al sector: <span className="font-semibold">{result.industry}</span> (marca sin suficiente histórico propio)
                     </p>
                   )}
+                </div>
+              )}
+
+              {result.calidad_creadores && (
+                <div className={`rounded-lg p-3 border ${
+                  result.calidad_creadores.decision_dominante === 'ESCALAR' ? 'bg-emerald-50 border-emerald-200' :
+                  result.calidad_creadores.decision_dominante === 'DESCARTAR' ? 'bg-red-50 border-red-200' :
+                  result.calidad_creadores.decision_dominante === 'DATOS_INSUFICIENTES' ? 'bg-slate-50 border-slate-200' :
+                  'bg-amber-50 border-amber-200'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Users className="w-3 h-3" />
+                    <span className="text-xs font-semibold">Calidad de creadores</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      result.calidad_creadores.ajuste_aplicado === 'optimista_ajustado' ? 'bg-emerald-100 text-emerald-700' :
+                      result.calidad_creadores.ajuste_aplicado === 'conservador_ajustado' ? 'bg-red-100 text-red-700' :
+                      'bg-amber-100 text-amber-700'
+                    }`}>
+                      {result.calidad_creadores.ajuste_aplicado.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div>
+                      <span className="text-xs text-muted-foreground">Decisión dominante: </span>
+                      <span className={`text-xs font-semibold ${
+                        result.calidad_creadores.decision_dominante === 'ESCALAR' ? 'text-emerald-700' :
+                        result.calidad_creadores.decision_dominante === 'DESCARTAR' ? 'text-red-700' :
+                        result.calidad_creadores.decision_dominante === 'DATOS_INSUFICIENTES' ? 'text-slate-600' :
+                        'text-amber-700'
+                      }`}>{result.calidad_creadores.decision_dominante}</span>
+                    </div>
+                    {result.calidad_creadores.score_promedio != null && (
+                      <div>
+                        <span className="text-xs text-muted-foreground">Score promedio: </span>
+                        <span className="text-xs font-semibold">{result.calidad_creadores.score_promedio.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

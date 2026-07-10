@@ -20,9 +20,25 @@ ESCENARIOS: Final[dict[str, float]] = {
     "optimista": 1.30,
 }
 
+ESCENARIOS_OPTIMISTA_AJUSTADO: Final[dict[str, float]] = {
+    "conservador": 0.85,
+    "base": 1.0,
+    "optimista": 1.40,
+}
+
+ESCENARIOS_CONSERVADOR_AJUSTADO: Final[dict[str, float]] = {
+    "conservador": 0.60,
+    "base": 0.85,
+    "optimista": 1.15,
+}
+
 FACTOR_ALCANCE: Final[float] = 0.70
 
 TASA_VIRAL_ESPERADA: Final[float] = 0.10
+
+MIN_POSTS_PARA_SCORE: Final[int] = 3
+UMBRAL_ESCALAR_PARA_AJUSTE: Final[float] = 0.70
+UMBRAL_DESCARTAR_PARA_AJUSTE: Final[float] = 0.70
 
 TIERS_VALIDOS: Final[list[str]] = ["NANO", "MICRO", "MID", "MACRO", "MEGA"]
 

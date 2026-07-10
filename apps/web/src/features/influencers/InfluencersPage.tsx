@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { influencersApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { useState } from 'react';
 import { ResponsiveTable } from '@/components/data-table/ResponsiveTable';
+import { InfluencerScoreBadge } from './InfluencerScoreBadge';
+import { InfluencerScore } from '@/types/piar';
 
 const TIER_COLORS: Record<string, string> = {
   NANO: 'bg-slate-100 text-slate-700',
@@ -17,12 +17,36 @@ const TIER_COLORS: Record<string, string> = {
   MIX: 'bg-pink-100 text-pink-700',
 };
 
+interface InfluencerWithScore {
+  id: string;
+  full_name: string;
+  primary_handle?: string;
+  primary_tier: string;
+  status: string;
+  country: string;
+  content_niches: string[];
+  score?: InfluencerScore;
+}
+
 export function InfluencersPage() {
   const [search, setSearch] = useState('');
   const [tier, setTier] = useState('');
+  const [decision, setDecision] = useState('');
+
+  const useScoring = decision !== '';
+
   const { data: influencers, isLoading } = useQuery({
-    queryKey: ['influencers', { search, tier }],
-    queryFn: () => influencersApi.list({ search: search || undefined, tier: tier || undefined }),
+    queryKey: ['influencers', { search, tier, decision, useScoring }],
+    queryFn: () => {
+      if (useScoring) {
+        return influencersApi.listWithScores({
+          search: search || undefined,
+          tier: tier || undefined,
+          decision: decision || undefined,
+        }) as Promise<InfluencerWithScore[]>;
+      }
+      return influencersApi.list({ search: search || undefined, tier: tier || undefined }) as Promise<InfluencerWithScore[]>;
+    },
   });
 
   return (
@@ -46,6 +70,13 @@ export function InfluencersPage() {
             <option value="MACRO">Macro (&gt;500K)</option>
             <option value="MEGA">Mega</option>
           </select>
+          <select value={decision} onChange={(e) => setDecision(e.target.value)} className="h-9 px-3 rounded-md border border-input bg-transparent text-sm w-full sm:w-auto">
+            <option value="">Todos los scores</option>
+            <option value="ESCALAR">Escalar</option>
+            <option value="OPTIMIZAR">Optimizar</option>
+            <option value="DESCARTAR">Descartar</option>
+            <option value="DATOS_INSUFICIENTES">Sin datos</option>
+          </select>
         </div>
 
         <ResponsiveTable
@@ -54,29 +85,38 @@ export function InfluencersPage() {
           loading={isLoading}
           emptyMessage="No hay influencers"
           columns={[
-            { key: 'full_name', label: 'Nombre', render: (inf: any) => <span className="font-medium">{inf.full_name}</span> },
-            { key: 'handle', label: 'Handle', render: (inf: any) => <span className="text-sm text-muted-foreground">{inf.primary_handle || '—'}</span> },
-            { key: 'tier', label: 'Tier', render: (inf: any) => <Badge variant="outline" className={TIER_COLORS[inf.primary_tier]}>{inf.primary_tier}</Badge> },
-            { key: 'country', label: 'Pais', render: (inf: any) => inf.country },
+            { key: 'full_name', label: 'Nombre', render: (inf: InfluencerWithScore) => <span className="font-medium">{inf.full_name}</span> },
+            { key: 'handle', label: 'Handle', render: (inf: InfluencerWithScore) => <span className="text-sm text-muted-foreground">{inf.primary_handle || '—'}</span> },
+            { key: 'tier', label: 'Tier', render: (inf: InfluencerWithScore) => <span className="inline-flex items-center gap-1"><span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_COLORS[inf.primary_tier] || ''}`}>{inf.primary_tier}</span></span> },
+            { key: 'country', label: 'Pais', render: (inf: InfluencerWithScore) => inf.country },
             {
               key: 'niches',
               label: 'Nichos',
-              render: (inf: any) => (
+              render: (inf: InfluencerWithScore) => (
                 <div className="flex gap-1 flex-wrap">
-                  {inf.content_niches.slice(0, 3).map((n: string) => (
-                    <Badge key={n} variant="outline" className="text-xs">{n}</Badge>
+                  {(inf.content_niches || []).slice(0, 3).map((n: string) => (
+                    <span key={n} className="text-xs bg-muted px-1.5 py-0.5 rounded">{n}</span>
                   ))}
                 </div>
               ),
             },
-            { key: 'status', label: 'Estado', render: (inf: any) => inf.status },
+            ...(useScoring
+              ? [{
+                  key: 'score' as const,
+                  label: 'Score',
+                  render: (inf: InfluencerWithScore) => (
+                    <InfluencerScoreBadge score={inf.score ?? null} size="sm" showLabel />
+                  ),
+                }]
+              : []),
+            { key: 'status', label: 'Estado', render: (inf: InfluencerWithScore) => inf.status },
           ]}
           cardFields={[
-            { key: 'full_name', label: '', primary: true, render: (inf: any) => <span className="font-medium">{inf.full_name}</span> },
-            { key: 'handle', label: 'Handle', render: (inf: any) => <span className="text-sm text-muted-foreground">{inf.primary_handle || '—'}</span> },
-            { key: 'tier', label: 'Tier', render: (inf: any) => <Badge variant="outline" className={TIER_COLORS[inf.primary_tier]}>{inf.primary_tier}</Badge> },
-            { key: 'country', label: 'Pais', render: (inf: any) => inf.country },
-            { key: 'status', label: 'Estado', render: (inf: any) => inf.status },
+            { key: 'full_name', label: '', primary: true, render: (inf: InfluencerWithScore) => <span className="font-medium">{inf.full_name}</span> },
+            { key: 'handle', label: 'Handle', render: (inf: InfluencerWithScore) => <span className="text-sm text-muted-foreground">{inf.primary_handle || '—'}</span> },
+            { key: 'tier', label: 'Tier', render: (inf: InfluencerWithScore) => <span className={`px-2 py-0.5 rounded text-xs font-medium ${TIER_COLORS[inf.primary_tier] || ''}`}>{inf.primary_tier}</span> },
+            { key: 'country', label: 'Pais', render: (inf: InfluencerWithScore) => inf.country },
+            { key: 'status', label: 'Estado', render: (inf: InfluencerWithScore) => inf.status },
           ]}
         />
       </Card>

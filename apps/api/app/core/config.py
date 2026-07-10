@@ -40,8 +40,14 @@ class Settings(BaseSettings):
     # AI Providers
     OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
-    DEFAULT_LLM_PROVIDER: str = "openai"
-    DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
+    DEEPSEEK_API_KEY: str = ""
+    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEFAULT_LLM_PROVIDER: str = "openai"  # Cambiar a "deepseek" cuando esté activo
+    DEFAULT_LLM_MODEL: str = "gpt-4o-mini"  # Se ignora si provider=deepseek
+
+    # Google Drive (Service Account para ETL P.I.A.R.)
+    GOOGLE_SERVICE_ACCOUNT_KEY: str = ""  # JSON del service account
+    GOOGLE_DRIVE_FOLDER_ID: str = ""  # ID de la carpeta del Drive del equipo P.I.A.R.
 
     # Integrations
     HYPEAUDITOR_API_KEY: str = ""

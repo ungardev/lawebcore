@@ -39,7 +39,7 @@ import type {
   Brand,
   Influencer,
 } from '@/types';
-import type { Publicacion, ProjectionCalculateResponse as ProjResp } from '@/types/piar';
+import type { Publicacion, ProjectionCalculateResponse as ProjResp, InfluencerScore } from '@/types/piar';
 
 export const dashboardApi = {
   summary: async () => (await api.get<DashboardKPIs>('/dashboard/summary')).data,
@@ -76,6 +76,10 @@ export const brandsApi = {
 export const influencersApi = {
   list: async (params?: Record<string, string | number | undefined>) =>
     (await api.get<Influencer[]>('/influencers', { params })).data,
+  listWithScores: async (params?: Record<string, string | number | undefined>) =>
+    (await api.get<Array<Influencer & { score: InfluencerScore }>>('/scoring/influencers', { params })).data,
+  getScore: async (influencerId: string, mode?: string) =>
+    (await api.get<InfluencerScore>(`/scoring/influencers/${influencerId}/score`, { params: { mode } })).data,
   create: async (data: Partial<Influencer>) =>
     (await api.post<Influencer>('/influencers', data)).data,
 };
