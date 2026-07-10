@@ -19,12 +19,15 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401 -> redirect to login
+// Handle 401 -> only redirect if there's no active session
 api.interceptors.response.use(
   (r) => r,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      window.location.href = '/login';
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   },

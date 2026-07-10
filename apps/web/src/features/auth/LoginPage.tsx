@@ -14,7 +14,13 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (user) return <Navigate to="/dashboard" replace />;
+  if (user) {
+    const fromDashboard = window.location.search.includes('from=dashboard') ||
+                         sessionStorage.getItem('auth_error') === 'true';
+    if (!fromDashboard) {
+      return <Navigate to="/dashboard" replace />;
+    }
+  }
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
