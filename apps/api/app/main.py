@@ -81,6 +81,48 @@ async def readiness():
         )
 
 
+@app.get("/api/v1/health/net-debug", tags=["health"])
+async def net_debug():
+    """Debug network connectivity to Supabase hosts."""
+    import socket
+    import httpx
+    result = {
+        "outbound_ip": None,
+        "dns_pooler": None,
+        "dns_direct": None,
+        "tcp_pooler_6543": None,
+        "tcp_direct_5432": None,
+        "errors": [],
+    }
+    try:
+        r = httpx.get("https://api.ipify.org", timeout=5)
+        result["outbound_ip"] = r.text
+    except Exception as e:
+        result["errors"].append(f"ipify: {e}")
+
+    for host_key, host in [
+        ("dns_pooler", "aws-0-us-east-1.pooler.supabase.com"),
+        ("dns_direct", "db.sdrsxeweobcnnqdxqhjb.supabase.co"),
+    ]:
+        try:
+            result[host_key] = socket.gethostbyname(host)
+        except Exception as e:
+            result["errors"].append(f"{host_key}: {type(e).__name__}: {str(e)[:100]}")
+
+    for tcp_key, host, port in [
+        ("tcp_pooler_6543", "aws-0-us-east-1.pooler.supabase.com", 6543),
+        ("tcp_direct_5432", "db.sdrsxeweobcnnqdxqhjb.supabase.co", 5432),
+    ]:
+        try:
+            sock = socket.create_connection((host, port), timeout=10)
+            sock.close()
+            result[tcp_key] = "OK"
+        except Exception as e:
+            result[tcp_key] = f"FAIL: {type(e).__name__}: {str(e)[:100]}"
+
+    return result
+
+
 # Mount v1 API
 app.include_router(api_router, prefix="/api/v1")
 
