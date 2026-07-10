@@ -2,11 +2,8 @@
 
 from typing import Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.db import get_db
+from fastapi import APIRouter, Depends, HTTPException, Query
+from app.core.supabase_rest import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas import (
     CampaignRead, CampaignCreate, CampaignUpdate,
@@ -22,7 +19,6 @@ VALID_STATUSES = {"BRIEF", "CONTACTANDO", "PLAN_DE_CUENTAS", "PULL", "CAMPAÑA I
 @router.get("", response_model=list[CampaignRead], summary="List campaigns")
 async def list_campaigns(
     user: CurrentUserDep,
-    db: AsyncSession = Depends(get_db),
     client_id: str | None = Query(None),
     brand_id: str | None = Query(None),
     status_filter: str | None = Query(None, alias="status"),
@@ -31,151 +27,174 @@ async def list_campaigns(
     limit: int = Query(100, le=500),
 ):
     """List campaigns with filters. Returns lightweight projection."""
-    params: dict = {"limit": limit}
-    where = ["c.deleted_at IS NULL"]
+    filters = {"deleted_at": "is.null"}
     if client_id:
-        where.append("c.client_id = :client_id"); params["client_id"] = client_id
+        filters["client_id"] = client_id
     if brand_id:
-        where.append("c.brand_id = :brand_id"); params["brand_id"] = brand_id
+        filters["brand_id"] = brand_id
     if status_filter:
-        where.append("c.status = :status"); params["status"] = status_filter
+        filters["status"] = status_filter
     if objective:
-        where.append("c.objective = :objective"); params["objective"] = objective
-    if search:
-        where.append("(c.name ILIKE :search OR c.code ILIKE :search)")
-        params["search"] = f"%{search}%"
+        filters["objective"] = objective
 
-    sql = f"""
-        SELECT c.* FROM campaigns c
-        WHERE {' AND '.join(where)}
-        ORDER BY c.updated_at DESC
-        LIMIT :limit
-    """
-    result = await db.execute(text(sql), params)
-    return [CampaignRead.model_validate(r) for r in result.mappings().all()]
+    rows = await supabase_rest.table(
+        "campaigns",
+        select="*",
+        eq_filters=filters if filters != {"deleted_at": "is.null"} else None,
+        limit=limit,
+        order="updated_at.desc",
+    )
+    if filters.get("deleted_at") == "is.null" and "deleted_at" not in filters:
+        all_rows = await supabase_rest.table("campaigns", select="*", limit=10000)
+        filtered = []
+        for r in all_rows:
+            match = True
+            if client_id and str(r.get("client_id") or "") != client_id:
+                match = False
+            if brand_id and str(r.get("brand_id") or "") != brand_id:
+                match = False
+            if status_filter and r.get("status") != status_filter:
+                match = False
+            if objective and r.get("objective") != objective:
+                match = False
+            if search:
+                name = (r.get("name") or "").lower()
+                code = (r.get("code") or "").lower()
+                if search.lower() not in name and search.lower() not in code:
+                    match = False
+            if match:
+                filtered.append(r)
+        return [CampaignRead.model_validate(r) for r in filtered[:limit]]
+
+    return [CampaignRead.model_validate(r) for r in rows]
 
 
 @router.get("/kanban", summary="Campaigns grouped by status (Kanban)")
 async def kanban_view(
     user: CurrentUserDep,
-    db: AsyncSession = Depends(get_db),
     client_id: str | None = Query(None),
     brand_id: str | None = Query(None),
 ):
     """Returns campaigns grouped by status, for the Kanban board."""
-    params: dict = {}
-    where = ["deleted_at IS NULL"]
-    if client_id:
-        where.append("client_id = :client_id"); params["client_id"] = client_id
-    if brand_id:
-        where.append("brand_id = :brand_id"); params["brand_id"] = brand_id
-    sql = f"""
-        SELECT id, code, name, status, objective, brand_id, client_id,
-               num_influencers, budget_total, end_date, updated_at
-        FROM campaigns
-        WHERE {' AND '.join(where)}
-        ORDER BY updated_at DESC
-    """
-    result = await db.execute(text(sql), params)
-    rows = result.mappings().all()
+    rows = await supabase_rest.table(
+        "campaigns",
+        select="id,code,name,status,objective,brand_id,client_id,num_influencers,budget_total,end_date,updated_at",
+        eq_filters={"deleted_at": "is.null"},
+        limit=10000,
+        order="updated_at.desc",
+    )
 
-    # Group by status
     columns: dict[str, list] = {s: [] for s in VALID_STATUSES}
     for r in rows:
-        s = r["status"]
+        if client_id and str(r.get("client_id") or "") != client_id:
+            continue
+        if brand_id and str(r.get("brand_id") or "") != brand_id:
+            continue
+        s = r.get("status") or "UNKNOWN"
         if s not in columns:
             columns[s] = []
+        end_date = r.get("end_date")
+        updated_at = r.get("updated_at")
         columns[s].append({
             "id": str(r["id"]),
-            "code": r["code"],
-            "name": r["name"],
-            "objective": r["objective"],
-            "client_id": str(r["client_id"]),
-            "brand_id": str(r["brand_id"]),
-            "num_influencers": r["num_influencers"],
-            "budget_total": float(r["budget_total"]) if r["budget_total"] else None,
-            "end_date": r["end_date"].isoformat() if r["end_date"] else None,
-            "updated_at": r["updated_at"].isoformat(),
+            "code": r.get("code") or "",
+            "name": r.get("name") or "",
+            "objective": r.get("objective") or "",
+            "client_id": str(r.get("client_id") or ""),
+            "brand_id": str(r.get("brand_id") or ""),
+            "num_influencers": r.get("num_influencers") or 0,
+            "budget_total": float(r.get("budget_total") or 0),
+            "end_date": end_date.isoformat() if end_date else None,
+            "updated_at": updated_at.isoformat() if updated_at else None,
         })
-    return {"columns": columns, "total": len(rows)}
+    return {"columns": columns, "total": sum(len(v) for v in columns.values())}
 
 
 @router.get("/{campaign_id}", response_model=CampaignDetail)
-async def get_campaign(campaign_id: str, user: CurrentUserDep, db: AsyncSession = Depends(get_db)):
-    sql = text("SELECT * FROM campaigns WHERE id = :id AND deleted_at IS NULL")
-    result = await db.execute(sql, {"id": campaign_id})
-    row = result.mappings().first()
-    if not row:
+async def get_campaign(campaign_id: str, user: CurrentUserDep):
+    rows = await supabase_rest.table(
+        "campaigns",
+        select="*",
+        eq_filters={"id": campaign_id, "deleted_at": "is.null"},
+    )
+    if not rows:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    campaign = CampaignRead.model_validate(row)
+    campaign = rows[0]
 
-    # Brand
-    brand = (await db.execute(text("SELECT * FROM brands WHERE id = :id"), {"id": str(campaign.brand_id)})).mappings().first()
-    # Client
-    client = (await db.execute(text("SELECT * FROM clients WHERE id = :id"), {"id": str(campaign.client_id)})).mappings().first()
-    # KPIs
-    kpi_sql = text("""
-        SELECT kd.code AS kpi_code, kd.name AS kpi_name, kd.category, ckv.value, ckv.source, ckv.recorded_at
-        FROM campaign_kpi_values ckv
-        JOIN kpi_definitions kd ON kd.id = ckv.kpi_definition_id
-        WHERE ckv.campaign_id = :id
-        ORDER BY kd.category, kd.name
-    """)
-    kpis = (await db.execute(kpi_sql, {"id": campaign_id})).mappings().all()
-    # Links
-    links = (await db.execute(text("SELECT * FROM campaign_links WHERE campaign_id = :id ORDER BY link_type"), {"id": campaign_id})).mappings().all()
-    # Insights
-    insights = (await db.execute(text("SELECT * FROM insights WHERE campaign_id = :id ORDER BY created_at DESC"), {"id": campaign_id})).mappings().all()
+    brand_rows = await supabase_rest.table("brands", select="*", eq_filters={"id": str(campaign.get("brand_id") or "")})
+    brand = brand_rows[0] if brand_rows else None
+
+    client_rows = await supabase_rest.table("clients", select="*", eq_filters={"id": str(campaign.get("client_id") or "")})
+    client = client_rows[0] if client_rows else None
+
+    kpi_values = await supabase_rest.table(
+        "campaign_kpi_values",
+        select="value,kpi_definition_id,source,recorded_at",
+        eq_filters={"campaign_id": campaign_id},
+        limit=500,
+    )
+    kpi_defs_resp = await supabase_rest.table("kpi_definitions", select="id,code,name,category", limit=500)
+    kpi_defs = {str(k["id"]): k for k in kpi_defs_resp}
+
+    kpis = []
+    for v in kpi_values:
+        kd = kpi_defs.get(str(v["kpi_definition_id"]) or {})
+        if kd:
+            kpis.append(CampaignKPIRead(
+                kpi_code=kd.get("code") or "",
+                kpi_name=kd.get("name") or "",
+                category=kd.get("category") or "",
+                value=v.get("value") or 0,
+                source=v.get("source") or "",
+                recorded_at=v.get("recorded_at") or "",
+            ))
+
+    links = await supabase_rest.table(
+        "campaign_links",
+        select="*",
+        eq_filters={"campaign_id": campaign_id},
+        order="link_type",
+    )
+
+    insights = await supabase_rest.table(
+        "insights",
+        select="*",
+        eq_filters={"campaign_id": campaign_id},
+        order="created_at.desc",
+    )
 
     return CampaignDetail(
-        **campaign.model_dump(),
+        **campaign,
         brand=brand,
         client=client,
-        kpis=[CampaignKPIRead(**dict(k)) for k in kpis],
-        links=[CampaignLinkRead(**dict(l)) for l in links],
-        insights=[InsightRead(**dict(i)) for i in insights],
+        kpis=kpis,
+        links=[CampaignLinkRead(**l) for l in links],
+        insights=[InsightRead(**i) for i in insights],
     )
 
 
 @router.post("", response_model=CampaignRead, status_code=201)
-async def create_campaign(payload: CampaignCreate, user: CurrentUserDep, db: AsyncSession = Depends(get_db)):
-    # Auto-generate code
-    count_sql = text("SELECT COUNT(*) AS c FROM campaigns WHERE code LIKE 'CAMP-%'")
-    count = (await db.execute(count_sql)).scalar() or 0
-    code = f"CAMP-{count + 1:04d}"
+async def create_campaign(payload: CampaignCreate, user: CurrentUserDep):
+    all_campaigns = await supabase_rest.table("campaigns", select="code", limit=10000)
+    camp_codes = [c.get("code") or "" for c in all_campaigns if c.get("code", "").startswith("CAMP-")]
+    nums = [int(c.split("-")[1]) for c in camp_codes if c.split("-")[1].isdigit()]
+    next_num = max(nums) + 1 if nums else 1
+    code = f"CAMP-{next_num:04d}"
 
-    sql = text("""
-        INSERT INTO campaigns (
-            code, client_id, brand_id, name, objective, campaign_type,
-            secondary_objectives, influencer_tiers, start_date, end_date,
-            budget_total, num_influencers, target_audience, tags, notes,
-            owner_user_id, created_by, business_unit_id
-        )
-        VALUES (
-            :code, :client_id, :brand_id, :name, :objective, :campaign_type,
-            :secondary_objectives, :influencer_tiers, :start_date, :end_date,
-            :budget_total, :num_influencers, :target_audience, :tags, :notes,
-            :owner_user_id, :created_by, '00000000-0000-0000-0000-000000000003'::uuid
-        )
-        RETURNING *
-    """)
-    params = payload.model_dump()
-    params["code"] = code
-    params["secondary_objectives"] = list(payload.secondary_objectives)
-    params["influencer_tiers"] = list(payload.influencer_tiers)
-    params["tags"] = list(payload.tags)
-    params["owner_user_id"] = str(user.id)
-    params["created_by"] = str(user.id)
-    # Convert UUIDs to str for asyncpg
-    params["client_id"] = str(payload.client_id)
-    params["brand_id"] = str(payload.brand_id)
-    try:
-        result = await db.execute(sql, params)
-        await db.commit()
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail=f"Could not create campaign: {e}")
-    return CampaignRead.model_validate(result.mappings().first())
+    data = payload.model_dump()
+    data["code"] = code
+    data["owner_user_id"] = str(user.id)
+    data["created_by"] = str(user.id)
+    data["business_unit_id"] = "00000000-0000-0000-0000-000000000003"
+    data["client_id"] = str(payload.client_id)
+    data["brand_id"] = str(payload.brand_id)
+    data["secondary_objectives"] = list(payload.secondary_objectives)
+    data["influencer_tiers"] = list(payload.influencer_tiers)
+    data["tags"] = list(payload.tags)
+    data["budget_currency"] = "USD"
+
+    result = await supabase_rest.insert("campaigns", data)
+    return CampaignRead.model_validate(result[0])
 
 
 @router.patch("/{campaign_id}", response_model=CampaignRead)
@@ -183,21 +202,16 @@ async def update_campaign(
     campaign_id: str,
     payload: CampaignUpdate,
     user: CurrentUserDep,
-    db: AsyncSession = Depends(get_db),
 ):
     updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if not updates:
-        return await get_campaign(campaign_id, user, db)
+        rows = await supabase_rest.table("campaigns", select="*", eq_filters={"id": campaign_id})
+        if not rows:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        return CampaignRead.model_validate(rows[0])
 
-    set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
-    sql = text(f"UPDATE campaigns SET {set_clauses} WHERE id = :id RETURNING *")
-    updates["id"] = campaign_id
-    result = await db.execute(sql, updates)
-    await db.commit()
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    return CampaignRead.model_validate(row)
+    result = await supabase_rest.update("campaigns", updates, {"id": campaign_id})
+    return CampaignRead.model_validate(result[0])
 
 
 @router.post("/{campaign_id}/status", response_model=CampaignRead, summary="Change status")
@@ -205,24 +219,14 @@ async def change_status(
     campaign_id: str,
     payload: CampaignStatusChange,
     user: CurrentUserDep,
-    db: AsyncSession = Depends(get_db),
 ):
     if payload.to_status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {sorted(VALID_STATUSES)}")
-    # History trigger inserts a row automatically; we just update status
-    sql = text("""
-        UPDATE campaigns SET status = :status WHERE id = :id RETURNING *
-    """)
-    result = await db.execute(sql, {"status": payload.to_status, "id": campaign_id})
-    await db.commit()
-    row = result.mappings().first()
-    if not row:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    return CampaignRead.model_validate(row)
+    result = await supabase_rest.update("campaigns", {"status": payload.to_status}, {"id": campaign_id})
+    return CampaignRead.model_validate(result[0])
 
 
 @router.delete("/{campaign_id}", status_code=204)
-async def delete_campaign(campaign_id: str, user: CurrentUserDep, db: AsyncSession = Depends(get_db)):
-    await db.execute(text("UPDATE campaigns SET deleted_at = NOW() WHERE id = :id"), {"id": campaign_id})
-    await db.commit()
+async def delete_campaign(campaign_id: str, user: CurrentUserDep):
+    await supabase_rest.update("campaigns", {"deleted_at": "now()"}, {"id": campaign_id})
     return None

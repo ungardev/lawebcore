@@ -1,13 +1,6 @@
-"""Auth endpoints - sync user profile from Supabase JWT."""
-
-from fastapi import APIRouter, HTTPException, status
-from supabase import create_client, Client as SupabaseClient
-from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import Depends
-
-from app.core.config import settings
-from app.core.db import get_db
+"""Auth endpoints - sync user profile from Supabase REST API."""
+from fastapi import APIRouter, HTTPException
+from app.core.supabase_rest import supabase_rest
 from app.core.security import CurrentUserDep, get_current_user
 from app.schemas import UserRead
 
@@ -15,25 +8,22 @@ router = APIRouter()
 
 
 @router.get("/me", response_model=UserRead, summary="Current user profile")
-async def get_me(user: CurrentUserDep, db: AsyncSession = Depends(get_db)):
+async def get_me(user: CurrentUserDep):
     """Returns the profile of the authenticated user; auto-creates if missing."""
-    # Intentar leer de la tabla users (mirror de auth.users)
-    result = await db.execute(text("SELECT * FROM users WHERE id = :uid"), {"uid": str(user.id)})
-    row = result.mappings().first()
-    if row:
-        return UserRead.model_validate(row)
-    # Si no existe, auto-crear perfil basico
-    await db.execute(
-        text("""
-        INSERT INTO users (id, email, full_name, status)
-        VALUES (:uid, :email, :full_name, 'active')
-        ON CONFLICT (id) DO NOTHING
-        """),
-        {"uid": str(user.id), "email": user.email, "full_name": user.email.split("@")[0]},
-    )
-    await db.commit()
-    result = await db.execute(text("SELECT * FROM users WHERE id = :uid"), {"uid": str(user.id)})
-    return UserRead.model_validate(result.mappings().first())
+    rows = await supabase_rest.table("users", select="*", eq_filters={"id": str(user.id)})
+    if rows:
+        return UserRead.model_validate(rows[0])
+
+    data = {
+        "id": str(user.id),
+        "email": user.email,
+        "full_name": user.email.split("@")[0],
+        "status": "active",
+    }
+    await supabase_rest.insert("users", data, return_repr=False)
+
+    rows = await supabase_rest.table("users", select="*", eq_filters={"id": str(user.id)})
+    return UserRead.model_validate(rows[0])
 
 
 @router.post("/logout", summary="Logout (client-side token discard)")

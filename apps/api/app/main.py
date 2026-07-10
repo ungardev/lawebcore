@@ -13,6 +13,7 @@ from sqlalchemy import text
 
 from app.core.config import settings
 from app.core.db import close_db, init_db
+from app.core.supabase_rest import supabase_rest
 from app.api.v1 import api_router
 from app.core.logging import configure_logging
 
@@ -28,6 +29,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
     logger.info("lawebcore_api_stopping")
+    await supabase_rest.close()
     await close_db()
 
 

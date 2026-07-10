@@ -1,10 +1,6 @@
 """Brands endpoints."""
-
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.db import get_db
+from fastapi import APIRouter, HTTPException, Query
+from app.core.supabase_rest import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas import BrandRead, BrandCreate
 
@@ -14,42 +10,25 @@ router = APIRouter()
 @router.get("", response_model=list[BrandRead])
 async def list_brands(
     user: CurrentUserDep,
-    db: AsyncSession = Depends(get_db),
     client_id: str | None = Query(None),
     search: str | None = Query(None),
     is_active: bool | None = Query(True),
     limit: int = Query(100, le=500),
 ):
-    params: dict = {"limit": limit}
-    where = ["deleted_at IS NULL"]
+    all_rows = await supabase_rest.table("brands", select="*", limit=10000)
     if client_id:
-        where.append("client_id = :client_id")
-        params["client_id"] = client_id
+        all_rows = [r for r in all_rows if str(r.get("client_id") or "") == client_id]
     if is_active is not None:
-        where.append("is_active = :is_active")
-        params["is_active"] = is_active
+        all_rows = [r for r in all_rows if r.get("is_active") == is_active]
     if search:
-        where.append("(name ILIKE :search OR code ILIKE :search)")
-        params["search"] = f"%{search}%"
-    sql = f"""
-        SELECT * FROM brands WHERE {' AND '.join(where)}
-        ORDER BY name LIMIT :limit
-    """
-    result = await db.execute(text(sql), params)
-    return [BrandRead.model_validate(r) for r in result.mappings().all()]
+        s = search.lower()
+        all_rows = [r for r in all_rows if s in (r.get("name") or "").lower() or s in (r.get("code") or "").lower()]
+    return [BrandRead.model_validate(r) for r in all_rows[:limit]]
 
 
 @router.post("", response_model=BrandRead, status_code=201)
-async def create_brand(payload: BrandCreate, user: CurrentUserDep, db: AsyncSession = Depends(get_db)):
-    sql = text("""
-        INSERT INTO brands (client_id, code, name, category)
-        VALUES (:client_id, :code, :name, :category)
-        RETURNING *
-    """)
-    try:
-        result = await db.execute(sql, payload.model_dump())
-        await db.commit()
-    except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail=f"Could not create brand: {e}")
-    return BrandRead.model_validate(result.mappings().first())
+async def create_brand(payload: BrandCreate, user: CurrentUserDep):
+    data = payload.model_dump()
+    data["client_id"] = str(payload.client_id)
+    result = await supabase_rest.insert("brands", data)
+    return BrandRead.model_validate(result[0])
