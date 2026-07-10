@@ -1,24 +1,71 @@
 import { useQuery } from '@tanstack/react-query';
-import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp } from 'lucide-react';
-import { dashboardApi } from '@/lib/api';
+import { useState } from 'react';
+import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter } from 'lucide-react';
+import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Brand, Client } from '@/types';
 
 const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4'];
 
 export function DashboardPage() {
+  const [brandFilter, setBrandFilter] = useState<string>('');
+  const [clientFilter, setClientFilter] = useState<string>('');
+
   const { data: summary } = useQuery({ queryKey: ['dashboard-summary'], queryFn: dashboardApi.summary });
   const { data: byStatus } = useQuery({ queryKey: ['dashboard-by-status'], queryFn: dashboardApi.byStatus });
   const { data: topClients } = useQuery({ queryKey: ['dashboard-top-clients'], queryFn: () => dashboardApi.topClients() });
+  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => brandsApi.list() });
+  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => clientsApi.list() });
+
+  const clientMap = new Map((clients || []).map((c: Client) => [c.id, c]));
+
+  const hasFilter = Boolean(brandFilter || clientFilter);
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Dashboard Ejecutivo</h1>
-        <p className="text-sm md:text-base text-muted-foreground">Vision integral de campanas, clientes y KPIs</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard Ejecutivo</h1>
+          <p className="text-sm md:text-base text-muted-foreground">Vision integral de campanas, clientes y KPIs</p>
+        </div>
+        {hasFilter && (
+          <button
+            onClick={() => { setBrandFilter(''); setClientFilter(''); }}
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            <Filter className="w-3 h-3" />
+            Limpiar filtro
+          </button>
+        )}
       </div>
+
+      <Card className="p-3 md:p-4">
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <select
+            value={clientFilter}
+            onChange={(e) => { setClientFilter(e.target.value); setBrandFilter(''); }}
+            className="h-9 px-3 rounded-md border border-input bg-transparent text-sm w-full sm:w-auto"
+          >
+            <option value="">Todas los clientes</option>
+            {clients?.map((c: Client) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+          <select
+            value={brandFilter}
+            onChange={(e) => { setBrandFilter(e.target.value); setClientFilter(''); }}
+            className="h-9 px-3 rounded-md border border-input bg-transparent text-sm w-full sm:w-auto"
+          >
+            <option value="">Todas las marcas</option>
+            {brands?.map((b: Brand) => (
+              <option key={b.id} value={b.id}>{b.name} ({clientMap.get(b.client_id)?.name || '—'})</option>
+            ))}
+          </select>
+        </div>
+      </Card>
 
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <KpiCard title="Campanas activas" value={summary?.active_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} hint={`${summary?.total_campaigns ?? 0} totales`} />

@@ -9,11 +9,13 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CAMPAIGN_STATUSES, STATUS_COLORS, OBJECTIVE_COLORS, formatCurrency } from '@/lib/utils';
 import { ResponsiveTable } from '@/components/data-table/ResponsiveTable';
+import { NewCampaignModal } from './components/NewCampaignModal';
 
 export function CampaignsListPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
+  const [newCampaignOpen, setNewCampaignOpen] = useState(false);
 
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ['campaigns', { search, statusFilter }],
@@ -33,12 +35,18 @@ export function CampaignsListPage() {
           <h1 className="text-2xl md:text-3xl font-bold">Campanas</h1>
           <p className="text-sm md:text-base text-muted-foreground">{campaigns?.length ?? 0} campanas registradas</p>
         </div>
-        <Button asChild className="w-full sm:w-auto">
-          <Link to="/campaigns/kanban">
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button variant="outline" asChild className="flex-1 sm:flex-none">
+            <Link to="/campaigns/kanban">
+              <Plus className="w-4 h-4 mr-2" />
+              Pipeline
+            </Link>
+          </Button>
+          <Button className="flex-1 sm:flex-none" onClick={() => setNewCampaignOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Ver Pipeline
-          </Link>
-        </Button>
+            Nueva Campana
+          </Button>
+        </div>
       </div>
 
       <Card className="p-3 md:p-4">
@@ -147,6 +155,8 @@ export function CampaignsListPage() {
           ]}
         />
       </Card>
+
+      <NewCampaignModal open={newCampaignOpen} onClose={() => setNewCampaignOpen(false)} />
     </div>
   );
 }

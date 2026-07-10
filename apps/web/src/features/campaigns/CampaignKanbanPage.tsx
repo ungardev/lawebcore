@@ -14,7 +14,7 @@ import {
   closestCorners,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { campaignsApi, clientsApi } from '@/lib/api';
+import { campaignsApi, clientsApi, brandsApi } from '@/lib/api';
 import { CAMPAIGN_STATUSES } from '@/lib/utils';
 import { toast } from 'sonner';
 import { KanbanColumn } from './components/KanbanColumn';
@@ -27,6 +27,7 @@ export function CampaignKanbanPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [clientFilter, setClientFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
   const [activeCard, setActiveCard] = useState<KanbanCardData | null>(null);
 
   const sensors = useSensors(
@@ -43,6 +44,12 @@ export function CampaignKanbanPage() {
   const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: () => clientsApi.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: brands = [] } = useQuery({
+    queryKey: ['brands'],
+    queryFn: () => brandsApi.list(),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -88,7 +95,8 @@ export function CampaignKanbanPage() {
     for (const status of COLUMNS) {
       const cards = kanban.columns[status] || [];
       result[status] = cards.filter((c: any) => {
-        if (clientFilter && c.client_id !== clientFilter) return false;
+            if (clientFilter && c.client_id !== clientFilter) return false;
+        if (brandFilter && c.brand_id !== brandFilter) return false;
         if (search) {
           const name = (c.name || '').toLowerCase();
           const code = (c.code || '').toLowerCase();
@@ -98,7 +106,7 @@ export function CampaignKanbanPage() {
       });
     }
     return result;
-  }, [kanban, search, clientFilter]);
+  }, [kanban, search, clientFilter, brandFilter]);
 
   const columnStats = useMemo(() => {
     const stats: Record<string, number> = {};
@@ -192,7 +200,10 @@ export function CampaignKanbanPage() {
         onSearchChange={setSearch}
         clientFilter={clientFilter}
         onClientFilterChange={setClientFilter}
-        clients={clients.map((c: any) => ({ id: c.id, name: c.name }))}
+        brandFilter={brandFilter}
+        onBrandFilterChange={setBrandFilter}
+        clients={clients}
+        brands={brands}
       />
 
       <DndContext
