@@ -12,8 +12,8 @@ import {
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/campaigns', label: 'Campanas', icon: Megaphone },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/campaigns', label: 'Campanas', icon: Megaphone, end: true },
   { to: '/campaigns/kanban', label: 'Pipeline', icon: Kanban },
   { to: '/clients', label: 'Clientes', icon: Building2 },
   { to: '/brands', label: 'Marcas', icon: Tags },
@@ -42,7 +42,7 @@ export function Sidebar() {
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/dashboard'}
+            end={item.end ?? false}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',

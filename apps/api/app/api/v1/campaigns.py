@@ -74,8 +74,6 @@ async def kanban_view(
         s = r.get("status") or "UNKNOWN"
         if s not in columns:
             columns[s] = []
-        end_date = r.get("end_date")
-        updated_at = r.get("updated_at")
         columns[s].append({
             "id": str(r["id"]),
             "code": r.get("code") or "",
@@ -85,8 +83,8 @@ async def kanban_view(
             "brand_id": str(r.get("brand_id") or ""),
             "num_influencers": r.get("num_influencers") or 0,
             "budget_total": float(r.get("budget_total") or 0),
-            "end_date": end_date.isoformat() if end_date else None,
-            "updated_at": updated_at.isoformat() if updated_at else None,
+            "end_date": r.get("end_date"),
+            "updated_at": r.get("updated_at"),
         })
     return {"columns": columns, "total": sum(len(v) for v in columns.values())}
 
