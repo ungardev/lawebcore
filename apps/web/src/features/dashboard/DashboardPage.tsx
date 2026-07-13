@@ -6,17 +6,48 @@ import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Sector, Rectangle } from 'recharts';
 import { Brand, Client } from '@/types';
 
 const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4'];
+
+const renderPieLabel = (entry: any) => entry.name;
+
+const renderActiveShape = (props: any) => {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <Sector
+      cx={cx}
+      cy={cy}
+      innerRadius={innerRadius}
+      outerRadius={outerRadius + 8}
+      startAngle={startAngle}
+      endAngle={endAngle}
+      fill={fill}
+      style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+    />
+  );
+};
+
+const renderActiveBar = (props: any) => {
+  const { x, y, width, height } = props;
+  return (
+    <Rectangle
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill="#7c3aed"
+      fillOpacity={0.9}
+      radius={[4, 4, 0, 0]}
+    />
+  );
+};
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [clientFilter, setClientFilter] = useState<string>('');
-  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
-  const [isBarHovered, setIsBarHovered] = useState(false);
 
   const handlePieClick = (data: any) => {
     if (data?.name) navigate(`/clients?search=${encodeURIComponent(data.name)}`);
@@ -25,11 +56,6 @@ export function DashboardPage() {
   const handleBarClick = (data: any) => {
     if (data?.status) navigate(`/campaigns?status=${encodeURIComponent(data.status)}`);
   };
-
-  const handlePieMouseEnter = () => setActivePieIndex(-1);
-  const handlePieMouseLeave = () => setActivePieIndex(null);
-  const handleBarMouseEnter = () => setIsBarHovered(true);
-  const handleBarMouseLeave = () => setIsBarHovered(false);
 
   const renderStatusTick = (props: any) => {
     const { x, y, payload } = props;
@@ -147,9 +173,8 @@ export function DashboardPage() {
                   fill="#8b5cf6"
                   radius={[4, 4, 0, 0]}
                   onClick={handleBarClick}
-                  onMouseEnter={handleBarMouseEnter}
-                  onMouseLeave={handleBarMouseLeave}
-                  style={{ cursor: 'pointer', opacity: isBarHovered ? 0.8 : 1, transition: 'opacity 0.2s' }}
+                  activeBar={renderActiveBar}
+                  style={{ cursor: 'pointer' }}
                 />
               </BarChart>
             </ResponsiveContainer>
@@ -170,19 +195,13 @@ export function DashboardPage() {
                   cx="50%"
                   cy="50%"
                   outerRadius={window.innerWidth < 640 ? 60 : 90}
-                  label={(e) => e.name}
+                  label={renderPieLabel}
+                  activeShape={renderActiveShape}
                   onClick={handlePieClick}
                   style={{ cursor: 'pointer' }}
                 >
                   {(topClients || []).map((_: any, i: number) => (
-                    <Cell
-                      key={i}
-                      fill={COLORS[i % COLORS.length]}
-                      opacity={activePieIndex === null || activePieIndex === i ? 1 : 0.5}
-                      onMouseEnter={handlePieMouseEnter}
-                      onMouseLeave={handlePieMouseLeave}
-                      style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
-                    />
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
