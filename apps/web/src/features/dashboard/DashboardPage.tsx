@@ -9,7 +9,7 @@ import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
 import { Brand, Client } from '@/types';
 
-const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4'];
+const COLORS = ['#14181F', '#EC4899', '#3B82F6', '#5C6370', '#F59E0B', '#22C55E', '#8B93A1'];
 
 const renderPieLabel = (entry: any) => entry.name;
 
@@ -205,13 +205,13 @@ export function DashboardPage() {
                   type="category"
                   interval={0}
                   width={130}
-                  tick={{ fontSize: 12, fill: '#8b5cf6', cursor: 'pointer' }}
+                  tick={{ fontSize: 12, fill: '#14181F', cursor: 'pointer' }}
                   tickFormatter={(value) => String(value).replace(/_/g, ' ')}
                 />
                 <Tooltip cursor={{ fill: 'transparent' }} content={<CustomBarTooltip />} />
                 <Bar
                   dataKey="count"
-                  fill="#8b5cf6"
+                  fill="#14181F"
                   radius={[0, 6, 6, 0]}
                   maxBarSize={36}
                   onClick={handleBarClick}

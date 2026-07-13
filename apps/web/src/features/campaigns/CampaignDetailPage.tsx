@@ -103,10 +103,10 @@ export function CampaignDetailPage() {
       </div>
 
       {aiOutput && (
-        <Card className="border-purple-200 bg-purple-50/50 dark:bg-purple-950/20">
+        <Card className="border-border bg-gradient-subtle dark:bg-card">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" /> Resultado IA
+              <Sparkles className="w-4 h-4 text-foreground" /> Resultado IA
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -297,7 +297,7 @@ export function CampaignDetailPage() {
               <CardHeader><CardTitle>Insights</CardTitle></CardHeader>
               <CardContent className="space-y-3">
                 {campaign.insights.map((i) => (
-                  <div key={i.id} className="border-l-4 border-purple-400 pl-3 py-2">
+                  <div key={i.id} className="border-l-4 border-[#3B82F6] pl-3 py-2">
                     <p className="font-medium text-sm flex items-center gap-2">
                       {i.title}
                       {i.generated_by_ai && <Badge variant="outline" className="text-xs">IA</Badge>}

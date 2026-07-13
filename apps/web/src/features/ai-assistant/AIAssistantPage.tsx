@@ -158,7 +158,7 @@ export function AIAssistantPage() {
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
-            <Sparkles className="w-6 md:w-7 text-purple-600" />
+            <Sparkles className="w-6 md:w-7 text-foreground" />
             Asistente IA
           </h1>
           <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
@@ -192,7 +192,7 @@ export function AIAssistantPage() {
               >
                 {m.role === 'assistant' && m.usedRag && (
                   <div className="flex items-center gap-1 mb-2">
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gradient-to-r from-pink-500/20 to-blue-500/20 text-foreground font-medium border border-[#EC4899]/30">
                       RAG activo
                     </span>
                   </div>
