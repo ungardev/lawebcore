@@ -6,7 +6,7 @@ import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { formatCurrency, formatNumber, formatPercent } from '@/lib/utils';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Sector, Rectangle } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Sector } from 'recharts';
 import { Brand, Client } from '@/types';
 
 const COLORS = ['#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#06b6d4'];
@@ -20,26 +20,27 @@ const renderActiveShape = (props: any) => {
       cx={cx}
       cy={cy}
       innerRadius={innerRadius}
-      outerRadius={outerRadius + 8}
+      outerRadius={outerRadius + 10}
       startAngle={startAngle}
       endAngle={endAngle}
       fill={fill}
-      style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.25))' }}
+      style={{ filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.3))' }}
     />
   );
 };
 
 const renderActiveBar = (props: any) => {
-  const { x, y, width, height } = props;
+  const { x, y, width, height, fill } = props;
   return (
-    <Rectangle
+    <rect
       x={x}
       y={y}
       width={width}
       height={height}
-      fill="#7c3aed"
-      fillOpacity={0.9}
-      radius={[4, 4, 0, 0]}
+      fill={fill}
+      fillOpacity={0.85}
+      rx={4}
+      ry={4}
     />
   );
 };
@@ -65,7 +66,8 @@ export function DashboardPage() {
         y={y + 10}
         textAnchor="end"
         fill="#8b5cf6"
-        fontSize={11}
+        fontSize={12}
+        fontWeight={500}
         style={{ cursor: 'pointer' }}
         onClick={() => navigate(`/campaigns?status=${encodeURIComponent(payload.value)}`)}
       >
@@ -157,21 +159,25 @@ export function DashboardPage() {
             <CardTitle>Campanas por Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240} className="md:!h-[280px]">
-              <BarChart data={byStatus || []}>
+            <ResponsiveContainer width="100%" height={300} className="md:!h-[380px]">
+              <BarChart data={byStatus || []} barCategoryGap="20%" barGap={4}>
                 <XAxis
                   dataKey="status"
                   tick={renderStatusTick}
-                  angle={window.innerWidth < 640 ? -45 : -15}
-                  textAnchor={window.innerWidth < 640 ? 'end' : 'end'}
-                  height={70}
+                  angle={-15}
+                  textAnchor="end"
+                  height={72}
                 />
-                <YAxis />
-                <Tooltip />
+                <YAxis tick={{ fontSize: 12 }} />
+                <Tooltip
+                  cursor={{ fill: 'transparent' }}
+                  contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', fontSize: 12 }}
+                />
                 <Bar
                   dataKey="count"
                   fill="#8b5cf6"
-                  radius={[4, 4, 0, 0]}
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={60}
                   onClick={handleBarClick}
                   activeBar={renderActiveBar}
                   style={{ cursor: 'pointer' }}
@@ -186,7 +192,7 @@ export function DashboardPage() {
             <CardTitle>Top Clientes</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={240} className="md:!h-[280px]">
+            <ResponsiveContainer width="100%" height={300} className="md:!h-[380px]">
               <PieChart>
                 <Pie
                   data={topClients || []}
@@ -194,17 +200,24 @@ export function DashboardPage() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
-                  outerRadius={window.innerWidth < 640 ? 60 : 90}
+                  outerRadius="78%"
+                  innerRadius="30%"
+                  paddingAngle={3}
+                  minAngle={4}
+                  labelLine={false}
                   label={renderPieLabel}
                   activeShape={renderActiveShape}
                   onClick={handlePieClick}
                   style={{ cursor: 'pointer' }}
                 >
                   {(topClients || []).map((_: any, i: number) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={COLORS[i % COLORS.length]} stroke="none" />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  cursor={{ fill: 'transparent' }}
+                  contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', fontSize: 12 }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
