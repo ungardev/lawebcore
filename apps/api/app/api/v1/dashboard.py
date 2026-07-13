@@ -30,7 +30,7 @@ async def summary(
 
     campaigns = await supabase_rest.table(
         "campaigns",
-        select="status,budget_total",
+        select="id,status,budget_total",
         eq_filters=campaign_filter,
     )
     clients = await supabase_rest.table("clients", select="id", is_null_filters=["deleted_at"])
