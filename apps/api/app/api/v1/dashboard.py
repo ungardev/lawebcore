@@ -1,4 +1,5 @@
 """Dashboard endpoints - using Supabase REST API."""
+import structlog
 from decimal import Decimal
 from fastapi import APIRouter, Query
 
@@ -67,32 +68,40 @@ async def summary(
     total_reach = int(sum(reach_values)) if reach_values else 0
     avg_engagement_rate = Decimal(str(sum(engagement_values) / len(engagement_values))) if engagement_values else None
 
-    all_pubs = await supabase_rest.table(
-        "publicaciones",
-        select="id,campaign_id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
-        limit=10000,
-    )
+    publicaciones_analizadas = 0
+    campanas_analizadas = 0
+    sentimiento_promedio = None
 
-    if campaign_filter:
-        campaign_ids = {str(c["id"]) for c in campaigns}
-        pubs_filtered = [p for p in all_pubs if str(p.get("campaign_id")) in campaign_ids]
-    else:
-        pubs_filtered = all_pubs
+    try:
+        all_pubs = await supabase_rest.table(
+            "publicaciones",
+            select="id,campaign_id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
+            limit=10000,
+        )
 
-    pubs_with_sentiment = [p for p in pubs_filtered if p.get("comentarios_analizados")]
-    publicaciones_analizadas = len(pubs_with_sentiment)
-    campanas_ids = set(str(p.get("campaign_id")) for p in pubs_with_sentiment if p.get("campaign_id"))
-    campanas_analizadas = len(campanas_ids)
+        if campaign_filter:
+            campaign_ids = {str(c["id"]) for c in campaigns}
+            pubs_filtered = [p for p in all_pubs if str(p.get("campaign_id")) in campaign_ids]
+        else:
+            pubs_filtered = all_pubs
 
-    sentiment_scores = []
-    for p in pubs_with_sentiment:
-        pos = int(p.get("sentimiento_positivo") or 0)
-        neu = int(p.get("sentimiento_neutro") or 0)
-        neg = int(p.get("sentimiento_negativo") or 0)
-        total = pos + neu + neg
-        if total > 0:
-            sentiment_scores.append((pos - neg) / total)
-    sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
+        pubs_with_sentiment = [p for p in pubs_filtered if p.get("comentarios_analizados")]
+        publicaciones_analizadas = len(pubs_with_sentiment)
+        campanas_ids = set(str(p.get("campaign_id")) for p in pubs_with_sentiment if p.get("campaign_id"))
+        campanas_analizadas = len(campanas_ids)
+
+        sentiment_scores = []
+        for p in pubs_with_sentiment:
+            pos = int(p.get("sentimiento_positivo") or 0)
+            neu = int(p.get("sentimiento_neutro") or 0)
+            neg = int(p.get("sentimiento_negativo") or 0)
+            total = pos + neu + neg
+            if total > 0:
+                sentiment_scores.append((pos - neg) / total)
+        sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
+    except Exception:
+        logger = structlog.get_logger()
+        logger.error("sentiment_kpi_query_failed", error="fallback to zero values")
 
     return DashboardKPIs(
         total_campaigns=total_campaigns,
