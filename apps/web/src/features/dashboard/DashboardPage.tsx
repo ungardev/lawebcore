@@ -58,26 +58,21 @@ export function DashboardPage() {
     if (data?.status) navigate(`/campaigns?status=${encodeURIComponent(data.status)}`);
   };
 
-  const renderStatusTick = (props: any) => {
-    const { x, y, payload } = props;
+  const CustomBarTooltip = ({ active, payload }: any) => {
+    if (!active || !payload?.length) return null;
+    const data = payload[0].payload;
     return (
-      <text
-        x={x}
-        y={y + 10}
-        textAnchor="end"
-        fill="#8b5cf6"
-        fontSize={12}
-        fontWeight={500}
-        style={{ cursor: 'pointer' }}
-        onClick={() => navigate(`/campaigns?status=${encodeURIComponent(payload.value)}`)}
-      >
-        {String(payload.value).replace(/_/g, ' ')}
-      </text>
+      <div className="bg-card border border-border rounded-lg p-2 shadow-md text-xs">
+        <div className="font-medium">{data.status?.replace(/_/g, ' ')}</div>
+        <div className="text-muted-foreground">{data.count} campañas</div>
+      </div>
     );
   };
 
   const { data: summary } = useQuery({ queryKey: ['dashboard-summary'], queryFn: dashboardApi.summary });
   const { data: byStatus } = useQuery({ queryKey: ['dashboard-by-status'], queryFn: dashboardApi.byStatus });
+
+  const sortedByStatus = [...(byStatus || [])].sort((a, b) => b.count - a.count);
   const { data: topClients } = useQuery({ queryKey: ['dashboard-top-clients'], queryFn: () => dashboardApi.topClients() });
   const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => brandsApi.list() });
   const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => clientsApi.list() });
@@ -160,26 +155,27 @@ export function DashboardPage() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300} className="md:!h-[380px]">
-              <BarChart data={byStatus || []} barCategoryGap="20%" barGap={4}>
-                <XAxis
+              <BarChart
+                data={sortedByStatus}
+                layout="vertical"
+                barCategoryGap="25%"
+                margin={{ left: 20, right: 30 }}
+              >
+                <XAxis type="number" tick={{ fontSize: 12 }} />
+                <YAxis
                   dataKey="status"
-                  tick={renderStatusTick}
+                  type="category"
                   interval={0}
-                  angle={-45}
-                  textAnchor="end"
-                  height={90}
-                  tickMargin={12}
+                  width={130}
+                  tick={{ fontSize: 12, fill: '#8b5cf6', cursor: 'pointer' }}
+                  tickFormatter={(value) => String(value).replace(/_/g, ' ')}
                 />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip
-                  cursor={{ fill: 'transparent' }}
-                  contentStyle={{ borderRadius: 8, border: '1px solid hsl(var(--border))', fontSize: 12 }}
-                />
+                <Tooltip cursor={{ fill: 'transparent' }} content={<CustomBarTooltip />} />
                 <Bar
                   dataKey="count"
                   fill="#8b5cf6"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={60}
+                  radius={[0, 6, 6, 0]}
+                  maxBarSize={36}
                   onClick={handleBarClick}
                   activeBar={renderActiveBar}
                   style={{ cursor: 'pointer' }}
