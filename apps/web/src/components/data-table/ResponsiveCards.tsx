@@ -49,7 +49,7 @@ export function ResponsiveCards<T extends { id: string }>({
       {data.map((item) => (
         <Card
           key={keyExtractor(item)}
-          className={`p-4 ${onCardClick ? 'cursor-pointer hover:bg-accent transition-colors' : ''}`}
+          className={`p-4 ${onCardClick ? 'cursor-pointer hover:bg-hover transition-colors' : ''}`}
           onClick={() => onCardClick?.(item)}
         >
           {primaryField && (

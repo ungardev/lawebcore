@@ -61,7 +61,7 @@ export function ResponsiveTable<T extends { id: string }>({
             {data.map((item) => (
               <TableRow
                 key={keyExtractor(item)}
-                className={onRowClick ? 'cursor-pointer hover:bg-accent' : ''}
+                className={onRowClick ? 'cursor-pointer hover:bg-hover' : ''}
                 onClick={() => onRowClick?.(item)}
               >
                 {columns.map((col) => (

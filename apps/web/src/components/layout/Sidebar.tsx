@@ -50,7 +50,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         {onNavigate && (
           <button
             onClick={onNavigate}
-            className="md:hidden p-2 hover:bg-accent rounded-lg"
+            className="md:hidden p-2 hover:bg-hover rounded-lg"
             aria-label="Cerrar menu"
           >
             <X className="w-5 h-5" />
@@ -71,7 +71,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
                 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                  : 'text-muted-foreground hover:bg-hover hover:text-foreground',
                 collapsed && 'md:justify-center'
               )
             }

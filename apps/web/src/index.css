@@ -31,6 +31,10 @@
     --brand-pink-hover: 330 81% 52%;
     --brand-blue: 217 91% 60%;
     --brand-blue-hover: 217 91% 53%;
+
+    /* Hover token - soft gray for interactive elements */
+    --hover: 220 10% 95%;
+    --hover-foreground: 220 20% 10%;
   }
 
   .dark {
@@ -53,6 +57,10 @@
     --border: 220 15% 18%;
     --input: 220 15% 18%;
     --ring: 0 0% 98%;
+
+    /* Hover token - dark gray for dark mode */
+    --hover: 220 15% 18%;
+    --hover-foreground: 0 0% 98%;
   }
 }
 

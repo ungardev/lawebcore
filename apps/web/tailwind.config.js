@@ -43,6 +43,10 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        hover: {
+          DEFAULT: 'hsl(var(--hover))',
+          foreground: 'hsl(var(--hover-foreground))',
+        },
         brand: {
           pink: '#EC4899',
           'pink-hover': '#DB2777',
