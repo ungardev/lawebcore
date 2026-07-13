@@ -14,10 +14,14 @@ async def get_me(user: CurrentUserDep):
     if rows:
         return UserRead.model_validate(rows[0])
 
+    raw_name = (
+        (user.user_metadata or {}).get("full_name")
+        or user.email.split("@")[0].replace(".", " ").title()
+    )
     data = {
         "id": str(user.id),
         "email": user.email,
-        "full_name": user.email.split("@")[0],
+        "full_name": raw_name,
         "status": "active",
     }
     await supabase_rest.insert("users", data, return_repr=False)

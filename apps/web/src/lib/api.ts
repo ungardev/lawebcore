@@ -38,6 +38,7 @@ import type {
   Client,
   Brand,
   Influencer,
+  User,
 } from '@/types';
 import type { Publicacion, ProjectionCalculateResponse as ProjResp, InfluencerScore } from '@/types/piar';
 import type { SentimentAnalyzeResponse, SentimentAggregateResponse, SentimentReanalyzeResponse } from '@/types/sentiment';
@@ -117,6 +118,10 @@ export const aiApi = {
     (await api.post('/ai/chat', data)).data,
   generate: async (data: { prompt_code: string; campaign_id: string; extra_context?: Record<string, unknown> }) =>
     (await api.post('/ai/generate', data)).data,
+};
+
+export const authApi = {
+  me: async () => (await api.get<User>('/auth/me')).data,
 };
 
 export interface ImportReport {
