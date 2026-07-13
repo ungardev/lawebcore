@@ -1,6 +1,7 @@
 """Dashboard endpoints - using Supabase REST API."""
 from decimal import Decimal
 from fastapi import APIRouter, Query
+
 from app.core.supabase_rest import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas import DashboardKPIs
@@ -8,10 +9,29 @@ from app.schemas import DashboardKPIs
 router = APIRouter()
 
 
+def _campaigns_filter(client_id: str | None, brand_id: str | None) -> dict | None:
+    """Build eq_filters dict for campaign filtering."""
+    if brand_id:
+        return {"brand_id": brand_id}
+    if client_id:
+        return {"client_id": client_id}
+    return None
+
+
 @router.get("/summary", response_model=DashboardKPIs)
-async def summary(user: CurrentUserDep):
-    """Returns aggregated KPIs for the executive dashboard."""
-    campaigns = await supabase_rest.table("campaigns", select="status,budget_total")
+async def summary(
+    user: CurrentUserDep,
+    client_id: str | None = Query(None),
+    brand_id: str | None = Query(None),
+):
+    """Returns aggregated KPIs for the executive dashboard, optionally filtered."""
+    campaign_filter = _campaigns_filter(client_id, brand_id)
+
+    campaigns = await supabase_rest.table(
+        "campaigns",
+        select="status,budget_total",
+        eq_filters=campaign_filter,
+    )
     clients = await supabase_rest.table("clients", select="id", is_null_filters=["deleted_at"])
     brands = await supabase_rest.table("brands", select="id", is_null_filters=["deleted_at"])
     influencers = await supabase_rest.table("influencers", select="id", is_null_filters=["deleted_at"])
@@ -24,13 +44,22 @@ async def summary(user: CurrentUserDep):
     total_influencers = len(influencers)
     total_budget_usd = sum(Decimal(str(c.get("budget_total") or 0)) for c in campaigns)
 
-    kpi_values = await supabase_rest.table(
+    all_kpi_values = await supabase_rest.table(
         "campaign_kpi_values",
-        select="value,kpi_definition_id",
+        select="value,kpi_definition_id,campaign_id",
         limit=10000,
     )
     kpi_defs_resp = await supabase_rest.table("kpi_definitions", select="id,code", limit=500)
     kpi_defs = {str(k["id"]): k["code"] for k in kpi_defs_resp}
+
+    if campaign_filter:
+        campaign_ids = {str(c["id"]) for c in campaigns}
+        kpi_values = [
+            v for v in all_kpi_values
+            if str(v.get("campaign_id")) in campaign_ids
+        ]
+    else:
+        kpi_values = all_kpi_values
 
     reach_values = [v["value"] for v in kpi_values if kpi_defs.get(str(v["kpi_definition_id"])) == "reach" and v["value"] is not None]
     engagement_values = [v["value"] for v in kpi_values if kpi_defs.get(str(v["kpi_definition_id"])) == "engagement_rate" and v["value"] is not None]
@@ -38,33 +67,32 @@ async def summary(user: CurrentUserDep):
     total_reach = int(sum(reach_values)) if reach_values else 0
     avg_engagement_rate = Decimal(str(sum(engagement_values) / len(engagement_values))) if engagement_values else None
 
-    try:
-        all_pubs = await supabase_rest.table(
-            "publicaciones",
-            select="id,campaign_id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
-            limit=10000,
-        )
-        pubs_with_sentiment = [p for p in all_pubs if p.get("comentarios_analizados")]
-        publicaciones_analizadas = len(pubs_with_sentiment)
-        campanas_ids = set(str(p.get("campaign_id")) for p in pubs_with_sentiment if p.get("campaign_id"))
-        campanas_analizadas = len(campanas_ids)
+    all_pubs = await supabase_rest.table(
+        "publicaciones",
+        select="id,campaign_id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
+        limit=10000,
+    )
 
-        sentiment_scores = []
-        for p in pubs_with_sentiment:
-            pos = int(p.get("sentimiento_positivo") or 0)
-            neu = int(p.get("sentimiento_neutro") or 0)
-            neg = int(p.get("sentimiento_negativo") or 0)
-            total = pos + neu + neg
-            if total > 0:
-                sentiment_scores.append((pos - neg) / total)
-        sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
-    except Exception:
-        import structlog
-        logger = structlog.get_logger()
-        logger.error("sentiment_kpi_query_failed", error="fallback to zero values")
-        publicaciones_analizadas = 0
-        campanas_analizadas = 0
-        sentimiento_promedio = None
+    if campaign_filter:
+        campaign_ids = {str(c["id"]) for c in campaigns}
+        pubs_filtered = [p for p in all_pubs if str(p.get("campaign_id")) in campaign_ids]
+    else:
+        pubs_filtered = all_pubs
+
+    pubs_with_sentiment = [p for p in pubs_filtered if p.get("comentarios_analizados")]
+    publicaciones_analizadas = len(pubs_with_sentiment)
+    campanas_ids = set(str(p.get("campaign_id")) for p in pubs_with_sentiment if p.get("campaign_id"))
+    campanas_analizadas = len(campanas_ids)
+
+    sentiment_scores = []
+    for p in pubs_with_sentiment:
+        pos = int(p.get("sentimiento_positivo") or 0)
+        neu = int(p.get("sentimiento_neutro") or 0)
+        neg = int(p.get("sentimiento_negativo") or 0)
+        total = pos + neu + neg
+        if total > 0:
+            sentiment_scores.append((pos - neg) / total)
+    sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
 
     return DashboardKPIs(
         total_campaigns=total_campaigns,
@@ -83,9 +111,20 @@ async def summary(user: CurrentUserDep):
 
 
 @router.get("/by-status")
-async def by_status(user: CurrentUserDep):
-    """Campaigns grouped by status (counts + budget)."""
-    campaigns = await supabase_rest.table("campaigns", select="status,budget_total", limit=10000)
+async def by_status(
+    user: CurrentUserDep,
+    client_id: str | None = Query(None),
+    brand_id: str | None = Query(None),
+):
+    """Campaigns grouped by status (counts + budget), optionally filtered."""
+    campaign_filter = _campaigns_filter(client_id, brand_id)
+
+    campaigns = await supabase_rest.table(
+        "campaigns",
+        select="status,budget_total",
+        eq_filters=campaign_filter,
+        limit=10000,
+    )
     status_map: dict[str, dict] = {}
     for c in campaigns:
         s = c.get("status") or "UNKNOWN"
@@ -97,10 +136,23 @@ async def by_status(user: CurrentUserDep):
 
 
 @router.get("/top-clients")
-async def top_clients(user: CurrentUserDep, limit: int = Query(10, ge=1, le=100)):
-    """Top clients by number of campaigns and total budget."""
+async def top_clients(
+    user: CurrentUserDep,
+    limit: int = Query(10, ge=1, le=100),
+    client_id: str | None = Query(None),
+    brand_id: str | None = Query(None),
+):
+    """Top clients by number of campaigns and total budget, optionally filtered."""
+    campaign_filter = _campaigns_filter(client_id, brand_id)
+
     clients = await supabase_rest.table("clients", select="id,code,name", is_null_filters=["deleted_at"], limit=500)
-    campaigns = await supabase_rest.table("campaigns", select="client_id,budget_total", is_null_filters=["deleted_at"], limit=10000)
+    campaigns = await supabase_rest.table(
+        "campaigns",
+        select="client_id,budget_total",
+        eq_filters=campaign_filter,
+        is_null_filters=["deleted_at"],
+        limit=10000,
+    )
 
     campaign_count_by_client: dict[str, int] = {}
     budget_by_client: dict[str, Decimal] = {}

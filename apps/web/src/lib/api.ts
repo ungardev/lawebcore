@@ -43,9 +43,12 @@ import type { Publicacion, ProjectionCalculateResponse as ProjResp, InfluencerSc
 import type { SentimentAnalyzeResponse, SentimentAggregateResponse, SentimentReanalyzeResponse } from '@/types/sentiment';
 
 export const dashboardApi = {
-  summary: async () => (await api.get<DashboardKPIs>('/dashboard/summary')).data,
-  byStatus: async () => (await api.get('/dashboard/by-status')).data,
-  topClients: async () => (await api.get('/dashboard/top-clients')).data,
+  summary: async (params?: { client_id?: string; brand_id?: string }) =>
+    (await api.get<DashboardKPIs>('/dashboard/summary', { params })).data,
+  byStatus: async (params?: { client_id?: string; brand_id?: string }) =>
+    (await api.get('/dashboard/by-status', { params })).data,
+  topClients: async (params?: { client_id?: string; brand_id?: string; limit?: number }) =>
+    (await api.get('/dashboard/top-clients', { params })).data,
 };
 
 export const campaignsApi = {

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter, MessageCircle, BarChart2, CheckCircle } from 'lucide-react';
+import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter, MessageCircle, BarChart2, CheckCircle, X } from 'lucide-react';
 import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -50,6 +50,34 @@ export function DashboardPage() {
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [clientFilter, setClientFilter] = useState<string>('');
 
+  const filterParams = {
+    client_id: clientFilter || undefined,
+    brand_id: brandFilter || undefined,
+  };
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ['dashboard-summary', filterParams],
+    queryFn: () => dashboardApi.summary(filterParams),
+  });
+  const { data: byStatus, isLoading: byStatusLoading } = useQuery({
+    queryKey: ['dashboard-by-status', filterParams],
+    queryFn: () => dashboardApi.byStatus(filterParams),
+  });
+  const { data: topClients, isLoading: topClientsLoading } = useQuery({
+    queryKey: ['dashboard-top-clients', filterParams],
+    queryFn: () => dashboardApi.topClients(filterParams),
+  });
+  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => brandsApi.list() });
+  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => clientsApi.list() });
+
+  const sortedByStatus = [...(byStatus || [])].sort((a, b) => b.count - a.count);
+
+  const clientMap = new Map((clients || []).map((c: Client) => [c.id, c]));
+  const brandMap = new Map((brands || []).map((b: Brand) => [b.id, b]));
+
+  const activeClient = clientFilter ? clientMap.get(clientFilter) : null;
+  const activeBrand = brandFilter ? brandMap.get(brandFilter) : null;
+
   const handlePieClick = (data: any) => {
     if (data?.name) navigate(`/clients?search=${encodeURIComponent(data.name)}`);
   };
@@ -68,16 +96,6 @@ export function DashboardPage() {
       </div>
     );
   };
-
-  const { data: summary } = useQuery({ queryKey: ['dashboard-summary'], queryFn: dashboardApi.summary });
-  const { data: byStatus } = useQuery({ queryKey: ['dashboard-by-status'], queryFn: dashboardApi.byStatus });
-
-  const sortedByStatus = [...(byStatus || [])].sort((a, b) => b.count - a.count);
-  const { data: topClients } = useQuery({ queryKey: ['dashboard-top-clients'], queryFn: () => dashboardApi.topClients() });
-  const { data: brands } = useQuery({ queryKey: ['brands'], queryFn: () => brandsApi.list() });
-  const { data: clients } = useQuery({ queryKey: ['clients'], queryFn: () => clientsApi.list() });
-
-  const clientMap = new Map((clients || []).map((c: Client) => [c.id, c]));
 
   const hasFilter = Boolean(brandFilter || clientFilter);
 
@@ -100,6 +118,26 @@ export function DashboardPage() {
       </div>
 
       <Card className="p-3 md:p-4">
+        {hasFilter && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {activeClient && (
+              <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-md text-xs font-medium">
+                Cliente: {activeClient.name}
+                <button onClick={() => setClientFilter('')} className="hover:opacity-70 transition-opacity">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+            {activeBrand && (
+              <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded-md text-xs font-medium">
+                Marca: {activeBrand.name}
+                <button onClick={() => setBrandFilter('')} className="hover:opacity-70 transition-opacity">
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
           <select
             value={clientFilter}
