@@ -43,11 +43,36 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        brand: {
+          pink: '#EC4899',
+          'pink-hover': '#DB2777',
+          blue: '#3B82F6',
+          'blue-hover': '#2563EB',
+          orange: '#F97316',
+        },
+        success: '#22C55E',
+        warning: '#F59E0B',
+        info: '#3B82F6',
+      },
+      fontFamily: {
+        sans: ['Montserrat', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      boxShadow: {
+        card: '0 2px 8px rgba(0,0,0,0.04)',
+        'card-hover': '0 4px 16px rgba(0,0,0,0.08)',
+        elevated: '0 12px 48px rgba(0,0,0,0.12)',
+      },
+      backgroundImage: {
+        'brand-gradient': 'linear-gradient(to right, #EC4899, #3B82F6)',
+        'brand-gradient-hover': 'linear-gradient(to right, #DB2777, #2563EB)',
+        'gradient-dark': 'linear-gradient(135deg, #14181F 0%, #2B303B 100%)',
+        'gradient-subtle': 'linear-gradient(180deg, #FAFBFB 0%, #F1F2F4 100%)',
       },
       keyframes: {
         'accordion-down': {
