@@ -37,10 +37,10 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-rose-50 via-white to-purple-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-4">
-      <Card className="w-full max-w-md p-6 sm:p-8 shadow-xl">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-subtle dark:bg-background p-4">
+      <Card className="w-full max-w-md p-6 sm:p-8 shadow-elevated">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-rose-300 via-purple-400 to-blue-600 text-white text-2xl font-bold mb-4 shadow-md">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-blue-500 text-white text-2xl font-bold mb-4 shadow-card">
             LW
           </div>
           <h1 className="text-3xl font-bold text-foreground">La Web Core</h1>
@@ -76,7 +76,7 @@ export function LoginPage() {
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" variant="gradient" className="w-full" disabled={loading}>
             {loading ? 'Ingresando...' : 'Ingresar'}
           </Button>
         </form>
