@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { campaignsApi, clientsApi, brandsApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -51,6 +51,19 @@ export function CampaignsListPage() {
       </div>
 
       <Card className="p-3 md:p-4">
+        {statusFilter && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-md font-medium">
+              Status: {statusFilter.replace(/_/g, ' ')}
+            </span>
+            <button
+              onClick={() => { setStatusFilter(''); navigate('/campaigns'); }}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

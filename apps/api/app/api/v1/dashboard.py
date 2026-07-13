@@ -38,6 +38,30 @@ async def summary(user: CurrentUserDep):
     total_reach = int(sum(reach_values)) if reach_values else 0
     avg_engagement_rate = Decimal(str(sum(engagement_values) / len(engagement_values))) if engagement_values else None
 
+    all_pubs = await supabase_rest.table(
+        "publicaciones",
+        select="id,campaign_id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
+        limit=10000,
+    )
+
+    pubs_with_sentiment = [p for p in all_pubs if p.get("comentarios_analizados")]
+
+    publicaciones_analizadas = len(pubs_with_sentiment)
+    campanas_ids = set(str(p.get("campaign_id")) for p in pubs_with_sentiment if p.get("campaign_id"))
+    campanas_analizadas = len(campanas_ids)
+
+    sentiment_scores = []
+    for p in pubs_with_sentiment:
+        pos = int(p.get("sentimiento_positivo") or 0)
+        neu = int(p.get("sentimiento_neutro") or 0)
+        neg = int(p.get("sentimiento_negativo") or 0)
+        total = pos + neu + neg
+        if total > 0:
+            net = (pos - neg) / total
+            sentiment_scores.append(net)
+
+    sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
+
     return DashboardKPIs(
         total_campaigns=total_campaigns,
         active_campaigns=active_campaigns,
@@ -48,6 +72,9 @@ async def summary(user: CurrentUserDep):
         total_budget_usd=total_budget_usd,
         total_reach=total_reach,
         avg_engagement_rate=avg_engagement_rate,
+        publicaciones_analizadas=publicaciones_analizadas,
+        campanas_analizadas=campanas_analizadas,
+        sentimiento_promedio=sentimiento_promedio,
     )
 
 

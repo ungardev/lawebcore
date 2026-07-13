@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { clientsApi } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { ResponsiveTable } from '@/components/data-table/ResponsiveTable';
 
 export function ClientsPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('search') || '');
   const { data: clients, isLoading } = useQuery({
@@ -23,6 +24,19 @@ export function ClientsPage() {
       </div>
 
       <Card className="p-3 md:p-4">
+        {searchParams.get('search') && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-md font-medium">
+              Filtrado por: {searchParams.get('search')}
+            </span>
+            <button
+              onClick={() => { setSearch(''); navigate('/clients'); }}
+              className="text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Buscar cliente..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />

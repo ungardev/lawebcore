@@ -126,4 +126,7 @@ export interface DashboardKPIs {
   total_budget_usd: number | string;
   total_reach: number;
   avg_engagement_rate: number | string | null;
+  publicaciones_analizadas: number;
+  campanas_analizadas: number;
+  sentimiento_promedio: number | string | null;
 }

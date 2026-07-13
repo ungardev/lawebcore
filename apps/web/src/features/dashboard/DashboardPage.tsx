@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter } from 'lucide-react';
+import { Megaphone, Building2, Tags, Users, DollarSign, Eye, TrendingUp, Filter, MessageCircle, BarChart2, CheckCircle } from 'lucide-react';
 import { dashboardApi, brandsApi, clientsApi } from '@/lib/api';
 import { KpiCard } from '@/components/data-table/KpiCard';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -15,6 +15,8 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const [brandFilter, setBrandFilter] = useState<string>('');
   const [clientFilter, setClientFilter] = useState<string>('');
+  const [activePieIndex, setActivePieIndex] = useState<number | null>(null);
+  const [isBarHovered, setIsBarHovered] = useState(false);
 
   const handlePieClick = (data: any) => {
     if (data?.name) navigate(`/clients?search=${encodeURIComponent(data.name)}`);
@@ -22,6 +24,28 @@ export function DashboardPage() {
 
   const handleBarClick = (data: any) => {
     if (data?.status) navigate(`/campaigns?status=${encodeURIComponent(data.status)}`);
+  };
+
+  const handlePieMouseEnter = () => setActivePieIndex(-1);
+  const handlePieMouseLeave = () => setActivePieIndex(null);
+  const handleBarMouseEnter = () => setIsBarHovered(true);
+  const handleBarMouseLeave = () => setIsBarHovered(false);
+
+  const renderStatusTick = (props: any) => {
+    const { x, y, payload } = props;
+    return (
+      <text
+        x={x}
+        y={y + 10}
+        textAnchor="end"
+        fill="#8b5cf6"
+        fontSize={11}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(`/campaigns?status=${encodeURIComponent(payload.value)}`)}
+      >
+        {String(payload.value).replace(/_/g, ' ')}
+      </text>
+    );
   };
 
   const { data: summary } = useQuery({ queryKey: ['dashboard-summary'], queryFn: dashboardApi.summary });
@@ -86,6 +110,19 @@ export function DashboardPage() {
         <KpiCard title="Reach total" value={formatNumber(summary?.total_reach)} icon={<Eye className="w-4 h-4" />} to="/campaigns" />
         <KpiCard title="ER promedio" value={summary?.avg_engagement_rate ? formatPercent(Number(summary.avg_engagement_rate)) : '—'} icon={<TrendingUp className="w-4 h-4" />} to="/campaigns" />
         <KpiCard title="Campanas terminadas" value={summary?.completed_campaigns ?? '—'} icon={<Megaphone className="w-4 h-4" />} to="/campaigns" />
+        <KpiCard
+          title="Sentimiento global"
+          value={summary?.sentimiento_promedio != null ? (
+            Number(summary.sentimiento_promedio) >= 0
+              ? `+${(Number(summary.sentimiento_promedio) * 100).toFixed(0)}%`
+              : `${(Number(summary.sentimiento_promedio) * 100).toFixed(0)}%`
+          ) : '—'}
+          icon={<MessageCircle className="w-4 h-4" />}
+          hint={`${summary?.campanas_analizadas ?? 0} campanas analizadas`}
+          to="/campaigns"
+        />
+        <KpiCard title="Pub. analizadas" value={summary?.publicaciones_analizadas ?? '—'} icon={<BarChart2 className="w-4 h-4" />} hint="con sentimiento" to="/campaigns" />
+        <KpiCard title="Camp. analizadas" value={summary?.campanas_analizadas ?? '—'} icon={<CheckCircle className="w-4 h-4" />} hint="con sentimiento" to="/campaigns" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
@@ -96,10 +133,24 @@ export function DashboardPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={240} className="md:!h-[280px]">
               <BarChart data={byStatus || []}>
-                <XAxis dataKey="status" tick={{ fontSize: 11 }} angle={window.innerWidth < 640 ? -45 : -15} textAnchor={window.innerWidth < 640 ? 'end' : 'end'} height={70} />
+                <XAxis
+                  dataKey="status"
+                  tick={renderStatusTick}
+                  angle={window.innerWidth < 640 ? -45 : -15}
+                  textAnchor={window.innerWidth < 640 ? 'end' : 'end'}
+                  height={70}
+                />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="count" fill="#8b5cf6" radius={[4, 4, 0, 0]} onClick={handleBarClick} style={{ cursor: 'pointer' }} />
+                <Bar
+                  dataKey="count"
+                  fill="#8b5cf6"
+                  radius={[4, 4, 0, 0]}
+                  onClick={handleBarClick}
+                  onMouseEnter={handleBarMouseEnter}
+                  onMouseLeave={handleBarMouseLeave}
+                  style={{ cursor: 'pointer', opacity: isBarHovered ? 0.8 : 1, transition: 'opacity 0.2s' }}
+                />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -112,9 +163,26 @@ export function DashboardPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={240} className="md:!h-[280px]">
               <PieChart>
-                <Pie data={topClients || []} dataKey="campaign_count" nameKey="name" cx="50%" cy="50%" outerRadius={window.innerWidth < 640 ? 60 : 90} label={(e) => e.name} onClick={handlePieClick} style={{ cursor: 'pointer' }}>
+                <Pie
+                  data={topClients || []}
+                  dataKey="campaign_count"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={window.innerWidth < 640 ? 60 : 90}
+                  label={(e) => e.name}
+                  onClick={handlePieClick}
+                  style={{ cursor: 'pointer' }}
+                >
                   {(topClients || []).map((_: any, i: number) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell
+                      key={i}
+                      fill={COLORS[i % COLORS.length]}
+                      opacity={activePieIndex === null || activePieIndex === i ? 1 : 0.5}
+                      onMouseEnter={handlePieMouseEnter}
+                      onMouseLeave={handlePieMouseLeave}
+                      style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}
+                    />
                   ))}
                 </Pie>
                 <Tooltip />

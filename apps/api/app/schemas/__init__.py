@@ -321,6 +321,9 @@ class DashboardKPIs(BaseModel):
     total_budget_usd: Decimal
     total_reach: int
     avg_engagement_rate: Decimal | None
+    publicaciones_analizadas: int = 0
+    campanas_analizadas: int = 0
+    sentimiento_promedio: Decimal | None = None
 
 
 # Resolve forward refs
