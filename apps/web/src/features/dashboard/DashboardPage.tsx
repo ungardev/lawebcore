@@ -164,9 +164,11 @@ export function DashboardPage() {
                 <XAxis
                   dataKey="status"
                   tick={renderStatusTick}
-                  angle={-15}
+                  interval={0}
+                  angle={-45}
                   textAnchor="end"
-                  height={72}
+                  height={90}
+                  tickMargin={12}
                 />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip
