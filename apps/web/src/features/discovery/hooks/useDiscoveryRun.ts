@@ -1,0 +1,69 @@
+import { useCallback, useState } from 'react';
+import { discoveryApi } from '../api/discoveryApi';
+import type { DiscoveryCandidate, DiscoveryRun, Platform } from '../types/discovery';
+
+export function useDiscoveryRun() {
+  const [run, setRun] = useState<DiscoveryRun | null>(null);
+  const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createRun = useCallback(async (brief: Parameters<typeof discoveryApi.search.createRun>[0]) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const newRun = await discoveryApi.search.createRun(brief);
+      setRun(newRun);
+      return newRun;
+    } catch (e) {
+      setError((e as Error).message);
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const loadRun = useCallback(async (runId: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [loadedRun, loadedCandidates] = await Promise.all([
+        discoveryApi.search.getRun(runId),
+        discoveryApi.search.getCandidates(runId, { limit: 50 }),
+      ]);
+      setRun(loadedRun);
+      setCandidates(loadedCandidates);
+      return { run: loadedRun, candidates: loadedCandidates };
+    } catch (e) {
+      setError((e as Error).message);
+      throw e;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const pollRun = useCallback(async (runId: string, intervalMs = 3000, maxAttempts = 60) => {
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      const { run: currentRun, candidates: currentCandidates } = await loadRun(runId);
+      if (currentRun.status === 'completed' || currentRun.status === 'failed') {
+        return { run: currentRun, candidates: currentCandidates };
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      attempts++;
+    }
+    throw new Error('Timeout esperando resultados');
+  }, [loadRun]);
+
+  return {
+    run,
+    candidates,
+    isLoading,
+    error,
+    createRun,
+    loadRun,
+    pollRun,
+    saveCandidate: discoveryApi.candidates.save,
+    dismissCandidate: discoveryApi.candidates.dismiss,
+  };
+}

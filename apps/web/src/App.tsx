@@ -12,6 +12,9 @@ import { ClientsPage } from '@/features/clients/ClientsPage';
 import { BrandsPage } from '@/features/brands/BrandsPage';
 import { InfluencersPage } from '@/features/influencers/InfluencersPage';
 import { AIAssistantPage } from '@/features/ai-assistant/AIAssistantPage';
+import { DiscoveryChatPage } from '@/features/discovery/pages/DiscoveryChatPage';
+import { DiscoverySearchPage } from '@/features/discovery/pages/DiscoverySearchPage';
+import { DiscoveryRunsListPage } from '@/features/discovery/pages/DiscoveryRunsListPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 
 export default function App() {
@@ -36,6 +39,10 @@ export default function App() {
           <Route path="brands" element={<BrandsPage />} />
           <Route path="influencers" element={<InfluencersPage />} />
           <Route path="ai" element={<AIAssistantPage />} />
+          <Route path="discovery" element={<DiscoveryChatPage />} />
+          <Route path="discovery/:id" element={<DiscoveryChatPage />} />
+          <Route path="discovery/search" element={<DiscoverySearchPage />} />
+          <Route path="discovery/runs" element={<DiscoveryRunsListPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
