@@ -61,8 +61,13 @@ class SupabaseRest:
         values: dict,
         returning: str = "representation",
         on_conflict: list[str] = None,
+        return_repr: bool = None,
     ) -> dict | None:
         """INSERT con soporte para UPSERT via Prefer header."""
+        if return_repr is False:
+            returning = "minimal"
+        elif return_repr is True:
+            returning = "representation"
         headers = dict(self.headers)
         prefs = [f"return={returning}"]
         if on_conflict:
@@ -126,6 +131,36 @@ class SupabaseRest:
         resp = await self.client.post(f"/rpc/{function_name}", json=params or {})
         resp.raise_for_status()
         return resp.json()
+
+    async def table(
+        self,
+        name: str,
+        select: str = "*",
+        eq_filters: dict = None,
+        is_null_filters: list = None,
+        order: str = None,
+        limit: int = None,
+        offset: int = None,
+    ) -> list[dict]:
+        """Backwards-compat builder shorthand used across the codebase.
+        Translates eq_filters={col:val} and is_null_filters=[col] into
+        PostgREST filter strings, then delegates to select()."""
+        filters: list[str] = []
+        if eq_filters:
+            for col, val in eq_filters.items():
+                if val is not None and val != "":
+                    filters.append(f"{col}=eq.{val}")
+        if is_null_filters:
+            for col in is_null_filters:
+                filters.append(f"{col}=is.null")
+        return await self.select(
+            table=name,
+            select=select,
+            filters=filters,
+            order=order,
+            limit=limit,
+            offset=offset,
+        )
 
 
 supabase_rest = SupabaseRest()
