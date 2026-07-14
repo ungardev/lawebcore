@@ -6,7 +6,7 @@ import type {
   DiscoveryMetrics,
   DiscoveryRun,
   Platform,
-} from './types/discovery';
+} from '../types/discovery';
 
 export const discoveryApi = {
   conversations: {

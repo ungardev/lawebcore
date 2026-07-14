@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { discoveryApi } from '../api/discoveryApi';
-import type { BriefStructured, ChatTurn, DiscoveryCandidate, DiscoveryConversation } from '../types/discovery';
+import type { BriefStructured, ChatTurn, DiscoveryCandidate, DiscoveryConversation, DiscoveryMessage } from '../types/discovery';
 
 export function useDiscoveryConversation() {
   const [conversation, setConversation] = useState<DiscoveryConversation | null>(null);
@@ -34,7 +34,7 @@ export function useDiscoveryConversation() {
       const conv = await discoveryApi.conversations.get(conversationId);
       setConversation(conv);
 
-      const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m) => ({
+      const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m: DiscoveryMessage) => ({
         id: m.id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
