@@ -12,13 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+# Build context is repo root (/)
+COPY apps/workers/pyproject.toml ./pyproject.toml
 RUN pip install --upgrade pip && pip install -e .
 
-COPY . .
+COPY apps/workers/. .
 
-# Bring in the API's app/ package so worker.py can import app.core.*, app.discovery.*, app.ai.*
-# Build context is apps/workers/, so ../api/app resolves to apps/api/app/
-COPY ../api/app /app_api/app
+# Shared API code: bring in apps/api/app so worker.py can import app.core.*, app.discovery.*, app.ai.*
+COPY apps/api/app /app_api/app
 
 CMD ["arq", "app.worker.WorkerSettings"]
