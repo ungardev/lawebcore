@@ -36,6 +36,7 @@ dependencies = [
     "structlog>=24.4.0",
     "sentry-sdk[fastapi]>=2.18.0",
     "prometheus-client>=0.21.0",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

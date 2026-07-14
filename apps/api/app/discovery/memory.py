@@ -118,11 +118,9 @@ async def launch_discovery_run(
 
     run_id = run["id"]
 
-    try:
-        from app.worker import redis_conn
-        redis_conn.enqueue_job("discovery_run_task", str(run_id))
-    except Exception:
-        pass
+    # Nota: el enqueue al worker ARQ se hace en apps/api/app/api/v1/discovery.py
+    # via _run_discovery_job() despues de create_discovery_run(). Esta funcion
+    # solo persiste estado conversacional.
 
     return {
         "id": UUID(run_id),

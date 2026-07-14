@@ -44,8 +44,11 @@ async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
     logger.info("lawebcore_api_starting", env=settings.API_ENV, version="0.1.0")
     await init_db()
+    from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
+    await init_worker_pool()
     yield
     logger.info("lawebcore_api_stopping")
+    await close_worker_pool()
     await supabase_rest.close()
     await close_db()
 

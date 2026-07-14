@@ -164,11 +164,14 @@ async def send_message(
 async def create_discovery_run(body: DiscoverySearchRequest):
     """Crea y ejecuta un discovery_run sin chat conversacional."""
     from app.discovery.memory import conversation_memory
+    from app.core.worker_enqueuer import enqueue_discovery_run
 
     run = await conversation_memory.launch_discovery_run(
         brief=body,
         created_by=UUID("00000000-0000-0000-0000-000000000001"),
     )
+
+    await enqueue_discovery_run(str(run["id"]))
 
     return DiscoveryRunResponse(
         id=run["id"],
