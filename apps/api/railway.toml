@@ -1,0 +1,21 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/api/Dockerfile"
+
+[deploy]
+# startCommand omitted so Dockerfile CMD is used (includes auto-migrations)
+healthcheckPath = "/api/v1/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "api"
+[services.variables]
+API_ENV = "production"
+
+[env]
+PYTHONUNBUFFERED = "1"
+# DATABASE_URL must be set manually in Railway dashboard:
+# Supabase Dashboard → Settings → Database → Connection string (Session/Direct mode)
+# Format: postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres
