@@ -103,7 +103,7 @@ export function DashboardPage() {
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Dashboard Ejecutivo</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Influencer Strategist & Manager</h1>
           <p className="text-sm md:text-base text-muted-foreground">Vision integral de campanas, clientes y KPIs</p>
         </div>
         {hasFilter && (
