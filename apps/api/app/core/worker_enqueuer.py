@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Optional
 
 from arq import create_pool
@@ -10,7 +10,7 @@ from arq.connections import ArqRedis, RedisSettings
 
 from app.core.config import settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
 _pool: Optional[ArqRedis] = None
 
