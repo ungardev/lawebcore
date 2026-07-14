@@ -211,7 +211,9 @@ COMMENT ON TABLE api_costs IS 'Tracking de costos de todas las APIs externas (Ap
 
 CREATE INDEX idx_api_costs_provider ON api_costs(provider, occurred_at DESC);
 CREATE INDEX idx_api_costs_entity ON api_costs(entity_id) WHERE entity_id IS NOT NULL;
-CREATE INDEX idx_api_costs_month ON api_costs(DATE_TRUNC('month', occurred_at), provider);
+-- NOTE: idx_api_costs_month moved to migration 0020 (DATE_TRUNC not IMMUTABLE in Postgres)
+-- Original (broken):
+-- CREATE INDEX idx_api_costs_month ON api_costs(DATE_TRUNC('month', occurred_at), provider);
 
 -- ---------- integration_credentials ----------
 CREATE TABLE integration_credentials (
