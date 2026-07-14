@@ -33,7 +33,11 @@ class SupabaseRest:
         params = {"select": select}
         if filters:
             for f in filters:
-                params[f] = "eq.true" if "=" not in f else f
+                if "=" in f:
+                    col, val = f.split("=", 1)
+                    params[col] = val
+                else:
+                    params[f] = "eq.true"
         if order:
             params["order"] = order
         if limit is not None:
@@ -103,7 +107,11 @@ class SupabaseRest:
         """UPDATE con filtros."""
         params = {}
         for f in filters:
-            params[f] = "eq.true" if "=" not in f else f
+            if "=" in f:
+                col, val = f.split("=", 1)
+                params[col] = val
+            else:
+                params[f] = "eq.true"
         headers = dict(self.headers)
         headers["Prefer"] = f"return={returning}"
         resp = await self.client.patch(f"/{table}", params=params, json=values, headers=headers)
@@ -122,7 +130,11 @@ class SupabaseRest:
         params = {}
         if filters:
             for f in filters:
-                params[f] = "eq.true" if "=" not in f else f
+                if "=" in f:
+                    col, val = f.split("=", 1)
+                    params[col] = val
+                else:
+                    params[f] = "eq.true"
         resp = await self.client.delete(f"/{table}", params=params)
         resp.raise_for_status()
 
