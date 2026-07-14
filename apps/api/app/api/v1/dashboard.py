@@ -101,7 +101,11 @@ async def summary(
         sentimiento_promedio = Decimal(str(sum(sentiment_scores) / len(sentiment_scores))) if sentiment_scores else None
     except Exception:
         logger = structlog.get_logger()
-        logger.error("sentiment_kpi_query_failed", error="fallback to zero values")
+        logger.error(
+            "sentiment_kpi_query_failed",
+            error="fallback to zero values",
+            exc_info=True,
+        )
 
     return DashboardKPIs(
         total_campaigns=total_campaigns,
