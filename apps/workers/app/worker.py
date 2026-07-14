@@ -432,7 +432,7 @@ class WorkerSettings:
     ]
     cron_jobs = [
         cron(scheduled_reports_cron, hour=9, minute=0),
-        cron(sync_metricool_task, hour=2, minute=0, channel="instagram"),
+        cron(sync_metricool_task, hour=2, minute=0),
     ]
     on_startup = startup
     on_shutdown = shutdown
