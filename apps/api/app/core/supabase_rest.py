@@ -20,68 +20,109 @@ class SupabaseRest:
     async def close(self):
         await self.client.aclose()
 
-    async def table(
+    async def select(
         self,
         table: str,
         select: str = "*",
-        eq_filters: dict = None,
-        is_null_filters: list = None,
-        limit: int = None,
+        filters: list[str] = None,
         order: str = None,
-    ):
+        limit: int = None,
+        offset: int = None,
+    ) -> list[dict]:
+        """SELECT con filtros estilo PostgREST."""
         params = {"select": select}
-        if eq_filters:
-            for key, val in eq_filters.items():
-                params[key] = f"eq.{val}"
-        if is_null_filters:
-            for col in is_null_filters:
-                params[col] = "is.null"
-        if limit:
-            params["limit"] = limit
+        if filters:
+            for f in filters:
+                params[f] = "eq.true" if "=" not in f else f
         if order:
             params["order"] = order
+        if limit is not None:
+            params["limit"] = limit
+        if offset is not None:
+            params["offset"] = offset
         resp = await self.client.get(f"/{table}", params=params)
         resp.raise_for_status()
-        return resp.json()
+        result = resp.json()
+        return result if isinstance(result, list) else [result] if result else []
 
-    async def insert(self, table: str, data: dict | list, return_repr: bool = True):
+    async def select_one(
+        self,
+        table: str,
+        select: str = "*",
+        filters: list[str] = None,
+    ) -> dict | None:
+        """SELECT con limit=1."""
+        results = await self.select(table=table, select=select, filters=filters, limit=1)
+        return results[0] if results else None
+
+    async def insert(
+        self,
+        table: str,
+        values: dict,
+        returning: str = "representation",
+        on_conflict: list[str] = None,
+    ) -> dict | None:
+        """INSERT con soporte para UPSERT via Prefer header."""
         headers = dict(self.headers)
-        if return_repr:
-            headers["Prefer"] = "return=representation"
-        resp = await self.client.post(f"/{table}", json=data, headers=headers)
+        prefs = [f"return={returning}"]
+        if on_conflict:
+            prefs.append(f"resolution=merge-duplicates")
+            headers["Prefer"] = ",".join(prefs)
+            headers["On-Conflig"] = f"({','.join(on_conflict)})"
+        else:
+            headers["Prefer"] = ",".join(prefs)
+        resp = await self.client.post(f"/{table}", json=values, headers=headers)
         resp.raise_for_status()
-        return resp.json() if return_repr else None
+        if returning == "minimal":
+            return None
+        result = resp.json()
+        return result if isinstance(result, list) else result
+
+    async def upsert(
+        self,
+        table: str,
+        values: dict,
+        on_conflict: list[str],
+        returning: str = "representation",
+    ) -> dict | None:
+        """UPSERT (INSERT with ON CONFLICT)."""
+        return await self.insert(table=table, values=values, returning=returning, on_conflict=on_conflict)
 
     async def update(
         self,
         table: str,
-        data: dict,
-        eq_filters: dict = None,
-        is_null_filters: list = None,
-    ):
+        filters: list[str],
+        values: dict,
+        returning: str = "representation",
+    ) -> dict | None:
+        """UPDATE con filtros."""
         params = {}
-        if eq_filters:
-            params.update({k: f"eq.{v}" for k, v in eq_filters.items()})
-        if is_null_filters:
-            for col in is_null_filters:
-                params[col] = "is.null"
+        for f in filters:
+            params[f] = "eq.true" if "=" not in f else f
         headers = dict(self.headers)
-        headers["Prefer"] = "return=representation"
-        resp = await self.client.patch(f"/{table}", params=params, json=data, headers=headers)
+        headers["Prefer"] = f"return={returning}"
+        resp = await self.client.patch(f"/{table}", params=params, json=values, headers=headers)
         resp.raise_for_status()
-        return resp.json()
+        if returning == "minimal":
+            return None
+        result = resp.json()
+        return result if isinstance(result, list) else result
 
-    async def delete(self, table: str, eq_filters: dict = None, is_null_filters: list = None):
+    async def delete(
+        self,
+        table: str,
+        filters: list[str] = None,
+    ) -> None:
+        """DELETE con filtros."""
         params = {}
-        if eq_filters:
-            params.update({k: f"eq.{v}" for k, v in eq_filters.items()})
-        if is_null_filters:
-            for col in is_null_filters:
-                params[col] = "is.null"
+        if filters:
+            for f in filters:
+                params[f] = "eq.true" if "=" not in f else f
         resp = await self.client.delete(f"/{table}", params=params)
         resp.raise_for_status()
 
     async def rpc(self, function_name: str, params: dict = None):
+        """Llamada a función RPC de Postgres."""
         resp = await self.client.post(f"/rpc/{function_name}", json=params or {})
         resp.raise_for_status()
         return resp.json()

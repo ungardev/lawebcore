@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     GOOGLE_SERVICE_ACCOUNT_KEY: str = ""  # JSON del service account
     GOOGLE_DRIVE_FOLDER_ID: str = ""  # ID de la carpeta del Drive del equipo P.I.A.R.
 
-    # Integrations
+    # Integrations (existing)
     HYPEAUDITOR_API_KEY: str = ""
     CANVA_CLIENT_ID: str = ""
     CANVA_CLIENT_SECRET: str = ""
@@ -59,6 +59,26 @@ class Settings(BaseSettings):
     TRELLO_TOKEN: str = ""
     SLACK_WEBHOOK_URL: str = ""
 
+    # ---- Discovery Module (P.I.A.R. Discovery) ----
+    # Apify (scraping Instagram, TikTok, YouTube)
+    APIFY_API_KEY: str = ""
+
+    # Meta Business API
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    META_ACCESS_TOKEN: str = ""  # Page or User access token
+
+    # TikTok Research API (requires application + approval)
+    TIKTOK_RESEARCH_API_KEY: str = ""
+
+    # YouTube Data API v3
+    YOUTUBE_DATA_API_KEY: str = ""
+
+    # Metricool (OAuth2 — client credentials flow)
+    METRICOOL_CLIENT_ID: str = ""
+    METRICOOL_CLIENT_SECRET: str = ""
+    METRICOOL_ACCESS_TOKEN: str = ""
+
     # Storage
     SUPABASE_STORAGE_BUCKET: str = "lawebcore-assets"
 
@@ -67,10 +87,12 @@ class Settings(BaseSettings):
     FEATURE_KANBAN: bool = True
     FEATURE_WORKFLOWS: bool = True
     FEATURE_REPORTS_AUTO: bool = True
+    FEATURE_DISCOVERY: bool = True  # P.I.A.R. Discovery module
 
     # Limits
     MAX_UPLOAD_SIZE_MB: int = 50
     RATE_LIMIT_PER_MINUTE: int = 300
+    RATE_LIMIT_DISCOVERY_PER_MIN: int = 30  # Discovery endpoints más controlados
 
 
 @lru_cache

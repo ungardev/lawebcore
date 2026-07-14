@@ -9,6 +9,7 @@ import structlog
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from prometheus_client import make_asgi_app
 from sqlalchemy import text
 
 from app.core.config import settings
@@ -16,6 +17,22 @@ from app.core.db import close_db, init_db
 from app.core.supabase_rest import supabase_rest
 from app.api.v1 import api_router
 from app.core.logging import configure_logging
+
+# Sentry initialization (only in production, requires real DSN)
+if settings.API_ENV == "production":
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        sentry_sdk.init(
+            dsn="https://<key>@sentry.io/<project>",
+            integrations=[FastApiIntegration()],
+            traces_sample_rate=0.1,
+            environment=settings.API_ENV,
+            release="lawebcore-api@0.1.0",
+        )
+    except Exception:
+        pass
 
 configure_logging(settings.API_ENV)
 
@@ -51,6 +68,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Prometheus metrics endpoint
+metrics_app = make_asgi_app()
+app.mount("/metrics", metrics_app)
+
+# Rate limiting (slowapi)
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please slow down."},
+        headers={"Retry-After": "60"},
+    )
 
 
 # Global exception handler

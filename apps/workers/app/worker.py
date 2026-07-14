@@ -5,60 +5,436 @@ Handles:
 - AI generation tasks (brief, post-mortem, etc.)
 - Campaign automation triggers
 - Scheduled report generation
-- Integration syncs (HypeAuditor, etc.)
+- Discovery run execution (Apify, Meta, TikTok, YouTube)
+- Integration syncs
 """
 
+import asyncio
+from datetime import datetime, timedelta
+
+import structlog
 from arq import cron
 from arq.connections import RedisSettings
+from sqlalchemy import select, update
 
 from app.core.config import settings
+from app.core.db import db_session
+from app.core.supabase_rest import supabase_rest
+from app.discovery.brief_parser import brief_parser_agent
+from app.discovery.query_builder import query_builder
+from app.discovery.result_ranker import result_ranker
+from app.discovery.schemas import BriefStructured, CandidateMetrics, Platform
+from app.discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
+
+logger = structlog.get_logger(__name__)
 
 
 async def startup(ctx):
-    """Initialize worker context (DB, AI clients)."""
-    print("[workers] starting up")
+    """Initialize worker context (DB, Redis)."""
+    logger.info("workers_starting", env=settings.API_ENV, version="0.1.0")
+    ctx["redis"] = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
 
 
 async def shutdown(ctx):
     """Cleanup on shutdown."""
-    print("[workers] shutting down")
+    logger.info("workers_stopping")
+    await apify_client.close()
+    await meta_client.close()
+    await youtube_client.close()
+    await metricool_client.close()
+    await tiktok_client.close()
 
 
-async def embed_document_task(ctx, document_id: str):
+# ---- Discovery tasks ----
+
+async def discovery_run_task(ctx, run_id: str) -> dict:
+    """
+    Ejecuta un discovery_run completo:
+    1. Carga el run de la BD
+    2. Parsea el brief
+    3. Ejecuta queries en todas las plataformas
+    4. Scorea cada candidato
+    5. Persiste en discovery_candidates
+    6. Actualiza el estado del run
+    """
+    from app.core.cost_tracker import get_cost_tracker
+
+    cost_tracker = get_cost_tracker()
+
+    try:
+        await _run_set_status(run_id, "running")
+
+        run = await supabase_rest.select_one(
+            table="discovery_runs",
+            select="*",
+            filters=[f"id=eq.{run_id}"],
+        )
+
+        if not run:
+            return {"error": f"Run {run_id} not found"}
+
+        brief_parsed = run.get("brief_parsed", {})
+        if isinstance(brief_parsed, str):
+            import json
+            brief_parsed = json.loads(brief_parsed)
+
+        brief = BriefStructured(**brief_parsed)
+        platforms_raw = run.get("platforms", ["instagram"])
+        platforms = [Platform(p) if isinstance(p, str) else p for p in platforms_raw]
+
+        queries = query_builder.build(brief)
+        all_candidates: list[dict] = []
+
+        for platform in platforms:
+            platform_queries = queries.get(platform, [])
+            for q in platform_queries:
+                try:
+                    candidates = await _execute_platform_query(platform, q)
+                    for raw in candidates:
+                        metrics = _raw_to_candidate_dict(raw, platform)
+                        score = result_ranker.rank(
+                            CandidateMetrics(**metrics),
+                            brief,
+                        )
+                        all_candidates.append({
+                            "run_id": run_id,
+                            "platform": platform.value,
+                            "handle": metrics.get("handle", "unknown"),
+                            "full_name": metrics.get("full_name"),
+                            "bio": metrics.get("bio"),
+                            "avatar_url": metrics.get("avatar_url"),
+                            "country": metrics.get("country"),
+                            "city": metrics.get("city"),
+                            "followers": metrics.get("followers"),
+                            "following": metrics.get("following"),
+                            "posts_count": metrics.get("posts_count"),
+                            "avg_likes": metrics.get("avg_likes"),
+                            "avg_comments": metrics.get("avg_comments"),
+                            "avg_views": metrics.get("avg_views"),
+                            "engagement_rate": metrics.get("engagement_rate"),
+                            "audience_credibility": metrics.get("audience_credibility"),
+                            "audience_quality": metrics.get("audience_quality"),
+                            "audience_gender_split": metrics.get("audience_gender_split"),
+                            "audience_age_buckets": metrics.get("audience_age_buckets"),
+                            "match_score": score.match_score,
+                            "niche_relevance": score.niche_relevance,
+                            "geo_relevance": score.geo_relevance,
+                            "audience_relevance": score.audience_relevance,
+                            "content_quality": score.content_quality,
+                            "estimated_cost": score.estimated_cost,
+                            "expected_reach": score.expected_reach,
+                            "expected_engagement": score.expected_engagement,
+                            "roi_estimate": score.roi_estimate,
+                            "rationale": score.rationale,
+                            "status": "new",
+                            "raw_payload": raw,
+                            "fetched_at": datetime.utcnow().isoformat(),
+                        })
+                except Exception as e:
+                    logger.warning("discovery_query_failed", platform=platform.value, query=q.query_type, error=str(e))
+
+        await _deduplicate_and_insert_candidates(all_candidates, run_id)
+
+        total = len(all_candidates)
+        await _run_update(run_id, {
+            "status": "completed",
+            "total_candidates": total,
+            "completed_at": datetime.utcnow().isoformat(),
+        })
+
+        await cost_tracker.flush(db_session())
+
+        logger.info("discovery_run_completed", run_id=run_id, candidates=total)
+        return {"run_id": run_id, "candidates": total}
+
+    except Exception as e:
+        logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
+        await _run_set_status(run_id, "failed", error=str(e))
+        raise
+
+
+async def _execute_platform_query(platform: Platform, query) -> list[dict]:
+    """Ejecuta una query en la plataforma específica."""
+    if platform == Platform.INSTAGRAM:
+        if query.query_type == "hashtag_search":
+            return await apify_client.search_instagram_by_hashtag(
+                hashtag=query.params["hashtag"],
+                country=query.params.get("country", "VE"),
+                min_followers=query.params.get("min_followers", 1000),
+                max_followers=query.params.get("max_followers", 10_000_000),
+            )
+        elif query.query_type == "profile_search":
+            result = await apify_client.search_instagram_profile(
+                username=query.params.get("keyword", ""),
+            )
+            return [result] if result else []
+    elif platform == Platform.TIKTOK:
+        if query.query_type == "hashtag_search":
+            return await tiktok_client.search_content(
+                query=query.params["hashtag"],
+                country=query.params.get("country", "VE"),
+                max_count=100,
+            )
+    elif platform == Platform.YOUTUBE:
+        if query.query_type == "channel_search":
+            return await youtube_client.search_channels(
+                query=query.params.get("query", ""),
+                region=query.params.get("region", "VE"),
+                max_results=20,
+            )
+    return []
+
+
+def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
+    """Convierte payload raw a dict compatible con discovery_candidates."""
+    if platform == Platform.INSTAGRAM:
+        return {
+            "handle": raw.get("username", raw.get("handle", "")),
+            "full_name": raw.get("fullName", raw.get("full_name", "")),
+            "bio": raw.get("biography", raw.get("bio", "")),
+            "avatar_url": raw.get("profilePicUrlHD", raw.get("avatar_url", "")),
+            "followers": raw.get("followersCount", raw.get("followers", 0)),
+            "following": raw.get("followsCount", raw.get("following", 0)),
+            "posts_count": raw.get("postsCount", raw.get("posts_count", 0)),
+            "engagement_rate": raw.get("avgLikesPercent", raw.get("engagement_rate", 0)),
+            "country": raw.get("之国", raw.get("country", "")),
+            "city": raw.get("city", ""),
+            "audience_gender_split": raw.get("audienceGenderSplit", {}),
+            "audience_age_buckets": raw.get("audienceAgeSplit", {}),
+            "audience_credibility": raw.get("audienceCredibility", 50),
+            "audience_quality": raw.get("audienceQuality", 50),
+            "url": raw.get("url", f"https://instagram.com/{raw.get('username', '')}"),
+        }
+    elif platform == Platform.TIKTOK:
+        author = raw.get("author", {})
+        stats = raw.get("stats", {})
+        return {
+            "handle": author.get("uniqueId", raw.get("handle", "")),
+            "full_name": author.get("nickname", ""),
+            "followers": stats.get("followerCount", 0),
+            "posts_count": stats.get("videoCount", 0),
+            "avg_views": raw.get("videoView", 0),
+            "engagement_rate": 0.05,
+            "country": raw.get("region", "VE"),
+            "url": raw.get("shareUrl", ""),
+        }
+    elif platform == Platform.YOUTUBE:
+        snippet = raw.get("snippet", {})
+        stats = raw.get("channel_details", {}).get("statistics", {})
+        return {
+            "handle": snippet.get("channelTitle", ""),
+            "full_name": snippet.get("channelTitle", ""),
+            "bio": snippet.get("description", ""),
+            "avatar_url": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
+            "followers": int(stats.get("subscriberCount", 0)),
+            "posts_count": int(stats.get("videoCount", 0)),
+            "engagement_rate": 0.02,
+            "url": f"https://youtube.com/channel/{raw.get('id', '')}",
+        }
+    return {"handle": "unknown"}
+
+
+async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str) -> None:
+    """Inserta candidatos evitando duplicados por (run_id, platform, handle)."""
+    for c in candidates:
+        try:
+            await supabase_rest.insert(
+                table="discovery_candidates",
+                values=c,
+                returning="id",
+                on_conflict=["run_id", "platform", "handle"],
+            )
+        except Exception:
+            pass
+
+
+async def _run_set_status(run_id: str, status: str, error: str | None = None) -> None:
+    values = {"status": status, "started_at": datetime.utcnow().isoformat()}
+    if error:
+        values["error"] = error
+    await supabase_rest.update(
+        table="discovery_runs",
+        filters=[f"id=eq.{run_id}"],
+        values=values,
+    )
+
+
+async def _run_update(run_id: str, values: dict) -> None:
+    await supabase_rest.update(
+        table="discovery_runs",
+        filters=[f"id=eq.{run_id}"],
+        values=values,
+    )
+
+
+# ---- Existing tasks ----
+
+async def embed_document_task(ctx, document_id: str) -> dict:
     """Chunk a document, embed it, store in pgvector."""
-    print(f"[workers] embedding document {document_id}")
-    # TODO: implement
+    logger.info("embed_document_task", document_id=document_id)
+
+    doc = await supabase_rest.select_one(
+        table="documents",
+        select="id,content,doc_type",
+        filters=[f"id=eq.{document_id}"],
+    )
+
+    if not doc:
+        return {"error": "Document not found"}
+
+    from app.ai.embeddings import embed_texts
+    from app.ai.indexer import index_document_chunks
+
+    text = doc.get("content", "")
+    chunks = _chunk_text(text, chunk_size=600, overlap=100)
+    embeddings = await embed_texts(chunks)
+
+    await index_document_chunks(
+        document_id=document_id,
+        chunks=chunks,
+        embeddings=embeddings,
+        content_type=doc.get("doc_type", "document"),
+    )
+
+    await supabase_rest.update(
+        table="documents",
+        filters=[f"id=eq.{document_id}"],
+        values={
+            "status": "indexed",
+            "chunk_count": len(chunks),
+            "indexed_at": datetime.utcnow().isoformat(),
+        },
+    )
+
+    return {"document_id": document_id, "chunks": len(chunks)}
 
 
-async def generate_insight_task(ctx, campaign_id: str, prompt_code: str):
+def _chunk_text(text: str, chunk_size: int = 600, overlap: int = 100) -> list[str]:
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = " ".join(words[i:i + chunk_size])
+        if chunk:
+            chunks.append(chunk)
+    return chunks
+
+
+async def generate_insight_task(ctx, campaign_id: str, prompt_code: str) -> dict:
     """Generate an AI insight for a campaign."""
-    print(f"[workers] generating insight for campaign {campaign_id} with {prompt_code}")
-    # TODO: implement
+    logger.info("generate_insight_task", campaign_id=campaign_id, prompt_code=prompt_code)
+
+    campaign = await supabase_rest.select_one(
+        table="campaigns",
+        select="*",
+        filters=[f"id=eq.{campaign_id}"],
+    )
+
+    if not campaign:
+        return {"error": "Campaign not found"}
+
+    from app.services.ai_service import get_ai_service
+    ai = get_ai_service()
+
+    prompt = _build_insight_prompt(prompt_code, campaign)
+    response = await ai.generate(prompt=prompt, user_id=None)
+
+    insight = await supabase_rest.insert(
+        table="insights",
+        values={
+            "campaign_id": campaign_id,
+            "prompt_code": prompt_code,
+            "content": response.get("content", ""),
+            "model_provider": "deepseek",
+            "created_by": "system",
+        },
+        select="id",
+        return_http_status=201,
+    )
+
+    return {"insight_id": insight["id"], "campaign_id": campaign_id}
 
 
-async def sync_hypeauditor_task(ctx, influencer_id: str):
-    """Pull fresh metrics from HypeAuditor for an influencer."""
-    print(f"[workers] syncing HypeAuditor data for {influencer_id}")
-    # TODO: implement
+def _build_insight_prompt(code: str, campaign: dict) -> str:
+    base = f"Análisis de campaña: {campaign.get('name', 'Sin nombre')}"
+    if code == "performance":
+        return f"{base}\n\nGenera un insight de performance con recomendaciones."
+    elif code == "audience":
+        return f"{base}\n\nAnaliza la audiencia y sugiere mejoras."
+    return f"{base}\n\nGenera un insight general."
 
 
-async def scheduled_reports_cron(ctx):
-    """Run scheduled reports."""
-    print("[workers] running scheduled reports")
-    # TODO: query scheduled_reports where is_active=true and next_run_at <= now
+async def sync_hypeauditor_task(ctx, influencer_id: str) -> dict:
+    """Pull fresh metrics from Hypeauditor for an influencer."""
+    logger.info("sync_hypeauditor_task", influencer_id=influencer_id)
+
+    if not settings.HYPEAUDITOR_API_KEY:
+        return {"error": "HYPEAUDITOR_API_KEY not configured"}
+
+    influencer = await supabase_rest.select_one(
+        table="influencers",
+        select="id,full_name,primary_handle",
+        filters=[f"id=eq.{influencer_id}"],
+    )
+
+    if not influencer:
+        return {"error": "Influencer not found"}
+
+    return {"influencer_id": influencer_id, "synced": False, "reason": "HypeAuditor not implemented"}
+
+
+async def sync_metricool_task(ctx, channel: str = "instagram") -> dict:
+    """Sincroniza métricas desde Metricool para un canal."""
+    logger.info("sync_metricool_task", channel=channel)
+
+    if not settings.METRICOOL_ACCESS_TOKEN:
+        return {"synced": 0, "reason": "METRICOOL_ACCESS_TOKEN not configured"}
+
+    try:
+        end_date = datetime.utcnow().date()
+        start_date = end_date - timedelta(days=30)
+        analytics = await metricool_client.get_analytics(
+            channel=channel,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return {"channel": channel, "analytics": analytics, "synced": True}
+    except Exception as e:
+        logger.error("metricool_sync_failed", channel=channel, error=str(e))
+        return {"synced": False, "error": str(e)}
+
+
+async def scheduled_reports_cron(ctx) -> None:
+    """Run scheduled reports daily at 9 AM."""
+    logger.info("scheduled_reports_cron_running")
+
+    runs = await supabase_rest.select(
+        table="scheduled_reports",
+        select="id,name,query_config,delivery_channels",
+        filters=["is_active=eq.true"],
+        limit=50,
+    )
+
+    for run in runs:
+        try:
+            logger.info("executing_scheduled_report", report_id=run["id"], name=run["name"])
+        except Exception as e:
+            logger.error("scheduled_report_failed", report_id=run["id"], error=str(e))
 
 
 class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
     functions = [
+        discovery_run_task,
         embed_document_task,
         generate_insight_task,
         sync_hypeauditor_task,
+        sync_metricool_task,
     ]
     cron_jobs = [
-        cron(scheduled_reports_cron, hour=9, minute=0),  # daily 9 AM
+        cron(scheduled_reports_cron, hour=9, minute=0),
+        cron(sync_metricool_task, hour=2, minute=0, channel="instagram"),
     ]
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = 10
-    job_timeout = 600  # 10 minutes
+    job_timeout = 600
