@@ -1,9 +1,10 @@
 """Application configuration via environment variables."""
 
+import json
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +24,22 @@ class Settings(BaseSettings):
     API_CORS_ORIGINS: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
     )
+
+    @field_validator("API_CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        if isinstance(v, str):
+            v = v.strip()
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+            except (ValueError, json.JSONDecodeError):
+                pass
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
     # Supabase
     SUPABASE_URL: str = ""
