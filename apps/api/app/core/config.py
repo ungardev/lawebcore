@@ -2,10 +2,10 @@
 
 import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     API_ENV: Literal["development", "staging", "production"] = "development"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    API_CORS_ORIGINS: list[str] = Field(
+    API_CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
     )
 
