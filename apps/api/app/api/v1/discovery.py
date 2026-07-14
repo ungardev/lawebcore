@@ -1,10 +1,12 @@
 """API v1 router para el módulo de Discovery."""
 
+import uuid as uuidlib
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
+from app.core.security import CurrentUserDep
 from app.core.supabase_rest import supabase_rest
 from app.discovery.orchestrator import orchestrator
 from app.discovery.schemas import (
@@ -34,11 +36,11 @@ class InlineAssistantMessage(BaseModel):
 # ---- Conversations (chat style) ----
 
 @router.post("/conversations", response_model=ConversationResponse)
-async def create_conversation(body: DiscoveryConversationCreate):
+async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUserDep):
     """Crea una conversación nueva de discovery."""
     from app.discovery.memory import conversation_memory
 
-    conversation_id = UUID("00000000-0000-0000-0000-000000000001")
+    conversation_id = uuidlib.uuid4()
     result = await orchestrator.create_conversation(
         conversation_id=conversation_id,
         initial_brief=body.initial_brief,
@@ -46,7 +48,7 @@ async def create_conversation(body: DiscoveryConversationCreate):
 
     await conversation_memory.save_conversation(
         conversation_id=conversation_id,
-        user_id=UUID("00000000-0000-0000-0000-000000000001"),
+        user_id=user.id,
         bu_id=body.bu_id,
         step=ConversationStep.START.value,
     )
@@ -108,6 +110,7 @@ async def get_conversation(conversation_id: UUID):
 async def send_message(
     conversation_id: UUID,
     message: MessageCreate,
+    user: CurrentUserDep,
 ):
     """Procesa un mensaje del usuario y retorna la respuesta IA."""
     from app.discovery.memory import conversation_memory
@@ -161,14 +164,14 @@ async def send_message(
 # ---- Direct Search (no chat) ----
 
 @router.post("/search", response_model=DiscoveryRunResponse)
-async def create_discovery_run(body: DiscoverySearchRequest):
+async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDep):
     """Crea y ejecuta un discovery_run sin chat conversacional."""
     from app.discovery.memory import conversation_memory
     from app.core.worker_enqueuer import enqueue_discovery_run
 
     run = await conversation_memory.launch_discovery_run(
         brief=body,
-        created_by=UUID("00000000-0000-0000-0000-000000000001"),
+        created_by=user.id,
     )
 
     await enqueue_discovery_run(str(run["id"]))
@@ -229,7 +232,7 @@ async def list_run_candidates(
 # ---- Candidate management ----
 
 @router.post("/candidates/{candidate_id}/save")
-async def save_candidate(candidate_id: UUID):
+async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     """Convierte un discovery_candidate a influencer real."""
     candidate = await supabase_rest.select_one(
         table="discovery_candidates",
@@ -274,7 +277,7 @@ async def save_candidate(candidate_id: UUID):
 
 
 @router.post("/candidates/{candidate_id}/dismiss")
-async def dismiss_candidate(candidate_id: UUID, reason: str | None = None):
+async def dismiss_candidate(candidate_id: UUID, reason: str | None = None, user: CurrentUserDep = None):
     """Descarta un candidato."""
     await supabase_rest.update(
         table="discovery_candidates",

@@ -77,7 +77,7 @@ class SupabaseRest:
         if on_conflict:
             prefs.append(f"resolution=merge-duplicates")
             headers["Prefer"] = ",".join(prefs)
-            headers["On-Conflig"] = f"({','.join(on_conflict)})"
+            headers["On-Conflict"] = f"({','.join(on_conflict)})"
         else:
             headers["Prefer"] = ",".join(prefs)
         resp = await self.client.post(f"/{table}", json=values, headers=headers)
