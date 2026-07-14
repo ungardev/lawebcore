@@ -132,10 +132,10 @@ conversation_memory = type(
     "ConversationMemory",
     (),
     {
-        "save_conversation": save_conversation,
-        "get_conversation": get_conversation,
-        "update_conversation": update_conversation,
-        "save_message": save_message,
-        "launch_discovery_run": launch_discovery_run,
+        "save_conversation": staticmethod(save_conversation),
+        "get_conversation": staticmethod(get_conversation),
+        "update_conversation": staticmethod(update_conversation),
+        "save_message": staticmethod(save_message),
+        "launch_discovery_run": staticmethod(launch_discovery_run),
     },
 )()
