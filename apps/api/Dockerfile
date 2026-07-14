@@ -20,4 +20,4 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "python -m app.scripts.apply_migrations && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
+CMD ["sh", "-c", "python -m scripts.apply_migrations && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"]
