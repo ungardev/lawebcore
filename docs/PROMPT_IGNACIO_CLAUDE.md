@@ -9,7 +9,7 @@ Hola. Soy **Ignacio Chacón**, líder del área **P.I.A.R.** (Plataforma de Infl
 
 ## 📄 Documento adjunto
 
-En este repositorio encontrarás el archivo `@docs/PITCH_DIRECTIVOS_P_I_A_R.md`. Es el documento ejecutivo que define el producto completo: visión, diferenciador, stack tecnológico, features del MVP, modelo operativo, datos sembrados, comparativa contra el sistema anterior (ISM), alcance v1, roadmap de 5 fases y métricas de éxito.
+En este repositorio encontrarás el archivo `@docs/PITCH_LA_WEB_STRATEGIST_&_MANAGER_P_I_A_R.md`. Es el documento ejecutivo que define el producto completo: visión, diferenciador, stack tecnológico, features del MVP, modelo operativo, datos sembrados, comparativa contra el sistema anterior (ISM), alcance v1, roadmap de 5 fases y métricas de éxito.
 
 **Lée ese documento completo antes de responderme. No asumas nada que no esté en ese documento o en el código del repositorio. Si algo es ambiguo, pregúntame.**
 
@@ -33,7 +33,7 @@ Quiero que seas mi **co-pilot técnico senior de producto y datos** para potenci
 
 ## 🚀 Empieza ahora
 
-1. Lee el documento `@docs/PITCH_DIRECTIVOS_P_I_A_R.md`.
+1. Lee el documento `@docs/PITCH_LA_WEB_STRATEGIST_&_MANAGER_P_I_A_R`.
 2. Explora la estructura del monorepo (apps/web, apps/api, packages/).
 3. Confírmame que entendiste el contexto: qué es P.I.A.R., cuál es el alcance del MVP, qué distinguish es el motor de proyección de 3 escenarios y cómo funciona el scoring accionable.
 4. Dame tus primeras observaciones como co-pilot: qué ves como prioritario, qué riesgos identificas, qué harías diferente.
@@ -47,7 +47,7 @@ Estoy listo. Empezamos cuando digas.
 
 | Situación | Qué hacer |
 |---|---|
-| **Sesión nueva** | Copia todo el bloque de arriba y pégalo en Claude junto con el adjunto `@docs/PITCH_DIRECTIVOS_P_I_A_R.md` |
+| **Sesión nueva** | Copia todo el bloque de arriba y pégalo en Claude junto con el adjunto `@docs/PITCH_LA_WEB_STRATEGIST_&_MANAGER_P_I_A_R` |
 | **Sesión rápida** | Si ya tienes contexto previo, puedes saltar la confirmación inicial y ir directo: *"Siguiente tarea: {descripción}"* |
 | **Cambio de tema** | Si cambias de módulo (ej. de P.I.A.R. a otro módulo de La Web Core), empieza con: *"Estamos cambiando de módulo. Voy a adjuntar el documento correspondiente."* |
 | **Debugging urgente** | Pega el log o error directamente después de tu identidad: *"Error en Railway (API logs): {log}. Necesito diagnóstico y fix."* |
