@@ -1,5 +1,6 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/features/auth/AuthProvider';
+import { PasswordChangeForm } from './PasswordChangeForm';
 
 export function SettingsPage() {
   const { user } = useAuth();
@@ -27,6 +28,13 @@ export function SettingsPage() {
               <p className="font-medium">{user?.created_at && new Date(user.created_at).toLocaleDateString()}</p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Contrasena</CardTitle></CardHeader>
+        <CardContent>
+          <PasswordChangeForm />
         </CardContent>
       </Card>
 

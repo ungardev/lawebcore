@@ -9,6 +9,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,8 +55,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = '/login';
   };
 
+  const updatePassword = async (currentPassword: string, newPassword: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.email) {
+      throw new Error('No hay sesion activa');
+    }
+
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: session.user.email,
+      password: currentPassword,
+    });
+    if (verifyError) {
+      throw new Error('La contrasena actual es incorrecta');
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (updateError) {
+      throw updateError;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user, loading, signIn, signOut, signUp }}>
+      <AuthContext.Provider value={{ session, user, loading, signIn, signOut, signUp, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
