@@ -85,13 +85,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       </nav>
 
       <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'md:p-2 md:text-center')}>
-        <div className={cn('flex items-center gap-2 mb-1', collapsed && 'md:justify-center')}>
-          <img
-            src="/logo-laweb.png"
-            alt="La Web Figital Agency"
-            className={cn('h-5 w-auto object-contain', collapsed ? 'h-4' : 'h-5')}
-          />
-        </div>
         <p className={cn(collapsed && 'md:hidden')}>v0.1.0 - MVP</p>
         <p className={cn('hidden', collapsed && 'md:block')}>v0.1</p>
       </div>
