@@ -162,7 +162,7 @@ export function AIAssistantPage() {
             Asistente IA
           </h1>
           <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
-            Consulta la base de conocimiento de La Web Core
+            Consulta la base de conocimiento de La Web
           </p>
         </div>
         <Button
