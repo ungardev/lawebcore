@@ -28,7 +28,7 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       navigate('/dashboard');
-      toast.success('Bienvenido a La Web Core');
+      toast.success('Bienvenido');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error de autenticacion');
     } finally {
@@ -45,10 +45,6 @@ export function LoginPage() {
             alt="La Web Figital Agency"
             className="h-20 w-auto mx-auto mb-4 object-contain"
           />
-          <h1 className="text-3xl font-bold text-foreground">La Web Core</h1>
-          <p className="text-muted-foreground mt-2">
-            Plataforma interna de La Web Figital Agency
-          </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
