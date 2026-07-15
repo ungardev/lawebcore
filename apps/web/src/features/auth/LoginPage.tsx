@@ -45,6 +45,9 @@ export function LoginPage() {
             alt="La Web Figital Agency"
             className="h-20 w-auto mx-auto mb-4 object-contain"
           />
+          <p className="text-sm text-muted-foreground tracking-wide uppercase">
+            Influencer Strategist & Manager
+          </p>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
