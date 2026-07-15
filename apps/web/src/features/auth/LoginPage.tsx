@@ -40,9 +40,11 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-subtle dark:bg-background p-4">
       <Card className="w-full max-w-md p-6 sm:p-8 shadow-elevated">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500 to-blue-500 text-white text-2xl font-bold mb-4 shadow-card">
-            LW
-          </div>
+          <img
+            src="/logo-laweb.png"
+            alt="La Web Figital Agency"
+            className="h-20 w-auto mx-auto mb-4 object-contain"
+          />
           <h1 className="text-3xl font-bold text-foreground">La Web Core</h1>
           <p className="text-muted-foreground mt-2">
             Plataforma interna de La Web Figital Agency
