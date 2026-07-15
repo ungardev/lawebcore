@@ -49,7 +49,7 @@ export function DiscoveryRunsListPage() {
             Todas las ejecuciones de Discovery
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/discovery/search')}>
+        <Button variant="outline" size="sm" onClick={() => navigate('/influencer-search/search')}>
           Nueva búsqueda
         </Button>
       </div>
@@ -74,7 +74,7 @@ export function DiscoveryRunsListPage() {
                   <tr
                     key={run.id}
                     className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/discovery/search?run=${run.id}`)}
+                    onClick={() => navigate(`/influencer-search/search?run=${run.id}`)}
                   >
                     <td className="px-4 py-3 text-muted-foreground">
                       {run.created_at ? new Date(run.created_at).toLocaleDateString('es-ES', {

@@ -50,9 +50,9 @@ export function DiscoveryChatPage() {
 
   useEffect(() => {
     if (id) {
-      loadConversation(id).catch(() => navigate('/discovery'));
+      loadConversation(id).catch(() => navigate('/influencer-search'));
     } else if (conversations.length > 0) {
-      navigate(`/discovery/${conversations[0].id}`, { replace: true });
+      navigate(`/influencer-search/${conversations[0].id}`, { replace: true });
     }
   }, [id]);
 
@@ -65,7 +65,7 @@ export function DiscoveryChatPage() {
 
     if (!conversation) {
       const conv = await startConversation(input);
-      navigate(`/discovery/${conv.id}`);
+      navigate(`/influencer-search/${conv.id}`);
       setInput('');
       return;
     }
@@ -77,7 +77,7 @@ export function DiscoveryChatPage() {
   const handleNewConversation = async () => {
     const conv = await startConversation();
     setConversations((prev) => [conv, ...prev]);
-    navigate(`/discovery/${conv.id}`);
+    navigate(`/influencer-search/${conv.id}`);
   };
 
   const allCandidates = turns.flatMap((t) => t.candidates ?? []);
@@ -114,7 +114,7 @@ export function DiscoveryChatPage() {
               conversations.map((conv) => (
                 <button
                   key={conv.id}
-                  onClick={() => navigate(`/discovery/${conv.id}`)}
+                  onClick={() => navigate(`/influencer-search/${conv.id}`)}
                   className={cn(
                     'w-full text-left px-3 py-2 border-b border-border/50 hover:bg-muted transition-colors',
                     conv.id === id && 'bg-muted',

@@ -39,10 +39,10 @@ export default function App() {
           <Route path="brands" element={<BrandsPage />} />
           <Route path="influencers" element={<InfluencersPage />} />
           <Route path="ai" element={<AIAssistantPage />} />
-          <Route path="discovery" element={<DiscoveryChatPage />} />
-          <Route path="discovery/:id" element={<DiscoveryChatPage />} />
-          <Route path="discovery/search" element={<DiscoverySearchPage />} />
-          <Route path="discovery/runs" element={<DiscoveryRunsListPage />} />
+          <Route path="influencer-search" element={<DiscoveryChatPage />} />
+          <Route path="influencer-search/:id" element={<DiscoveryChatPage />} />
+          <Route path="influencer-search/search" element={<DiscoverySearchPage />} />
+          <Route path="influencer-search/runs" element={<DiscoveryRunsListPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
