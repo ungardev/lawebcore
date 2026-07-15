@@ -91,7 +91,7 @@ export function DiscoveryChatPage() {
             Discovery
           </h1>
           <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
-            Descubre influencers ideales con lenguaje natural
+            Busca por nicho, industria o describe tu producto ideal
           </p>
         </div>
         <Button onClick={handleNewConversation} size="sm" className="gap-1.5 flex-shrink-0">
