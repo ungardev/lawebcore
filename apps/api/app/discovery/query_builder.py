@@ -61,19 +61,6 @@ class QueryBuilder:
                 )
             )
 
-        for niche in brief.niches[:3]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.INSTAGRAM,
-                    query_type="profile_search",
-                    params={
-                        "keyword": niche,
-                        "country": brief.audience_countries[0] if brief.audience_countries else "VE",
-                        "min_followers": self._tier_to_min_followers(brief),
-                    },
-                )
-            )
-
         return queries
 
     def _build_tiktok_queries(self, brief: BriefStructured) -> list[SearchQuery]:
@@ -148,14 +135,35 @@ class QueryBuilder:
 
         return queries
 
+    _COUNTRY_MAP = {
+        "VE": "venezuela",
+        "CO": "colombia",
+        "MX": "mexico",
+        "AR": "argentina",
+        "CL": "chile",
+        "PE": "peru",
+        "EC": "ecuador",
+        "BO": "bolivia",
+        "PA": "panama",
+        "DO": "dominicana",
+        "CR": "costarica",
+        "UY": "uruguay",
+        "PY": "paraguay",
+        "GT": "guatemala",
+        "HN": "honduras",
+        "SV": "salvador",
+        "NI": "nicaragua",
+    }
+
     def _niches_to_hashtags(self, niches: list[str], countries: list[str]) -> list[str]:
         """Convierte niches a hashtags de Instagram/TikTok."""
         hashtags = []
-        country_suffix = countries[0].lower() if countries else "ve"
         for niche in niches:
             clean = niche.lower().replace(" ", "").replace("-", "")
             hashtags.append(f"#{clean}")
-            hashtags.append(f"#{clean}{country_suffix}")
+            for country in countries[:2]:
+                country_name = self._COUNTRY_MAP.get(country.upper(), country.lower())
+                hashtags.append(f"#{clean}{country_name}")
         return hashtags[:15]
 
     def _tier_to_min_followers(self, brief: BriefStructured) -> int:

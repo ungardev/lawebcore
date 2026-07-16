@@ -57,6 +57,7 @@ class ApifyClient:
             "hashtags": [hashtag],
             "resultType": "posts",
             "maxItems": 100,
+            "countryCode": country,
             "filter": {
                 "followersCountMin": min_followers,
                 "followersCountMax": max_followers,
