@@ -125,7 +125,7 @@ async def analyze_comments_batch(comments: list[str]) -> SentimentDistribution:
     prompt = _build_prompt(batch)
 
     try:
-        response: LLMResponse = deepseek_client.complete(prompt, system=SYSTEM_PROMPT)
+        response: LLMResponse = await deepseek_client.complete(prompt, system=SYSTEM_PROMPT)
     except Exception as e:
         logger.error("sentiment_llm_error", error=str(e))
         return SentimentDistribution(

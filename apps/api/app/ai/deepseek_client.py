@@ -4,6 +4,7 @@ DeepSeek client wrapper with retry, fallback to OpenAI, and structured output.
 Used by sentiment_analyzer.py for batch comment classification.
 """
 
+import asyncio
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -54,13 +55,12 @@ class DeepSeekClient:
             base_url="https://api.deepseek.com",
         )
 
-    def _call_with_retry(self, client: Any, messages: list[dict], **kwargs) -> LLMResponse:
-        import time
+    async def _call_with_retry(self, client: Any, messages: list[dict], **kwargs) -> LLMResponse:
         last_error: Exception | None = None
         for attempt in range(self.max_retries):
             try:
                 start = time.perf_counter()
-                response = client.invoke(messages)
+                response = await asyncio.to_thread(client.invoke, messages)
                 latency_ms = int((time.perf_counter() - start) * 1000)
                 content = response.content if hasattr(response, "content") else str(response)
                 tokens = getattr(response, "usage_metadata", {}).get("total_tokens", None) if hasattr(response, "usage_metadata") else None
@@ -81,10 +81,10 @@ class DeepSeekClient:
                     wait_s=wait,
                 )
                 if attempt < self.max_retries - 1:
-                    time.sleep(wait)
+                    await asyncio.sleep(wait)
         raise RuntimeError(f"LLM call failed after {self.max_retries} attempts: {last_error}")
 
-    def complete(self, prompt: str, system: str | None = None) -> LLMResponse:
+    async def complete(self, prompt: str, system: str | None = None) -> LLMResponse:
         """
         Simple text completion. Falls back to OpenAI if DeepSeek is unavailable.
         """
@@ -97,7 +97,7 @@ class DeepSeekClient:
             try:
                 client = self._build_deepseek_client()
                 self._active_provider = "deepseek"
-                result = self._call_with_retry(client, messages)
+                result = await self._call_with_retry(client, messages)
                 logger.info(
                     "llm_call",
                     provider="deepseek",
@@ -112,7 +112,7 @@ class DeepSeekClient:
         if settings.OPENAI_API_KEY:
             client = self._build_openai_client()
             self._active_provider = "openai"
-            result = self._call_with_retry(client, messages)
+            result = await self._call_with_retry(client, messages)
             logger.info(
                 "llm_call",
                 provider="openai",
@@ -124,12 +124,12 @@ class DeepSeekClient:
 
         raise RuntimeError("No LLM provider available (DeepSeek and OpenAI keys missing)")
 
-    def complete_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:
+    async def complete_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:
         """
         Completion parsed as JSON. Useful for structured sentiment responses.
         """
-        result = self.complete(prompt, system)
         import json
+        result = await self.complete(prompt, system)
         try:
             return json.loads(result.content)
         except json.JSONDecodeError as e:

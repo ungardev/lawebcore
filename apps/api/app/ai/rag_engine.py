@@ -157,7 +157,7 @@ async def generate_with_context(
     messages.append({"role": "user", "content": user_prompt})
 
     try:
-        response = deepseek_client.complete(
+        response = await deepseek_client.complete(
             prompt=user_prompt,
             system=PIAR_SYSTEM_PROMPT,
         )
