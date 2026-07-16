@@ -64,47 +64,7 @@ export function useDiscoveryConversation() {
 
     try {
       const result = await discoveryApi.conversations.sendMessage(conversation.id, content);
-
-      const assistantContent = result.candidates.length > 0
-        ? `Encontré ${result.candidates.length} candidatos potenciales. Revisa las tarjetas a continuación.`
-        : 'Procesando tu solicitud...';
-
-      setTurns((prev) => {
-        const filtered = prev.filter((t) => t.id !== 'loading');
-        return [
-          ...filtered,
-          {
-            id: result.assistant_message.id,
-            role: 'assistant',
-            content: assistantContent,
-            candidates: result.candidates,
-            run_summary: result.run_summary,
-            isLoading: false,
-          },
-        ];
-      });
-
-      if (result.run_summary) {
-        const briefTurn: ChatTurn = {
-          id: `brief-${result.assistant_message.id}`,
-          role: 'assistant',
-          content: `Búsqueda completada: ${result.run_summary.total_found} encontrados, mejor score ${result.run_summary.top_score}/100 en ${result.run_summary.platforms_queried.join(', ')}.`,
-          run_summary: result.run_summary,
-          isLoading: false,
-        };
-        setTurns((prev) => [...prev, briefTurn]);
-      }
-
-      setConversation((prev) =>
-        prev
-          ? {
-              ...prev,
-              last_message_at: result.assistant_message.created_at,
-              message_count: prev.message_count + 2,
-            }
-          : prev,
-      );
-
+      await loadConversation(conversation.id);
       return result;
     } catch (e) {
       setError((e as Error).message);
