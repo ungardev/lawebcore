@@ -207,22 +207,32 @@ async def _execute_platform_query(platform: Platform, query) -> list[dict]:
 def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
     """Convierte payload raw a dict compatible con discovery_candidates."""
     if platform == Platform.INSTAGRAM:
+        likes = raw.get("likesCount", 0)
+        comments = raw.get("commentsCount", 0)
+        engagement_rate = 0.0
+        if likes > 0 and comments >= 0:
+            engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+
         return {
-            "handle": raw.get("username", raw.get("handle", "")),
-            "full_name": raw.get("fullName", raw.get("full_name", "")),
-            "bio": raw.get("biography", raw.get("bio", "")),
-            "avatar_url": raw.get("profilePicUrlHD", raw.get("avatar_url", "")),
-            "followers": raw.get("followersCount", raw.get("followers", 0)),
-            "following": raw.get("followsCount", raw.get("following", 0)),
-            "posts_count": raw.get("postsCount", raw.get("posts_count", 0)),
-            "engagement_rate": raw.get("avgLikesPercent", raw.get("engagement_rate", 0)),
-            "country": raw.get("之国", raw.get("country", "")),
-            "city": raw.get("city", ""),
-            "audience_gender_split": raw.get("audienceGenderSplit", {}),
-            "audience_age_buckets": raw.get("audienceAgeSplit", {}),
-            "audience_credibility": raw.get("audienceCredibility", 50),
-            "audience_quality": raw.get("audienceQuality", 50),
-            "url": raw.get("url", f"https://instagram.com/{raw.get('username', '')}"),
+            "platform_user_id": raw.get("ownerId"),
+            "handle": raw.get("ownerUsername", ""),
+            "full_name": raw.get("ownerFullName", ""),
+            "bio": raw.get("caption", ""),
+            "avatar_url": raw.get("displayUrl", ""),
+            "followers": 0,
+            "following": 0,
+            "posts_count": 0,
+            "avg_likes": likes,
+            "avg_comments": comments,
+            "engagement_rate": engagement_rate,
+            "country": "",
+            "city": "",
+            "url": raw.get("url", f"https://instagram.com/{raw.get('ownerUsername', '')}"),
+            "audience_gender_split": {},
+            "audience_age_buckets": {},
+            "audience_credibility": 50,
+            "audience_quality": 50,
+            "raw_payload": raw,
         }
     elif platform == Platform.TIKTOK:
         author = raw.get("author", {})

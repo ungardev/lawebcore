@@ -41,38 +41,40 @@ class ApifyClient:
         min_followers: int = 1000,
         max_followers: int = 10_000_000,
     ) -> list[dict[str, Any]]:
-        """Busca posts de Instagram por hashtag vía apify/instagram-hashtag-scraper."""
+        """Busca posts de Instagram por hashtag vía apify/instagram-scraper.
+
+        El actor apify/instagram-scraper devuelve POSTS, no perfiles.
+        Los campos disponibles son: ownerUsername, ownerId, likesCount, commentsCount, url, caption, hashtags, etc.
+        Los campos de perfil (followers, bio, profilePic) requieren un run separado con instagram-profile-scraper.
+        """
         client = await self._get_client()
+
+        clean_hashtag = hashtag.lstrip("#")
 
         logger.info(
             "apify_instagram_start",
             hashtag=hashtag,
+            clean_hashtag=clean_hashtag,
             country=country,
-            min_followers=min_followers,
-            max_followers=max_followers,
             token_prefix=self.token[:8] if self.token else "EMPTY",
         )
 
         run_input = {
-            "hashtags": [hashtag],
-            "resultType": "posts",
-            "maxItems": 100,
-            "countryCode": country,
-            "filter": {
-                "followersCountMin": min_followers,
-                "followersCountMax": max_followers,
-            },
+            "hashtags": [clean_hashtag],
+            "resultsType": "posts",
+            "resultsLimit": min(max_followers, 100),
+            "searchType": "hashtag",
         }
 
         response = await client.post(
-            "/acts/apify~instagram-hashtag-scraper/runs",
+            "/acts/apify/instagram-scraper/runs",
             json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
         )
         logger.info("apify_post_response", status=response.status_code, response_body=response.text[:500])
         response.raise_for_status()
         run_data = response.json()
         run_id = run_data["data"]["id"]
-        logger.info("apify_run_started", run_id=run_id, hashtag=hashtag)
+        logger.info("apify_run_started", run_id=run_id, hashtag=clean_hashtag)
 
         return await self._poll_run(client, run_id)
 
