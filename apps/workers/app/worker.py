@@ -331,8 +331,14 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
                 returning="id",
                 on_conflict=["run_id", "platform", "handle"],
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "candidate_insert_failed",
+                run_id=run_id,
+                handle=c.get("handle"),
+                platform=c.get("platform"),
+                error=str(exc),
+            )
 
 
 async def _run_set_status(run_id: str, status: str, error: str | None = None) -> None:
