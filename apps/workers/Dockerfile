@@ -5,6 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app
 
+# Build argument to invalidate cache — change value to force rebuild
+ARG RAILWAY_BUILD_ID=88b0f71
+ENV RAILWAY_BUILD_ID=${RAILWAY_BUILD_ID}
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
