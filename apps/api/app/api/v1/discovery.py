@@ -197,6 +197,7 @@ async def send_message(
         "assistant_message": assistant_record,
         "candidates": ai_response.get("candidates", []),
         "run_summary": ai_response.get("run_summary"),
+        "discovery_run_id": ai_response.get("discovery_run_id"),
     }
 
 
