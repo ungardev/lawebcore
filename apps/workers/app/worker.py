@@ -24,7 +24,14 @@ from app.discovery.brief_parser import brief_parser_agent
 from app.discovery.query_builder import query_builder
 from app.discovery.result_ranker import result_ranker
 from app.discovery.schemas import BriefStructured, CandidateMetrics, Platform
-from app.discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
+from app.discovery.tools import (
+    apify_client,
+    meta_client,
+    metricool_client,
+    multi_actor_instagram_client,
+    tiktok_client,
+    youtube_client,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -158,14 +165,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         exc_info=True,
                     )
 
-        if not all_candidates and Platform.INSTAGRAM in platforms:
-            print("[discovery_run_task] no candidates from queries, using seed list fallback", flush=True)
-            await _fetch_seed_candidates(
-                run_id=run_id,
-                brief=brief,
-                all_candidates=all_candidates,
-            )
-
         await _deduplicate_and_insert_candidates(all_candidates, run_id)
 
         total = len(all_candidates)
@@ -191,11 +190,10 @@ async def _execute_platform_query(platform: Platform, query) -> list[dict]:
     """Ejecuta una query en la plataforma específica."""
     if platform == Platform.INSTAGRAM:
         if query.query_type == "hashtag_search":
-            return await apify_client.search_instagram_by_hashtag(
+            return await multi_actor_instagram_client.discover_by_hashtag(
                 hashtag=query.params["hashtag"],
                 country=query.params.get("country", "VE"),
-                min_followers=query.params.get("min_followers", 1000),
-                max_followers=query.params.get("max_followers", 10_000_000),
+                results_limit=50,
             )
         elif query.query_type == "profile_search":
             result = await apify_client.search_instagram_profile(
@@ -217,86 +215,6 @@ async def _execute_platform_query(platform: Platform, query) -> list[dict]:
                 max_results=20,
             )
     return []
-
-
-async def _fetch_seed_candidates(
-    run_id: str,
-    brief: BriefStructured,
-    all_candidates: list[dict],
-) -> None:
-    """Fallback: busca candidatos desde seed list cuando hashtag scraper retorna 0.
-
-    Usa el actor instagram-profile-scraper para enriquecer handles conocidos.
-    """
-    from app.discovery.seed_influencers import get_seed_handles
-
-    countries = brief.audience_countries if brief.audience_countries else ["VE"]
-    niches = brief.niches if brief.niches else []
-    primary_country = countries[0] if countries else "VE"
-
-    seed_handles = get_seed_handles(niches=niches, country=primary_country)
-
-    if not seed_handles:
-        print("[discovery_run_task] seed list empty, skipping fallback", flush=True)
-        return
-
-    print(f"[discovery_run_task] fetching {len(seed_handles)} seed profiles", flush=True)
-
-    try:
-        profiles = await apify_client.search_instagram_profiles_batch(seed_handles)
-        print(f"[discovery_run_task] fetched {len(profiles)} seed profiles", flush=True)
-
-        for raw in profiles:
-            if not raw or not isinstance(raw, dict):
-                continue
-            if raw.get("error"):
-                continue
-
-            metrics = _raw_to_candidate_dict(raw, Platform.INSTAGRAM)
-            score = result_ranker.rank(
-                CandidateMetrics(**metrics),
-                brief,
-            )
-            all_candidates.append({
-                "run_id": run_id,
-                "platform": "instagram",
-                "handle": metrics.get("handle", "unknown"),
-                "full_name": metrics.get("full_name"),
-                "bio": metrics.get("bio"),
-                "avatar_url": metrics.get("avatar_url"),
-                "country": metrics.get("country"),
-                "city": metrics.get("city"),
-                "followers": metrics.get("followers"),
-                "following": metrics.get("following"),
-                "posts_count": metrics.get("posts_count"),
-                "avg_likes": metrics.get("avg_likes"),
-                "avg_comments": metrics.get("avg_comments"),
-                "avg_views": metrics.get("avg_views"),
-                "engagement_rate": metrics.get("engagement_rate"),
-                "audience_credibility": metrics.get("audience_credibility"),
-                "audience_quality": metrics.get("audience_quality"),
-                "audience_gender_split": metrics.get("audience_gender_split"),
-                "audience_age_buckets": metrics.get("audience_age_buckets"),
-                "match_score": score.match_score,
-                "niche_relevance": score.niche_relevance,
-                "geo_relevance": score.geo_relevance,
-                "audience_relevance": score.audience_relevance,
-                "content_quality": score.content_quality,
-                "estimated_cost": score.estimated_cost,
-                "expected_reach": score.expected_reach,
-                "expected_engagement": score.expected_engagement,
-                "roi_estimate": score.roi_estimate,
-                "rationale": score.rationale,
-                "status": "new",
-                "raw_payload": raw,
-                "fetched_at": datetime.utcnow().isoformat(),
-            })
-
-        print(f"[discovery_run_task] seed candidates added: {len(profiles)}", flush=True)
-
-    except Exception as e:
-        logger.error("seed_candidates_failed", error=str(e), exc_info=True)
-        print(f"[discovery_run_task] seed fallback failed: {e}", flush=True)
 
 
 def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
