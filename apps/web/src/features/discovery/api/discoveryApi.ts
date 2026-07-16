@@ -30,6 +30,7 @@ export const discoveryApi = {
       assistant_message: { id: string; created_at: string };
       candidates: DiscoveryCandidate[];
       run_summary?: { total_found: number; top_score: number; platforms_queried: Platform[] };
+      discovery_run_id?: string;
     }> => {
       const { data } = await api.post(`/discovery/conversations/${conversationId}/messages`, { content });
       return data;

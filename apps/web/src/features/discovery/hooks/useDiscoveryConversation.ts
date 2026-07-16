@@ -65,6 +65,11 @@ export function useDiscoveryConversation() {
     try {
       const result = await discoveryApi.conversations.sendMessage(conversation.id, content);
       await loadConversation(conversation.id);
+
+      if (result.discovery_run_id) {
+        pollRunStatus(result.discovery_run_id, conversation.id);
+      }
+
       return result;
     } catch (e) {
       setError((e as Error).message);
@@ -86,6 +91,24 @@ export function useDiscoveryConversation() {
       setIsLoading(false);
     }
   }, [conversation]);
+
+  async function pollRunStatus(runId: string, conversationId: string) {
+    const maxAttempts = 40;
+    const interval = 3000;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise((r) => setTimeout(r, interval));
+      try {
+        const run = await discoveryApi.search.getRun(runId);
+        if ((run.status as string) === 'completed' || (run.status as string) === 'failed' || (run.status as string) === 'partial') {
+          await loadConversation(conversationId);
+          return;
+        }
+      } catch {
+        // keep polling
+      }
+    }
+  }
 
   const confirmBrief = useCallback(async () => {
     if (!conversation || !pendingBrief) return;
