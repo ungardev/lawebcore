@@ -102,6 +102,36 @@ export function useDiscoveryConversation() {
         const run = await discoveryApi.search.getRun(runId);
         if ((run.status as string) === 'completed' || (run.status as string) === 'failed' || (run.status as string) === 'partial') {
           await loadConversation(conversationId);
+          if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
+            try {
+              const candidates = await discoveryApi.search.getCandidates(runId, { limit: 20 });
+              setTurns((prev) => {
+                const lastIdx = prev.length - 1;
+                if (lastIdx < 0) return prev;
+                const last = prev[lastIdx];
+                if (last.role !== 'assistant') return prev;
+                return prev.map((t, i) =>
+                  i === lastIdx ? { ...t, candidates, isLoading: false } : t,
+                );
+              });
+            } catch {
+              setTurns((prev) => {
+                const lastIdx = prev.length - 1;
+                if (lastIdx < 0) return prev;
+                return prev.map((t, i) =>
+                  i === lastIdx ? { ...t, isLoading: false } : t,
+                );
+              });
+            }
+          } else {
+            setTurns((prev) => {
+              const lastIdx = prev.length - 1;
+              if (lastIdx < 0) return prev;
+              return prev.map((t, i) =>
+                i === lastIdx ? { ...t, isLoading: false } : t,
+              );
+            });
+          }
           return;
         }
       } catch {
