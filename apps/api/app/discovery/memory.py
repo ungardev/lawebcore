@@ -116,7 +116,8 @@ async def launch_discovery_run(
         returning="representation",
     )
 
-    run_id = run["id"]
+    run_record = run[0] if isinstance(run, list) else run
+    run_id = run_record["id"]
 
     # Nota: el enqueue al worker ARQ se hace en apps/api/app/api/v1/discovery.py
     # via _run_discovery_job() despues de create_discovery_run(). Esta funcion
@@ -124,7 +125,7 @@ async def launch_discovery_run(
 
     return {
         "id": UUID(run_id),
-        "created_at": run.get("created_at", ""),
+        "created_at": run_record.get("created_at", ""),
     }
 
 
