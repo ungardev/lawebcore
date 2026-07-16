@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
     APIFY_API_KEY: str = ""
+    DEEPSEEK_API_KEY: str = ""
+    DEFAULT_LLM_PROVIDER: str = "deepseek"
 
 
 settings = Settings()

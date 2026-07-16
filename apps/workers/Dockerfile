@@ -12,16 +12,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Layer 1: API code first — this is the layer that changes most often
-# When apps/api/ files change, this layer is invalidated and rebuilt
-COPY apps/api/app /app/app
-
-# Layer 2: Worker code on top — this layer's files (worker.py, config, etc.)
-# are copied AFTER the API layer, so they take precedence
-COPY apps/workers/app /app/app
-
 # Install workers runtime dependencies (arq, redis, pydantic, langchain, etc.)
 COPY apps/workers/pyproject.toml ./pyproject.toml
 RUN pip install --upgrade pip && pip install -e .
+
+# Layer 1: Workers' own code (provides /app/app/worker.py and /app/app/__init__.py)
+COPY apps/workers/app /app/app
+
+# Layer 2: API modules overlay onto /app/app/
+# Docker COPY does NOT delete files only present in destination, so
+# /app/app/worker.py (from layer 1) is preserved even though apps/api/app/ has no worker.py
+# apps/api/app/ has no worker.py (verified), so COPY cannot overwrite it
+# Result: single unified /app/app/ tree, no namespace collisions
+COPY apps/api/app /app/app
 
 CMD ["arq", "app.worker.WorkerSettings"]
