@@ -136,33 +136,43 @@ async def send_message(
     if ai_response.get("pending_discovery"):
         from app.core.worker_enqueuer import enqueue_discovery_run
         from app.discovery.memory import conversation_memory
+        import structlog
 
+        logger = structlog.get_logger(__name__)
         brief_data = ai_response.get("brief")
         if brief_data:
-            brief = BriefStructured(**brief_data)
-            run = await conversation_memory.launch_discovery_run(
-                brief=DiscoverySearchRequest(
-                    product_name=brief.product_name,
-                    industry=brief.industry,
-                    niches=brief.niches,
-                    audience_gender=brief.audience_gender,
-                    audience_age_min=brief.audience_age_min,
-                    audience_age_max=brief.audience_age_max,
-                    audience_countries=brief.audience_countries,
-                    audience_cities=brief.audience_cities,
-                    budget_usd=brief.budget_usd,
-                    tone=brief.tone,
-                    platforms=brief.platforms,
-                ),
-                created_by=user.id,
-            )
-            await enqueue_discovery_run(str(run["id"]))
-            ai_response = ai_response.copy()
-            ai_response["discovery_run_id"] = str(run["id"])
-            assistant_content = (
-                "Estoy buscando candidatos en Instagram, TikTok y YouTube "
-                "basado en tu brief. Te aviso cuando termine la búsqueda."
-            )
+            try:
+                brief = BriefStructured(**brief_data)
+                run = await conversation_memory.launch_discovery_run(
+                    brief=DiscoverySearchRequest(
+                        product_name=brief.product_name,
+                        industry=brief.industry,
+                        niches=brief.niches,
+                        audience_gender=brief.audience_gender,
+                        audience_age_min=brief.audience_age_min,
+                        audience_age_max=brief.audience_age_max,
+                        audience_countries=brief.audience_countries,
+                        audience_cities=brief.audience_cities,
+                        budget_usd=brief.budget_usd,
+                        tone=brief.tone,
+                        platforms=brief.platforms,
+                    ),
+                    created_by=user.id,
+                )
+                enqueue_ok = await enqueue_discovery_run(str(run["id"]))
+                logger.info("discovery_run_enqueued", run_id=str(run["id"]), enqueue_ok=enqueue_ok)
+                ai_response = ai_response.copy()
+                ai_response["discovery_run_id"] = str(run["id"])
+                assistant_content = (
+                    "Estoy buscando candidatos en Instagram, TikTok y YouTube "
+                    "basado en tu brief. Te aviso cuando termine la búsqueda."
+                )
+            except Exception as e:
+                logger.error("pending_discovery_failed", error=str(e), brief_data=brief_data)
+                assistant_content = (
+                    f"Error al iniciar la búsqueda: {e}. "
+                    "Intenta de nuevo o contacta al administrador."
+                )
 
     assistant_record = await supabase_rest.insert(
         table="discovery_messages",
