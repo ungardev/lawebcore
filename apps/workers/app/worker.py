@@ -88,8 +88,20 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         for platform in platforms:
             platform_queries = queries.get(platform, [])
             for q in platform_queries:
+                logger.info(
+                    "discovery_executing_query",
+                    platform=platform.value,
+                    query_type=q.query_type,
+                    params=q.params,
+                )
                 try:
                     candidates = await _execute_platform_query(platform, q)
+                    logger.info(
+                        "discovery_query_done",
+                        platform=platform.value,
+                        query_type=q.query_type,
+                        candidates_count=len(candidates),
+                    )
                     for raw in candidates:
                         metrics = _raw_to_candidate_dict(raw, platform)
                         score = result_ranker.rank(
@@ -131,7 +143,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                             "fetched_at": datetime.utcnow().isoformat(),
                         })
                 except Exception as e:
-                    logger.warning("discovery_query_failed", platform=platform.value, query=q.query_type, error=str(e))
+                    logger.error(
+                        "discovery_query_failed",
+                        platform=platform.value,
+                        query=q.query_type,
+                        params=q.params,
+                        error=str(e),
+                        exc_info=True,
+                    )
 
         await _deduplicate_and_insert_candidates(all_candidates, run_id)
 

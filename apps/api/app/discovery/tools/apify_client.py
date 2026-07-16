@@ -1,10 +1,13 @@
 """Apify client — scraping de Instagram, TikTok, YouTube vía Apify actors."""
 
+import structlog
 from typing import Any
 
 import httpx
 
 from app.core.config import settings
+
+logger = structlog.get_logger(__name__)
 
 
 class ApifyClient:
@@ -41,6 +44,15 @@ class ApifyClient:
         """Busca posts de Instagram por hashtag vía apify/instagram-hashtag-scraper."""
         client = await self._get_client()
 
+        logger.info(
+            "apify_instagram_start",
+            hashtag=hashtag,
+            country=country,
+            min_followers=min_followers,
+            max_followers=max_followers,
+            token_prefix=self.token[:8] if self.token else "EMPTY",
+        )
+
         run_input = {
             "hashtags": [hashtag],
             "resultType": "posts",
@@ -55,9 +67,11 @@ class ApifyClient:
             "/acts/apify~instagram-hashtag-scraper/runs",
             json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
         )
+        logger.info("apify_post_response", status=response.status_code, response_body=response.text[:500])
         response.raise_for_status()
         run_data = response.json()
         run_id = run_data["data"]["id"]
+        logger.info("apify_run_started", run_id=run_id, hashtag=hashtag)
 
         return await self._poll_run(client, run_id)
 
@@ -114,11 +128,13 @@ class ApifyClient:
         """Poll hasta que el run complete (max 5 minutos)."""
         import asyncio
 
-        for _ in range(max_wait // 5):
+        for i in range(max_wait // 5):
             status_resp = await client.get(f"/runs/{run_id}")
             status_resp.raise_for_status()
             status_data = status_resp.json()
             status = status_data["data"]["status"]
+
+            logger.info("apify_poll", run_id=run_id, status=status, attempt=i + 1)
 
             if status == "RUNNING":
                 await asyncio.sleep(5)
@@ -126,9 +142,18 @@ class ApifyClient:
             elif status == "SUCCEEDED":
                 dataset_resp = await client.get(f"/runs/{run_id}/dataset/items")
                 dataset_resp.raise_for_status()
-                return dataset_resp.json()
+                items = dataset_resp.json()
+                logger.info(
+                    "apify_run_succeeded",
+                    run_id=run_id,
+                    items_count=len(items),
+                    first_item_keys=list(items[0].keys()) if items else [],
+                )
+                return items
             else:
+                logger.warning("apify_run_failed", run_id=run_id, status=status)
                 raise RuntimeError(f"Apify run failed: {status}")
+        logger.error("apify_poll_timeout", run_id=run_id, max_wait=max_wait)
         raise TimeoutError(f"Apify run {run_id} timed out after {max_wait}s")
 
 
