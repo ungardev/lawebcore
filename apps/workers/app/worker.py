@@ -324,6 +324,7 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
             credibility = min(credibility, 100)
 
             return {
+                "platform": platform.value,
                 "platform_user_id": str(raw.get("userId", "")),
                 "handle": raw.get("username", raw.get("username", "")),
                 "full_name": raw.get("fullName", ""),
@@ -352,6 +353,7 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
                 engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
 
             return {
+                "platform": platform.value,
                 "platform_user_id": str(raw.get("ownerId", "")),
                 "handle": raw.get("ownerUsername", ""),
                 "full_name": raw.get("ownerFullName", ""),

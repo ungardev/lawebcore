@@ -295,7 +295,26 @@ class ApifyClient:
             if not isinstance(items, list):
                 logger.warning("apify_dataset_unexpected_format", dataset_id=dataset_id, type=type(items))
                 return []
-            return items
+            valid_items = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                if "error" in item:
+                    error_desc = item.get("errorDescription", item.get("error", "unknown"))
+                    input_url = item.get("inputUrl", "")
+                    username = "unknown"
+                    if "instagram.com/" in input_url:
+                        username = input_url.split("instagram.com/")[-1].rstrip("/")
+                    logger.warning(
+                        "apify_dataset_item_skipped",
+                        dataset_id=dataset_id,
+                        username=username,
+                        input_url=input_url,
+                        error=error_desc,
+                    )
+                    continue
+                valid_items.append(item)
+            return valid_items
         except json.JSONDecodeError as e:
             logger.error("apify_dataset_json_parse_failed", dataset_id=dataset_id, error=str(e), text_preview=items_text[:200])
             return []
