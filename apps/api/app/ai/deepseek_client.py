@@ -84,7 +84,13 @@ class DeepSeekClient:
                     await asyncio.sleep(wait)
         raise RuntimeError(f"LLM call failed after {self.max_retries} attempts: {last_error}")
 
-    async def complete(self, prompt: str, system: str | None = None) -> LLMResponse:
+    async def complete(
+        self,
+        prompt: str,
+        system: str | None = None,
+        temperature: float = 0.1,
+        max_tokens: int = 2000,
+    ) -> LLMResponse:
         """
         Simple text completion. Falls back to OpenAI if DeepSeek is unavailable.
         """
@@ -97,7 +103,7 @@ class DeepSeekClient:
             try:
                 client = self._build_deepseek_client()
                 self._active_provider = "deepseek"
-                result = await self._call_with_retry(client, messages)
+                result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
                 logger.info(
                     "llm_call",
                     provider="deepseek",
@@ -112,7 +118,7 @@ class DeepSeekClient:
         if settings.OPENAI_API_KEY:
             client = self._build_openai_client()
             self._active_provider = "openai"
-            result = await self._call_with_retry(client, messages)
+            result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
             logger.info(
                 "llm_call",
                 provider="openai",
@@ -124,12 +130,18 @@ class DeepSeekClient:
 
         raise RuntimeError("No LLM provider available (DeepSeek and OpenAI keys missing)")
 
-    async def complete_json(self, prompt: str, system: str | None = None) -> dict[str, Any]:
+    async def complete_json(
+        self,
+        prompt: str,
+        system: str | None = None,
+        temperature: float = 0.1,
+        max_tokens: int = 2000,
+    ) -> dict[str, Any]:
         """
         Completion parsed as JSON. Useful for structured sentiment responses.
         """
         import json
-        result = await self.complete(prompt, system)
+        result = await self.complete(prompt, system, temperature=temperature, max_tokens=max_tokens)
         try:
             return json.loads(result.content)
         except json.JSONDecodeError as e:

@@ -64,6 +64,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     try:
         await _run_set_status(run_id, "running")
 
+        print(f"[discovery_run_task] START run_id={run_id}", flush=True)
+
         run = await supabase_rest.select_one(
             table="discovery_runs",
             select="*",
@@ -71,7 +73,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         )
 
         if not run:
+            print(f"[discovery_run_task] ABORT: Run {run_id} not found", flush=True)
             return {"error": f"Run {run_id} not found"}
+
+        print(f"[discovery_run_task] brief_parsed={run.get('brief_parsed')}", flush=True)
 
         brief_parsed = run.get("brief_parsed", {})
         if isinstance(brief_parsed, str):
@@ -83,6 +88,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         platforms = [Platform(p) if isinstance(p, str) else p for p in platforms_raw]
 
         queries = query_builder.build(brief)
+        print(f"[discovery_run_task] queries built: {list(queries.keys())}", flush=True)
         all_candidates: list[dict] = []
 
         for platform in platforms:
@@ -155,6 +161,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _deduplicate_and_insert_candidates(all_candidates, run_id)
 
         total = len(all_candidates)
+        print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
         await _run_update(run_id, {
             "status": "completed",
             "total_candidates": total,

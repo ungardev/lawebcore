@@ -102,7 +102,14 @@ class DiscoveryOrchestrator:
 
         try:
             brief = await brief_parser_agent.parse(content)
-        except Exception:
+        except Exception as e:
+            logger.error(
+                "brief_parser_failed",
+                error=str(e),
+                exc_info=True,
+                conversation_id=str(conversation_id),
+                content_preview=content[:200],
+            )
             brief = BriefStructured(additional_context=content[:500])
 
         state.brief_structured = brief
@@ -129,6 +136,30 @@ class DiscoveryOrchestrator:
         state = self.state[conversation_id]
 
         if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
+            if not state.brief_structured or not state.brief_structured.niches:
+                logger.warning(
+                    "brief_structured_empty_reparsing",
+                    conversation_id=str(conversation_id),
+                    accumulated_brief_preview=state.accumulated_brief[:200],
+                )
+                try:
+                    state.brief_structured = await brief_parser_agent.parse(
+                        state.accumulated_brief
+                    )
+                    logger.info(
+                        "brief_reparsed_successfully",
+                        conversation_id=str(conversation_id),
+                        niches=state.brief_structured.niches,
+                        platforms=[p.value for p in state.brief_structured.platforms] if state.brief_structured.platforms else [],
+                    )
+                except Exception as e:
+                    logger.error(
+                        "brief_reparse_failed",
+                        conversation_id=str(conversation_id),
+                        error=str(e),
+                        exc_info=True,
+                    )
+
             state.step = ConversationStep.SEARCHING
             return {
                 "conversation_id": str(conversation_id),
@@ -159,8 +190,13 @@ class DiscoveryOrchestrator:
                 state.accumulated_brief + "\n\nUsuario refina: " + content
             )
             state.brief_structured = new_brief
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "brief_parser_refine_failed",
+                error=str(e),
+                exc_info=True,
+                conversation_id=str(conversation_id),
+            )
 
         confirmation = self._brief_to_text(state.brief_structured)
         return {
