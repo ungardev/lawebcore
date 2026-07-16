@@ -34,6 +34,12 @@ class ApifyClient:
             await self._client.aclose()
             self._client = None
 
+    def _build_client_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+
     async def search_instagram_by_hashtag(
         self,
         hashtag: str,
@@ -45,7 +51,6 @@ class ApifyClient:
 
         El actor apify/instagram-scraper devuelve POSTS, no perfiles.
         Los campos disponibles son: ownerUsername, ownerId, likesCount, commentsCount, url, caption, hashtags, etc.
-        Los campos de perfil (followers, bio, profilePic) requieren un run separado con instagram-profile-scraper.
         """
         client = await self._get_client()
 
@@ -56,27 +61,38 @@ class ApifyClient:
             hashtag=hashtag,
             clean_hashtag=clean_hashtag,
             country=country,
+            min_followers=min_followers,
+            max_followers=max_followers,
             token_prefix=self.token[:8] if self.token else "EMPTY",
         )
+
+        actor_id = "apify~instagram-scraper"
 
         run_input = {
             "hashtags": [clean_hashtag],
             "resultsType": "posts",
-            "resultsLimit": min(max_followers, 100),
+            "resultsLimit": 30,
             "searchType": "hashtag",
         }
 
         response = await client.post(
-            "/acts/apify~instagram-scraper/runs",
-            json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
+            f"/acts/{actor_id}/runs",
+            json=run_input,
         )
-        logger.info("apify_post_response", status=response.status_code, response_body=response.text[:500])
         response.raise_for_status()
         run_data = response.json()
         run_id = run_data["data"]["id"]
-        logger.info("apify_run_started", run_id=run_id, hashtag=clean_hashtag)
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        return await self._poll_run(client, run_id)
+        logger.info(
+            "apify_run_started",
+            run_id=run_id,
+            actor_id=actor_id,
+            default_dataset_id=default_dataset_id,
+            hashtag=clean_hashtag,
+        )
+
+        return await self._poll_run(client, actor_id, run_id, default_dataset_id)
 
     async def search_instagram_profile(
         self,
@@ -85,20 +101,23 @@ class ApifyClient:
         """Obtiene datos de perfil de Instagram vía apify/instagram-profile-scraper."""
         client = await self._get_client()
 
+        actor_id = "apify~instagram-profile-scraper"
+
         run_input = {
-            "usernames": [username],
+            "usernames": [username.lstrip("@")],
             "resultsType": "details",
         }
 
         response = await client.post(
-            "/acts/apify~instagram-profile-scraper/runs",
-            json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
+            f"/acts/{actor_id}/runs",
+            json=run_input,
         )
         response.raise_for_status()
         run_data = response.json()
         run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, run_id)
+        results = await self._poll_run(client, actor_id, run_id, default_dataset_id)
         return results[0] if results else None
 
     async def search_tiktok_by_hashtag(
@@ -109,55 +128,109 @@ class ApifyClient:
         """Busca posts de TikTok por hashtag vía clockworks/tiktok-scraper."""
         client = await self._get_client()
 
+        actor_id = "clockworks~tiktok-scraper"
+
         run_input = {
-            "hashtags": [hashtag],
+            "hashtags": [hashtag.lstrip("#")],
             "country": country,
             "quantity": 100,
         }
 
         response = await client.post(
-            "/acts/clockworks~tiktok-scraper/runs",
-            json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
+            f"/acts/{actor_id}/runs",
+            json=run_input,
         )
         response.raise_for_status()
         run_data = response.json()
         run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        return await self._poll_run(client, run_id)
+        return await self._poll_run(client, actor_id, run_id, default_dataset_id)
 
     async def _poll_run(
-        self, client: httpx.AsyncClient, run_id: str, max_wait: int = 300
+        self,
+        client: httpx.AsyncClient,
+        actor_id: str,
+        run_id: str,
+        default_dataset_id: str | None,
+        max_wait: int = 300,
     ) -> list[dict[str, Any]]:
         """Poll hasta que el run complete (max 5 minutos)."""
         import asyncio
 
         for i in range(max_wait // 5):
-            status_resp = await client.get(f"/runs/{run_id}")
-            status_resp.raise_for_status()
+            status_resp = await client.get(f"/acts/{actor_id}/runs/{run_id}")
             status_data = status_resp.json()
-            status = status_data["data"]["status"]
+            status = status_data.get("data", {}).get("status")
 
-            logger.info("apify_poll", run_id=run_id, status=status, attempt=i + 1)
+            logger.info("apify_poll", run_id=run_id, actor_id=actor_id, status=status, attempt=i + 1)
 
             if status == "RUNNING":
                 await asyncio.sleep(5)
                 continue
             elif status == "SUCCEEDED":
-                dataset_resp = await client.get(f"/runs/{run_id}/dataset/items")
-                dataset_resp.raise_for_status()
-                items = dataset_resp.json()
+                ds_id = default_dataset_id or status_data.get("data", {}).get("defaultDatasetId")
+                if not ds_id:
+                    logger.error("apify_no_dataset_id", run_id=run_id, status_data=status_data)
+                    raise RuntimeError(f"No dataset ID for run {run_id}")
+
+                items = await self._fetch_dataset_items(client, ds_id)
                 logger.info(
                     "apify_run_succeeded",
                     run_id=run_id,
+                    actor_id=actor_id,
+                    dataset_id=ds_id,
                     items_count=len(items),
                     first_item_keys=list(items[0].keys()) if items else [],
                 )
                 return items
+            elif status == "FAILED":
+                status_message = status_data.get("data", {}).get("statusMessage", "unknown")
+                logger.error("apify_run_failed", run_id=run_id, status_message=status_message, full_status=status_data)
+                raise RuntimeError(f"Apify run failed: {status_message}")
+            elif status == "ABORTED":
+                logger.error("apify_run_aborted", run_id=run_id)
+                raise RuntimeError(f"Apify run aborted: {run_id}")
             else:
-                logger.warning("apify_run_failed", run_id=run_id, status=status)
-                raise RuntimeError(f"Apify run failed: {status}")
+                logger.warning("apify_run_unexpected_status", run_id=run_id, status=status)
+                await asyncio.sleep(5)
+                continue
+
         logger.error("apify_poll_timeout", run_id=run_id, max_wait=max_wait)
         raise TimeoutError(f"Apify run {run_id} timed out after {max_wait}s")
+
+    async def _fetch_dataset_items(
+        self, client: httpx.AsyncClient, dataset_id: str
+    ) -> list[dict[str, Any]]:
+        """Fetch items from a dataset using the correct endpoint."""
+        import json
+
+        items_resp = await client.get(f"/datasets/{dataset_id}/items")
+        items_text = items_resp.text.strip()
+
+        if not items_text or items_text == "null":
+            logger.warning("apify_dataset_empty", dataset_id=dataset_id)
+            return []
+
+        try:
+            items = json.loads(items_text)
+            if isinstance(items, dict) and "error" in items:
+                error_type = items.get("error", {}).get("type", "unknown")
+                error_desc = items.get("error", {}).get("errorDescription", "")
+                logger.error(
+                    "apify_dataset_error",
+                    dataset_id=dataset_id,
+                    error_type=error_type,
+                    error_description=error_desc,
+                )
+                return []
+            if not isinstance(items, list):
+                logger.warning("apify_dataset_unexpected_format", dataset_id=dataset_id, type=type(items))
+                return []
+            return items
+        except json.JSONDecodeError as e:
+            logger.error("apify_dataset_json_parse_failed", dataset_id=dataset_id, error=str(e), text_preview=items_text[:200])
+            return []
 
 
 apify_client = ApifyClient()
