@@ -125,12 +125,19 @@ class DiscoveryOrchestrator:
     async def _step_brief(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Brief confirmado → ejecutar búsqueda."""
+        """Brief confirmado → delegar ejecución al worker."""
         state = self.state[conversation_id]
 
         if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
             state.step = ConversationStep.SEARCHING
-            return await self._execute_discovery(conversation_id)
+            return {
+                "conversation_id": str(conversation_id),
+                "step": state.step.value,
+                "message": "Buscando candidatos en todas las plataformas... Te aviso cuando tenga resultados.",
+                "brief": state.brief_structured.model_dump() if state.brief_structured else None,
+                "candidates": [],
+                "pending_discovery": True,
+            }
 
         state.step = ConversationStep.REFINING
         state.pending_refinements.append(content)

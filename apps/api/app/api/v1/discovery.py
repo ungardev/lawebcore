@@ -10,6 +10,7 @@ from app.core.security import CurrentUserDep
 from app.core.supabase_rest import supabase_rest
 from app.discovery.orchestrator import orchestrator
 from app.discovery.schemas import (
+    BriefStructured,
     ConversationResponse,
     ConversationStep,
     DiscoveryConversationCreate,
@@ -130,12 +131,45 @@ async def send_message(
         message=message,
     )
 
+    assistant_content = ai_response["message"]
+
+    if ai_response.get("pending_discovery"):
+        from app.core.worker_enqueuer import enqueue_discovery_run
+        from app.discovery.memory import conversation_memory
+
+        brief_data = ai_response.get("brief")
+        if brief_data:
+            brief = BriefStructured(**brief_data)
+            run = await conversation_memory.launch_discovery_run(
+                brief=DiscoverySearchRequest(
+                    product_name=brief.product_name,
+                    industry=brief.industry,
+                    niches=brief.niches,
+                    audience_gender=brief.audience_gender,
+                    audience_age_min=brief.audience_age_min,
+                    audience_age_max=brief.audience_age_max,
+                    audience_countries=brief.audience_countries,
+                    audience_cities=brief.audience_cities,
+                    budget_usd=brief.budget_usd,
+                    tone=brief.tone,
+                    platforms=brief.platforms,
+                ),
+                created_by=user.id,
+            )
+            await enqueue_discovery_run(str(run["id"]))
+            ai_response = ai_response.copy()
+            ai_response["discovery_run_id"] = str(run["id"])
+            assistant_content = (
+                "Estoy buscando candidatos en Instagram, TikTok y YouTube "
+                "basado en tu brief. Te aviso cuando termine la búsqueda."
+            )
+
     assistant_record = await supabase_rest.insert(
         table="discovery_messages",
         values={
             "conversation_id": str(conversation_id),
             "role": "assistant",
-            "content": ai_response["message"],
+            "content": assistant_content,
             "tool_calls": None,
             "tool_results": None,
             "cost_usd": 0.0,
@@ -150,6 +184,7 @@ async def send_message(
         values={
             "last_message_at": "now()",
             "current_step": ai_response.get("step", "brief"),
+            "discovery_run_id": str(state.discovery_run_id) if state.discovery_run_id else None,
         },
     )
 
