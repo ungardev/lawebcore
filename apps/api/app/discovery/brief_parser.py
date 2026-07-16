@@ -1,8 +1,14 @@
 """BriefParser agent — interpreta texto libre y lo convierte en BriefStructured."""
 
+import re
+from typing import Any
+
+import structlog
+
 from app.ai.deepseek_client import deepseek_client
 from app.discovery.schemas import BriefStructured
 
+logger = structlog.get_logger(__name__)
 
 BRIEF_PARSER_SYSTEM_PROMPT = """Eres un planner de influencer marketing con 10 años de experiencia en Venezuela y LATAM.
 
@@ -49,6 +55,34 @@ Responde en JSON con este formato exacto:
   "additional_context": "contexto adicional o vacío"
 }}"""
 
+_PLATFORM_MAP = {
+    "instagram": "instagram",
+    "tiktok": "tiktok",
+    "youtube": "youtube",
+    "twitter": "x",
+    "x": "x",
+    "facebook": "facebook",
+    "fb": "facebook",
+}
+
+_COUNTRY_NAME_TO_ISO = {
+    "venezuela": "VE",
+    "colombia": "CO",
+    "mexico": "MX",
+    "argentina": "AR",
+    "chile": "CL",
+    "peru": "PE",
+    "ecuador": "EC",
+    "bolivia": "BO",
+    "uruguay": "UY",
+    "paraguay": "PY",
+    "panama": "PA",
+    "dominicana": "DO",
+    "puertorico": "PR",
+    "costarica": "CR",
+    "guatemala": "GT",
+}
+
 
 class BriefParserAgent:
     """Agent que parsea texto libre de brief a estructura."""
@@ -63,19 +97,156 @@ class BriefParserAgent:
             temperature=0.3,
         )
 
+        logger.info(
+            "deepseek_brief_response",
+            content_preview=response.content[:500],
+            content_length=len(response.content),
+            model=response.model,
+        )
+
         return self._parse_response(response.content, text)
+
+    def _extract_json(self, raw: str) -> str | None:
+        """Extrae el bloque JSON del response de DeepSeek."""
+        match = re.search(r'\{.*\}', raw, re.DOTALL)
+        if match:
+            return match.group()
+        return None
+
+    def _coerce_to_int(self, value: Any, default: int) -> int:
+        """Convierte un valor a int, con fallback robusto."""
+        if value is None:
+            return default
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            match = re.search(r'\d+', value.strip())
+            if match:
+                return int(match.group())
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return default
+
+    def _normalize_enum_value(self, value: str, allowed_values: set[str], default: str) -> str:
+        """Normaliza un valor de enum a lowercase y valida contra allowed."""
+        if not value:
+            return default
+        normalized = str(value).strip().lower()
+        if normalized in allowed_values:
+            return normalized
+        if normalized in {"all", "todo", "todos", "cualquier"}:
+            return "all"
+        if normalized in {"female", "mujer", "women", "femenino"}:
+            return "female"
+        if normalized in {"male", "hombre", "men", "masculino"}:
+            return "male"
+        return default
+
+    def _sanitize_brief_data(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Sanea los datos crudos del LLM antes de crear BriefStructured."""
+        sanitized = dict(data)
+
+        for age_field in ["audience_age_min", "audience_age_max"]:
+            if age_field in sanitized:
+                default = 18 if "min" in age_field else 65
+                sanitized[age_field] = self._coerce_to_int(sanitized[age_field], default)
+
+        if "audience_gender" in sanitized:
+            sanitized["audience_gender"] = self._normalize_enum_value(
+                sanitized["audience_gender"],
+                {"female", "male", "all"},
+                "all",
+            )
+
+        if "platforms" in sanitized and isinstance(sanitized["platforms"], list):
+            normalized_platforms = []
+            for p in sanitized["platforms"]:
+                p_lower = str(p).strip().lower()
+                if p_lower in _PLATFORM_MAP:
+                    normalized_platforms.append(_PLATFORM_MAP[p_lower])
+                elif p_lower.replace(" ", "") in _PLATFORM_MAP:
+                    normalized_platforms.append(_PLATFORM_MAP[p_lower.replace(" ", "")])
+            sanitized["platforms"] = normalized_platforms if normalized_platforms else ["instagram"]
+
+        if "audience_countries" in sanitized and isinstance(sanitized["audience_countries"], list):
+            normalized_countries = []
+            for c in sanitized["audience_countries"]:
+                c_str = str(c).strip()
+                c_upper = c_str.upper()
+                c_lower = c_str.lower()
+                if c_upper in _COUNTRY_NAME_TO_ISO.values():
+                    normalized_countries.append(c_upper)
+                elif c_lower in _COUNTRY_NAME_TO_ISO:
+                    normalized_countries.append(_COUNTRY_NAME_TO_ISO[c_lower])
+                else:
+                    normalized_countries.append(c_upper)
+            sanitized["audience_countries"] = normalized_countries if normalized_countries else ["VE"]
+
+        if "audience_cities" in sanitized and not isinstance(sanitized["audience_cities"], list):
+            sanitized["audience_cities"] = []
+
+        if "niches" in sanitized and not isinstance(sanitized["niches"], list):
+            sanitized["niches"] = []
+
+        if "tone" in sanitized and not isinstance(sanitized["tone"], list):
+            sanitized["tone"] = []
+
+        if "budget_usd" in sanitized and sanitized["budget_usd"] is not None:
+            try:
+                sanitized["budget_usd"] = float(sanitized["budget_usd"])
+            except (ValueError, TypeError):
+                sanitized["budget_usd"] = None
+
+        return sanitized
 
     def _parse_response(self, raw: str, original_text: str) -> BriefStructured:
         """Parsea el JSON crudo del LLM a BriefStructured."""
         import json
 
         try:
-            data = json.loads(raw)
-            brief = BriefStructured(**data)
+            json_str = self._extract_json(raw)
+            if not json_str:
+                raise ValueError(f"No JSON found in response: {raw[:200]}")
+
+            data = json.loads(json_str)
+            sanitized = self._sanitize_brief_data(data)
+
+            logger.info(
+                "brief_parsed_successfully",
+                niches=sanitized.get("niches", []),
+                platforms=sanitized.get("platforms", []),
+                countries=sanitized.get("audience_countries", []),
+                gender=sanitized.get("audience_gender"),
+            )
+
+            brief = BriefStructured(**sanitized)
             return brief
-        except (json.JSONDecodeError, Exception) as e:
+
+        except json.JSONDecodeError as e:
+            logger.error(
+                "brief_parser_json_decode_failed",
+                error=str(e),
+                raw_content=raw[:500],
+                original_text=original_text[:200],
+                exc_info=True,
+            )
             return BriefStructured(
-                additional_context=f"Error parsing: {e}. Original: {original_text[:200]}"
+                additional_context=f"Error parsing JSON: {str(e)[:200]}. Original: {original_text[:200]}"
+            )
+        except Exception as e:
+            logger.error(
+                "brief_parser_validation_failed",
+                error=str(e),
+                error_type=type(e).__name__,
+                raw_content=raw[:500],
+                original_text=original_text[:200],
+                exc_info=True,
+            )
+            return BriefStructured(
+                additional_context=f"Error parsing: {str(e)[:200]}. Original: {original_text[:200]}"
             )
 
 
