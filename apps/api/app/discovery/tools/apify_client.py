@@ -67,7 +67,7 @@ class ApifyClient:
         }
 
         response = await client.post(
-            "/acts/apify/instagram-scraper/runs",
+            "/acts/apify~instagram-scraper/runs",
             json={"token": self.token, "uiRunSpec": {"runInput": run_input}},
         )
         logger.info("apify_post_response", status=response.status_code, response_body=response.text[:500])
