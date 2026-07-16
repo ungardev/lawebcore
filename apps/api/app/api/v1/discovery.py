@@ -184,7 +184,7 @@ async def send_message(
         values={
             "last_message_at": "now()",
             "current_step": ai_response.get("step", "brief"),
-            "discovery_run_id": str(state.discovery_run_id) if state.discovery_run_id else None,
+            "discovery_run_id": ai_response.get("discovery_run_id"),
         },
     )
 
