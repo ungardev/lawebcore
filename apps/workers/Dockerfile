@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app
 
 # Build argument to invalidate cache — change value to force rebuild
-ARG RAILWAY_BUILD_ID=88b0f71
+ARG RAILWAY_BUILD_ID=ee335e9
 ENV RAILWAY_BUILD_ID=${RAILWAY_BUILD_ID}
 
 WORKDIR /app

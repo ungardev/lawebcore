@@ -13,10 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml .
+COPY apps/api/pyproject.toml ./pyproject.toml
 RUN pip install --upgrade pip && pip install -e .
 
-COPY . .
+COPY apps/api/app /app/app
 
 EXPOSE 8000
 
