@@ -100,6 +100,15 @@ export function useDiscoveryConversation() {
       await new Promise((r) => setTimeout(r, interval));
       try {
         const run = await discoveryApi.search.getRun(runId);
+        const metadata = (run.metadata || {}) as Record<string, unknown>;
+        const progress = {
+          current_step: (metadata.current_step as string) || "running",
+          completed_steps: (metadata.completed_steps as string[]) || [],
+          current_hashtag: metadata.current_hashtag as string | undefined,
+          candidates_found: (metadata.candidates_found as number) || 0,
+          platforms: metadata.platforms as string[] | undefined,
+        };
+
         if ((run.status as string) === 'completed' || (run.status as string) === 'failed' || (run.status as string) === 'partial') {
           await loadConversation(conversationId);
           if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
@@ -134,6 +143,17 @@ export function useDiscoveryConversation() {
           }
           return;
         }
+
+        setTurns((prev) => {
+          const lastIdx = prev.length - 1;
+          if (lastIdx < 0) return prev;
+          const last = prev[lastIdx];
+          if (last.role !== 'assistant') return prev;
+          if (last.candidates && last.candidates.length > 0) return prev;
+          return prev.map((t, i) =>
+            i === lastIdx ? { ...t, progress, isLoading: true } : t,
+          );
+        });
       } catch {
         // keep polling
       }

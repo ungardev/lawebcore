@@ -234,7 +234,7 @@ async def get_discovery_run(run_id: UUID):
     """Obtiene el estado de un run de búsqueda."""
     result = await supabase_rest.select_one(
         table="discovery_runs",
-        select="id,status,total_candidates,accepted,actual_cost_usd,error,started_at,completed_at,created_at",
+        select="id,status,total_candidates,accepted,actual_cost_usd,error,started_at,completed_at,created_at,metadata",
         filters=[f"id=eq.{run_id}"],
     )
 

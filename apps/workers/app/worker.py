@@ -96,11 +96,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         queries = query_builder.build(brief)
         print(f"[discovery_run_task] queries built: {list(queries.keys())}", flush=True)
+        await _run_update_metadata(run_id, {
+            "current_step": "building_queries",
+            "completed_steps": ["parsing_brief"],
+            "platforms": [p.value for p in platforms],
+            "total_queries": sum(len(queries.get(p, [])) for p in platforms),
+            "candidates_found": 0,
+        })
         all_candidates: list[dict] = []
 
         for platform in platforms:
             platform_queries = queries.get(platform, [])
             for q in platform_queries:
+                step_label = f"querying_{platform.value}_{q.query_type}"
+                await _run_update_metadata(run_id, {
+                    "current_step": step_label,
+                    "current_hashtag": q.params.get("hashtag", q.params.get("query", "")),
+                })
                 logger.info(
                     "discovery_executing_query",
                     platform=platform.value,
@@ -115,6 +127,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         query_type=q.query_type,
                         candidates_count=len(candidates),
                     )
+                    await _run_update_metadata(run_id, {
+                        "candidates_found": len(all_candidates),
+                        "last_query_platform": platform.value,
+                        "last_query_type": q.query_type,
+                    })
                     for raw in candidates:
                         metrics = _raw_to_candidate_dict(raw, platform)
                         score = result_ranker.rank(
@@ -165,13 +182,47 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         exc_info=True,
                     )
 
-        await _deduplicate_and_insert_candidates(all_candidates, run_id)
+        await _run_update_metadata(run_id, {
+            "current_step": "inserting_candidates",
+            "candidates_found": len(all_candidates),
+        })
+
+        MIN_SCORE = 15
+        MIN_FOLLOWERS = 100
+
+        qualified = [
+            c for c in all_candidates
+            if (c.get("match_score") or 0) >= MIN_SCORE
+            and (c.get("followers") or 0) >= MIN_FOLLOWERS
+        ]
+
+        if len(qualified) < 5:
+            qualified = [
+                c for c in all_candidates
+                if (c.get("match_score") or 0) >= 5
+                and (c.get("followers") or 0) >= 50
+            ]
+
+        logger.info(
+            "candidates_filtered",
+            total=len(all_candidates),
+            qualified=len(qualified),
+            min_score=MIN_SCORE,
+            min_followers=MIN_FOLLOWERS,
+        )
+
+        await _deduplicate_and_insert_candidates(qualified, run_id)
 
         total = len(all_candidates)
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
         await _run_update(run_id, {
             "status": "completed",
             "total_candidates": total,
+            "completed_at": datetime.utcnow().isoformat(),
+        })
+        await _run_update_metadata(run_id, {
+            "current_step": "completed",
+            "candidates_found": total,
             "completed_at": datetime.utcnow().isoformat(),
         })
 
@@ -186,15 +237,48 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         raise
 
 
-async def _execute_platform_query(platform: Platform, query) -> list[dict]:
+async def _execute_platform_query(platform: Platform, query, run_progress: dict | None = None) -> list[dict]:
     """Ejecuta una query en la plataforma específica."""
     if platform == Platform.INSTAGRAM:
         if query.query_type == "hashtag_search":
-            return await multi_actor_instagram_client.discover_by_hashtag(
+            raw_posts = await multi_actor_instagram_client.discover_by_hashtag(
                 hashtag=query.params["hashtag"],
                 country=query.params.get("country", "VE"),
                 results_limit=50,
             )
+
+            if raw_posts:
+                unique_handles = list(set(
+                    p.get("ownerUsername")
+                    for p in raw_posts
+                    if p.get("ownerUsername")
+                ))
+                logger.info("instagram_enriching_profiles", handles_count=len(unique_handles))
+
+                profile_map: dict[str, dict] = {}
+                if unique_handles:
+                    try:
+                        profiles = await apify_client.search_instagram_profiles_batch(unique_handles)
+                        for p in profiles:
+                            username = p.get("username", "")
+                            if username:
+                                profile_map[username] = p
+                    except Exception as exc:
+                        logger.warning("instagram_profile_enrichment_failed", error=str(exc))
+
+                enriched_posts = []
+                for post in raw_posts:
+                    handle = post.get("ownerUsername", "")
+                    profile = profile_map.get(handle, {})
+                    if profile:
+                        merged = {**post, **profile, "_from_profile": True}
+                    else:
+                        merged = {**post, "_from_profile": False}
+                    enriched_posts.append(merged)
+
+                return enriched_posts
+            return raw_posts
+
         elif query.query_type == "profile_search":
             result = await apify_client.search_instagram_profile(
                 username=query.params.get("keyword", ""),
@@ -220,18 +304,20 @@ async def _execute_platform_query(platform: Platform, query) -> list[dict]:
 def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
     """Convierte payload raw a dict compatible con discovery_candidates.
 
-    Maneja dos formatos de Instagram:
-    - Post data (de hashtag scraper): ownerUsername, likesCount, commentsCount
+    Maneja tres formatos de Instagram:
+    - Enriched data (profile scraper + post engagement): _from_profile=True, tiene followersCount + likesCount
     - Profile data (de profile scraper): username, followersCount, biography
+    - Post data (de hashtag scraper): ownerUsername, likesCount, commentsCount
     """
     if platform == Platform.INSTAGRAM:
-        is_profile_data = "followersCount" in raw or "username" in raw and "ownerUsername" not in raw
+        from_profile = raw.get("_from_profile", False)
+        has_followers = "followersCount" in raw and raw.get("followersCount")
 
-        if is_profile_data:
+        if from_profile or has_followers:
             followers = raw.get("followersCount", 0) or 0
             following = raw.get("followsCount", 0) or 0
             posts_count = raw.get("postsCount", 0) or 0
-            verified = raw.get("isVerified", False)
+            verified = raw.get("isVerified", False) or raw.get("verified", False)
             business = raw.get("isBusinessAccount", False)
 
             credibility = 50
@@ -241,22 +327,37 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
                 credibility += 15
             credibility = min(credibility, 100)
 
+            likes = raw.get("likesCount", 0) or 0
+            comments = raw.get("commentsCount", 0) or 0
+            engagement_rate = 0.0
+            if likes > 0 and followers > 0:
+                engagement_rate = round((likes + comments) / max(followers, 1) * 100, 4)
+            elif likes > 0:
+                engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+
+            country = ""
+            about = raw.get("about", {})
+            if about:
+                country = about.get("country", "") or ""
+            elif raw.get("country"):
+                country = raw.get("country", "")
+
             return {
                 "platform": platform.value,
-                "platform_user_id": str(raw.get("userId", "")),
-                "handle": raw.get("username", raw.get("username", "")),
-                "full_name": raw.get("fullName", ""),
-                "bio": raw.get("biography", ""),
-                "avatar_url": raw.get("profilePicUrl", ""),
+                "platform_user_id": str(raw.get("userId", raw.get("id", ""))),
+                "handle": raw.get("username", raw.get("ownerUsername", "")),
+                "full_name": raw.get("fullName", raw.get("ownerFullName", "")),
+                "bio": raw.get("biography", raw.get("caption", "")),
+                "avatar_url": raw.get("profilePicUrl", raw.get("displayUrl", "")),
                 "followers": followers,
                 "following": following,
                 "posts_count": posts_count,
-                "avg_likes": 0,
-                "avg_comments": 0,
-                "engagement_rate": 0.0,
-                "country": "",
+                "avg_likes": likes or None,
+                "avg_comments": comments or None,
+                "engagement_rate": engagement_rate or None,
+                "country": country,
                 "city": "",
-                "url": f"https://instagram.com/{raw.get('username', '')}",
+                "url": f"https://instagram.com/{raw.get('username', raw.get('ownerUsername', ''))}",
                 "audience_gender_split": {},
                 "audience_age_buckets": {},
                 "audience_credibility": credibility,
@@ -322,14 +423,13 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
 
 
 async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str) -> None:
-    """Inserta candidatos evitando duplicados por (run_id, platform, handle)."""
+    """Inserta candidatos. Datos ya vienen deduplicados por (platform, handle) upstream."""
     for c in candidates:
         try:
             await supabase_rest.insert(
                 table="discovery_candidates",
                 values=c,
-                returning="id",
-                on_conflict=["run_id", "platform", "handle"],
+                returning="minimal",
             )
         except Exception as exc:
             logger.warning(
@@ -357,6 +457,21 @@ async def _run_update(run_id: str, values: dict) -> None:
         table="discovery_runs",
         filters=[f"id=eq.{run_id}"],
         values=values,
+    )
+
+
+async def _run_update_metadata(run_id: str, metadata: dict) -> None:
+    existing = await supabase_rest.select_one(
+        table="discovery_runs",
+        select="metadata",
+        filters=[f"id=eq.{run_id}"],
+    )
+    current = existing.get("metadata", {}) if existing else {}
+    merged = {**current, **metadata, "updated_at": datetime.utcnow().isoformat()}
+    await supabase_rest.update(
+        table="discovery_runs",
+        filters=[f"id=eq.{run_id}"],
+        values={"metadata": merged},
     )
 
 

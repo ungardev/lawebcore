@@ -122,6 +122,17 @@ export interface DiscoveryRun {
   created_at: string;
   brief_text: string;
   brief_parsed: BriefStructured | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RunProgress {
+  current_step: string;
+  completed_steps: string[];
+  current_hashtag?: string;
+  candidates_found: number;
+  platforms?: string[];
+  total_queries?: number;
+  completed_at?: string;
 }
 
 export interface DiscoveryRunSummary {
@@ -137,6 +148,7 @@ export interface ChatTurn {
   candidates?: DiscoveryCandidate[];
   brief?: BriefStructured | null;
   run_summary?: DiscoveryRunSummary;
+  progress?: RunProgress;
   isLoading?: boolean;
   isError?: boolean;
 }

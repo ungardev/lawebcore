@@ -117,11 +117,15 @@ class ResultRanker:
         if not brief.audience_countries:
             return 1.0
 
-        candidate_country = (candidate.country or "").upper()
-        if candidate_country in [c.upper() for c in brief.audience_countries]:
+        candidate_country = (candidate.country or "").upper().strip()
+        target_countries = [c.upper().strip() for c in brief.audience_countries]
+
+        if candidate_country and candidate_country in target_countries:
             country_score = 1.0
+        elif not candidate_country:
+            country_score = 0.15
         else:
-            country_score = 0.2
+            country_score = 0.0
 
         if not brief.audience_cities:
             return country_score

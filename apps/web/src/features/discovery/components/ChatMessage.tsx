@@ -1,6 +1,7 @@
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatTurn } from '../types/discovery';
+import { SearchProgress } from './SearchProgress';
 
 interface ChatMessageProps {
   turn: ChatTurn;
@@ -29,6 +30,12 @@ export function ChatMessage({ turn }: ChatMessageProps) {
 
         {turn.isError && (
           <p className="text-xs text-red-400 mt-1">Error al procesar. Intenta de nuevo.</p>
+        )}
+
+        {turn.progress && !turn.candidates && (
+          <div className="mt-3">
+            <SearchProgress progress={turn.progress} />
+          </div>
         )}
       </div>
     </div>

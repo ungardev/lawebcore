@@ -204,6 +204,7 @@ class DiscoveryRunResponse(BaseModel):
     started_at: str | None = None
     completed_at: str | None = None
     created_at: str
+    metadata: dict = {}
 
 
 # ---- Cost tracking ----

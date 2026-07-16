@@ -4,6 +4,7 @@ import { Send, Sparkles, Plus, MessageSquare } from 'lucide-react';
 import { useDiscoveryConversation } from '../hooks/useDiscoveryConversation';
 import { ChatMessage } from '../components/ChatMessage';
 import { CandidateCard } from '../components/CandidateCard';
+import { CandidateCardSkeleton } from '../components/CandidateCardSkeleton';
 import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { DiscoveryEmptyState } from '../components/DiscoveryEmptyState';
 import { Card } from '@/components/ui/card';
@@ -168,6 +169,16 @@ export function DiscoveryChatPage() {
                             onSave={saveCandidate}
                             onDismiss={dismissCandidate}
                           />
+                        ))}
+                      </div>
+                    )}
+                    {turn.progress && !turn.candidates && (
+                      <div className="mt-4 space-y-2">
+                        <p className="text-xs text-muted-foreground font-medium px-1">
+                          Cargando candidatos...
+                        </p>
+                        {[1, 2, 3].map((i) => (
+                          <CandidateCardSkeleton key={i} compact />
                         ))}
                       </div>
                     )}
