@@ -120,6 +120,74 @@ class ApifyClient:
         results = await self._poll_run(client, actor_id, run_id, default_dataset_id)
         return results[0] if results else None
 
+    async def search_instagram_profiles_batch(
+        self,
+        usernames: list[str],
+    ) -> list[dict[str, Any]]:
+        """Busca múltiples perfiles de Instagram en paralelo.
+
+        Usa el actor instagram-profile-scraper con múltiples usernames.
+        Retorna lista de perfiles con followers, bio, etc.
+        """
+        if not usernames:
+            return []
+
+        results: list[dict[str, Any]] = []
+        batch_size = 5
+
+        for i in range(0, len(usernames), batch_size):
+            batch = usernames[i:i + batch_size]
+            batch_results = await self._search_instagram_profiles_single_request(batch)
+            results.extend(batch_results)
+            logger.info(
+                "apify_profile_batch_progress",
+                batch_start=i,
+                batch_size=len(batch),
+                total_results=len(results),
+                total_usernames=len(usernames),
+            )
+
+        logger.info(
+            "apify_profile_batch_complete",
+            total_usernames=len(usernames),
+            total_results=len(results),
+        )
+        return results
+
+    async def _search_instagram_profiles_single_request(
+        self,
+        usernames: list[str],
+    ) -> list[dict[str, Any]]:
+        """Busca un batch de hasta 5 perfiles en UNA llamada al actor."""
+        client = await self._get_client()
+        actor_id = "apify~instagram-profile-scraper"
+
+        run_input = {
+            "usernames": [u.lstrip("@") for u in usernames],
+            "resultsType": "details",
+        }
+
+        response = await client.post(
+            f"/acts/{actor_id}/runs",
+            json=run_input,
+        )
+        response.raise_for_status()
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+        items = await self._poll_run(client, actor_id, run_id, default_dataset_id)
+
+        valid_results = []
+        for item in items:
+            if isinstance(item, dict) and "error" not in item:
+                valid_results.append(item)
+            elif isinstance(item, dict) and item.get("error"):
+                username = item.get("input", {}).get("username", "unknown")
+                logger.warning("apify_profile_error", username=username, error=item.get("error"))
+
+        return valid_results
+
     async def search_tiktok_by_hashtag(
         self,
         hashtag: str,

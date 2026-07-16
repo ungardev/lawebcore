@@ -158,6 +158,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         exc_info=True,
                     )
 
+        if not all_candidates and Platform.INSTAGRAM in platforms:
+            print("[discovery_run_task] no candidates from queries, using seed list fallback", flush=True)
+            await _fetch_seed_candidates(
+                run_id=run_id,
+                brief=brief,
+                all_candidates=all_candidates,
+            )
+
         await _deduplicate_and_insert_candidates(all_candidates, run_id)
 
         total = len(all_candidates)
@@ -211,36 +219,159 @@ async def _execute_platform_query(platform: Platform, query) -> list[dict]:
     return []
 
 
-def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
-    """Convierte payload raw a dict compatible con discovery_candidates."""
-    if platform == Platform.INSTAGRAM:
-        likes = raw.get("likesCount", 0)
-        comments = raw.get("commentsCount", 0)
-        engagement_rate = 0.0
-        if likes > 0 and comments >= 0:
-            engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+async def _fetch_seed_candidates(
+    run_id: str,
+    brief: BriefStructured,
+    all_candidates: list[dict],
+) -> None:
+    """Fallback: busca candidatos desde seed list cuando hashtag scraper retorna 0.
 
-        return {
-            "platform_user_id": raw.get("ownerId"),
-            "handle": raw.get("ownerUsername", ""),
-            "full_name": raw.get("ownerFullName", ""),
-            "bio": raw.get("caption", ""),
-            "avatar_url": raw.get("displayUrl", ""),
-            "followers": 0,
-            "following": 0,
-            "posts_count": 0,
-            "avg_likes": likes,
-            "avg_comments": comments,
-            "engagement_rate": engagement_rate,
-            "country": "",
-            "city": "",
-            "url": raw.get("url", f"https://instagram.com/{raw.get('ownerUsername', '')}"),
-            "audience_gender_split": {},
-            "audience_age_buckets": {},
-            "audience_credibility": 50,
-            "audience_quality": 50,
-            "raw_payload": raw,
-        }
+    Usa el actor instagram-profile-scraper para enriquecer handles conocidos.
+    """
+    from app.discovery.seed_influencers import get_seed_handles
+
+    countries = brief.audience_countries if brief.audience_countries else ["VE"]
+    niches = brief.niches if brief.niches else []
+    primary_country = countries[0] if countries else "VE"
+
+    seed_handles = get_seed_handles(niches=niches, country=primary_country)
+
+    if not seed_handles:
+        print("[discovery_run_task] seed list empty, skipping fallback", flush=True)
+        return
+
+    print(f"[discovery_run_task] fetching {len(seed_handles)} seed profiles", flush=True)
+
+    try:
+        profiles = await apify_client.search_instagram_profiles_batch(seed_handles)
+        print(f"[discovery_run_task] fetched {len(profiles)} seed profiles", flush=True)
+
+        for raw in profiles:
+            if not raw or not isinstance(raw, dict):
+                continue
+            if raw.get("error"):
+                continue
+
+            metrics = _raw_to_candidate_dict(raw, Platform.INSTAGRAM)
+            score = result_ranker.rank(
+                CandidateMetrics(**metrics),
+                brief,
+            )
+            all_candidates.append({
+                "run_id": run_id,
+                "platform": "instagram",
+                "handle": metrics.get("handle", "unknown"),
+                "full_name": metrics.get("full_name"),
+                "bio": metrics.get("bio"),
+                "avatar_url": metrics.get("avatar_url"),
+                "country": metrics.get("country"),
+                "city": metrics.get("city"),
+                "followers": metrics.get("followers"),
+                "following": metrics.get("following"),
+                "posts_count": metrics.get("posts_count"),
+                "avg_likes": metrics.get("avg_likes"),
+                "avg_comments": metrics.get("avg_comments"),
+                "avg_views": metrics.get("avg_views"),
+                "engagement_rate": metrics.get("engagement_rate"),
+                "audience_credibility": metrics.get("audience_credibility"),
+                "audience_quality": metrics.get("audience_quality"),
+                "audience_gender_split": metrics.get("audience_gender_split"),
+                "audience_age_buckets": metrics.get("audience_age_buckets"),
+                "match_score": score.match_score,
+                "niche_relevance": score.niche_relevance,
+                "geo_relevance": score.geo_relevance,
+                "audience_relevance": score.audience_relevance,
+                "content_quality": score.content_quality,
+                "estimated_cost": score.estimated_cost,
+                "expected_reach": score.expected_reach,
+                "expected_engagement": score.expected_engagement,
+                "roi_estimate": score.roi_estimate,
+                "rationale": score.rationale,
+                "status": "new",
+                "raw_payload": raw,
+                "fetched_at": datetime.utcnow().isoformat(),
+            })
+
+        print(f"[discovery_run_task] seed candidates added: {len(profiles)}", flush=True)
+
+    except Exception as e:
+        logger.error("seed_candidates_failed", error=str(e), exc_info=True)
+        print(f"[discovery_run_task] seed fallback failed: {e}", flush=True)
+
+
+def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
+    """Convierte payload raw a dict compatible con discovery_candidates.
+
+    Maneja dos formatos de Instagram:
+    - Post data (de hashtag scraper): ownerUsername, likesCount, commentsCount
+    - Profile data (de profile scraper): username, followersCount, biography
+    """
+    if platform == Platform.INSTAGRAM:
+        is_profile_data = "followersCount" in raw or "username" in raw and "ownerUsername" not in raw
+
+        if is_profile_data:
+            followers = raw.get("followersCount", 0) or 0
+            following = raw.get("followsCount", 0) or 0
+            posts_count = raw.get("postsCount", 0) or 0
+            verified = raw.get("isVerified", False)
+            business = raw.get("isBusinessAccount", False)
+
+            credibility = 50
+            if verified:
+                credibility += 20
+            if business:
+                credibility += 15
+            credibility = min(credibility, 100)
+
+            return {
+                "platform_user_id": str(raw.get("userId", "")),
+                "handle": raw.get("username", raw.get("username", "")),
+                "full_name": raw.get("fullName", ""),
+                "bio": raw.get("biography", ""),
+                "avatar_url": raw.get("profilePicUrl", ""),
+                "followers": followers,
+                "following": following,
+                "posts_count": posts_count,
+                "avg_likes": 0,
+                "avg_comments": 0,
+                "engagement_rate": 0.0,
+                "country": "",
+                "city": "",
+                "url": f"https://instagram.com/{raw.get('username', '')}",
+                "audience_gender_split": {},
+                "audience_age_buckets": {},
+                "audience_credibility": credibility,
+                "audience_quality": 50,
+                "raw_payload": raw,
+            }
+        else:
+            likes = raw.get("likesCount", 0) or 0
+            comments = raw.get("commentsCount", 0) or 0
+            engagement_rate = 0.0
+            if likes > 0:
+                engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+
+            return {
+                "platform_user_id": str(raw.get("ownerId", "")),
+                "handle": raw.get("ownerUsername", ""),
+                "full_name": raw.get("ownerFullName", ""),
+                "bio": raw.get("caption", ""),
+                "avatar_url": raw.get("displayUrl", ""),
+                "followers": 0,
+                "following": 0,
+                "posts_count": 0,
+                "avg_likes": likes,
+                "avg_comments": comments,
+                "engagement_rate": engagement_rate,
+                "country": "",
+                "city": "",
+                "url": raw.get("url", f"https://instagram.com/{raw.get('ownerUsername', '')}"),
+                "audience_gender_split": {},
+                "audience_age_buckets": {},
+                "audience_credibility": 50,
+                "audience_quality": 50,
+                "raw_payload": raw,
+            }
     elif platform == Platform.TIKTOK:
         author = raw.get("author", {})
         stats = raw.get("stats", {})
