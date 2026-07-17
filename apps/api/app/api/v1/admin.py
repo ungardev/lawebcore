@@ -16,15 +16,22 @@ class SeedStatusResponse(BaseModel):
 
 
 async def _upsert(table: str, row: dict, on_conflict_col: str | None = None) -> dict:
-    """Insert or update a row via Supabase REST API (service role)."""
+    """Insert or update via Supabase REST API (service role)."""
     from shared_core import supabase_rest
+
     if on_conflict_col:
-        filters = [f"{on_conflict_col}=eq.{row[on_conflict_col]}"]
-        result = await supabase_rest.select(table=table, select="id", filters=filters, limit=1)
-        if result:
-            await supabase_rest.update(table=table, filters=[f"id=eq.{result[0]['id']}"], values=row)
+        filter_str = f"{on_conflict_col}=eq.{row[on_conflict_col]}"
+        existing = await supabase_rest.select(table=table, select="id", filters=[filter_str], limit=1)
+        if existing:
+            await supabase_rest.update(table=table, filters=[filter_str], values=row)
         else:
-            await supabase_rest.insert(table=table, values=row, on_conflict=[on_conflict_col])
+            headers = dict(supabase_rest.headers)
+            headers["Prefer"] = "resolution=merge-duplicates"
+            headers["On-Conflict"] = on_conflict_col
+            headers["Content-Type"] = "application/json"
+            resp = await supabase_rest.client.post(f"/{table}", json=row, headers=headers)
+            if resp.status_code not in (200, 201, 204):
+                raise Exception(f"{resp.status_code}: {resp.text}")
     else:
         await supabase_rest.insert(table=table, values=row)
     return row
