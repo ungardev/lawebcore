@@ -151,6 +151,13 @@ export const importsApi = {
   },
 };
 
+export const discoveryRunsApi = {
+  list: async (params?: { limit?: number; offset?: number }) => {
+    const { data } = await api.get<any[]>('/lens/discovery/runs', { params });
+    return data;
+  },
+};
+
 export const sentimentApi = {
   analyze: async (publicacionId: string, comentarios?: string[]): Promise<SentimentAnalyzeResponse> => {
     const payload: Record<string, unknown> = { publicacion_id: publicacionId };

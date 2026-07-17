@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { lensApi } from '../api/lensApi';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -25,7 +24,7 @@ export function LensRunsListPage() {
   const fetchRuns = async (pageNum: number) => {
     setIsLoading(true);
     try {
-      const { data } = await import('@/lib/api').then((m) => m.api.get('/lens/runs', { params: { limit, offset: (pageNum - 1) * limit } }));
+      const { data } = await import('@/lib/api').then((m) => m.api.get('/lens/discovery/runs', { params: { limit, offset: (pageNum - 1) * limit } }));
       if (pageNum === 1) setRuns(data);
       else setRuns((prev) => [...prev, ...data]);
     } catch (e) {

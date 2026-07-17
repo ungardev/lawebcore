@@ -229,6 +229,19 @@ async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDe
     )
 
 
+@router.get("/runs")
+async def list_discovery_runs(limit: int = 20, offset: int = 0):
+    """Lista todos los runs de búsqueda paginados."""
+    results = await supabase_rest.select(
+        table="discovery_runs",
+        select="id,status,total_candidates,accepted,actual_cost_usd,error,started_at,completed_at,created_at,metadata",
+        order="created_at.desc",
+        limit=limit,
+        offset=offset,
+    )
+    return results
+
+
 @router.get("/runs/{run_id}", response_model=DiscoveryRunResponse)
 async def get_discovery_run(run_id: UUID):
     """Obtiene el estado de un run de búsqueda."""
