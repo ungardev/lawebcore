@@ -16,7 +16,10 @@ COPY packages/discovery/pyproject.toml ./packages/discovery/pyproject.toml
 COPY apps/workers/pyproject.toml ./apps/workers/pyproject.toml
 
 RUN pip install --upgrade pip && \
-    pip install packages/shared-core packages/shared-ai packages/discovery apps/workers
+    pip install -e ./packages/shared-core \
+                -e ./packages/shared-ai \
+                -e ./packages/discovery \
+                -e ./apps/workers
 
 COPY apps/workers/app /app/app
 
