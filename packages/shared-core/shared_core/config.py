@@ -18,8 +18,6 @@ class Settings(BaseSettings):
     )
 
     API_ENV: Literal["development", "staging", "production"] = "development"
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8000
     API_CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
@@ -45,14 +43,10 @@ class Settings(BaseSettings):
         return v
 
     SUPABASE_URL: str = ""
-    SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
-    SUPABASE_JWT_SECRET: str = ""
 
     DATABASE_URL: str = ""
-    DATABASE_URL_SYNC: str = ""
 
-    REDIS_URL: str = "redis://localhost:6379/0"
     ARQ_REDIS_URL: str = "redis://localhost:6379/0"
 
     OPENAI_API_KEY: str = ""
@@ -66,14 +60,6 @@ class Settings(BaseSettings):
     GOOGLE_DRIVE_FOLDER_ID: str = ""
 
     HYPEAUDITOR_API_KEY: str = ""
-    CANVA_CLIENT_ID: str = ""
-    CANVA_CLIENT_SECRET: str = ""
-    GOOGLE_DRIVE_CLIENT_ID: str = ""
-    GOOGLE_DRIVE_CLIENT_SECRET: str = ""
-    TRELLO_API_KEY: str = ""
-    TRELLO_TOKEN: str = ""
-    SLACK_WEBHOOK_URL: str = ""
-
     APIFY_API_KEY: str = ""
 
     META_APP_ID: str = ""
@@ -87,14 +73,6 @@ class Settings(BaseSettings):
     METRICOOL_CLIENT_ID: str = ""
     METRICOOL_CLIENT_SECRET: str = ""
     METRICOOL_ACCESS_TOKEN: str = ""
-
-    SUPABASE_STORAGE_BUCKET: str = "lawebcore-assets"
-
-    FEATURE_AI_ASSISTANT: bool = True
-    FEATURE_KANBAN: bool = True
-    FEATURE_WORKFLOWS: bool = True
-    FEATURE_REPORTS_AUTO: bool = True
-    FEATURE_DISCOVERY: bool = True
 
     MAX_UPLOAD_SIZE_MB: int = 50
     RATE_LIMIT_PER_MINUTE: int = 300
