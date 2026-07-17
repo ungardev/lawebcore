@@ -5,4 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import discovery
 
 router = APIRouter(prefix="/lens", tags=["lens"])
-router.include_router(discovery.router, prefix="")
+
+for route in discovery.router.routes:
+    route.path = route.path.replace("/discovery", "") or "/"
+    router.routes.append(route)
