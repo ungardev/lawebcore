@@ -75,8 +75,8 @@ async def _seed_purina() -> dict:
         "campaign_type": "influencers", "objective": "AWARENESS",
         "influencer_tiers": ["NANO", "MICRO", "MID"],
         "target_audience": "Dueños de perros en Venezuela, 22-45 años,ABC+,zonas urbanas",
-        "start_date": datetime(2026, 7, 10).date(),
-        "end_date": datetime(2026, 8, 15).date(),
+        "start_date": "2026-07-10",
+        "end_date": "2026-08-15",
         "budget_total": 15000.0, "budget_currency": "USD",
         "num_influencers": 20, "status": "CAMPAÑA_INTERNA",
         "tags": ["pet", "dog", "venezuela", "purina", "awareness"],
@@ -147,7 +147,7 @@ async def _seed_purina() -> dict:
         try:
             await _upsert("influencer_metrics_snapshot", {
                 "id": ms_id, "influencer_id": inf_id, "social_account_id": sa_id,
-                "snapshot_date": (datetime.utcnow() - timedelta(days=random.randint(1, 20))).date(),
+                "snapshot_date": (datetime.utcnow() - timedelta(days=random.randint(1, 20))).strftime("%Y-%m-%d"),
                 "followers": followers, "following": random.randint(200, 2000),
                 "posts_count": posts, "avg_likes": avg_likes,
                 "avg_comments": int(avg_likes * 0.04),
@@ -172,7 +172,7 @@ async def _seed_purina() -> dict:
                 "currency": "USD",
                 "deliverables": [{"type": "reel", "qty": random.randint(1, 3)}],
                 "status": random.choice(["CONFIRMADO", "CONTRATADO", "CONTENIDO_ENTREGADO"]),
-                "contracted_at": datetime.utcnow() - timedelta(days=random.randint(2, 10)),
+                "contracted_at": (datetime.utcnow() - timedelta(days=random.randint(2, 10))).isoformat(),
             }, on_conflict_col=None)
         except Exception:
             pass
@@ -181,7 +181,7 @@ async def _seed_purina() -> dict:
         for j in range(3):
             dias = random.randint(0, 20)
             horas = random.randint(8, 22)
-            fecha = datetime(2026, 7, 10) + timedelta(days=dias, hours=horas)
+            fecha = (datetime(2026, 7, 10) + timedelta(days=dias, hours=horas)).isoformat()
             formato = random.choice(["reel", "post", "story", "video"])
             vistas = random.randint(800, 30000) if formato in ("reel", "video") else random.randint(200, 6000)
             alcance = int(vistas * random.uniform(1.2, 2.5))
@@ -280,7 +280,7 @@ async def _seed_scouting_ve() -> dict:
         try:
             await _upsert("influencer_metrics_snapshot", {
                 "id": str(uuid.uuid4()), "influencer_id": inf_id, "social_account_id": None,
-                "snapshot_date": datetime.utcnow().date(),
+                "snapshot_date": datetime.utcnow().strftime("%Y-%m-%d"),
                 "followers": followers, "following": random.randint(100, 2000),
                 "posts_count": posts, "avg_likes": avg_likes,
                 "avg_comments": int(avg_likes * 0.04),
@@ -366,7 +366,7 @@ async def _seed_matriz_dg() -> dict:
         try:
             await _upsert("influencer_metrics_snapshot", {
                 "id": str(uuid.uuid4()), "influencer_id": inf_id, "social_account_id": None,
-                "snapshot_date": datetime.utcnow().date(),
+                "snapshot_date": datetime.utcnow().strftime("%Y-%m-%d"),
                 "followers": followers, "following": random.randint(200, 3000),
                 "posts_count": posts, "avg_likes": avg_likes,
                 "avg_comments": int(avg_likes * 0.035),
