@@ -49,12 +49,8 @@ class Settings(BaseSettings):
 
     ARQ_REDIS_URL: str = "redis://localhost:6379/0"
 
-    OPENAI_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
     DEEPSEEK_MODEL: str = "deepseek-chat"
-    DEFAULT_LLM_PROVIDER: str = "openai"
-    DEFAULT_LLM_MODEL: str = "gpt-4o-mini"
 
     GOOGLE_SERVICE_ACCOUNT_KEY: str = ""
     GOOGLE_DRIVE_FOLDER_ID: str = ""

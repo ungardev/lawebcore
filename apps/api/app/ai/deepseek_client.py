@@ -1,7 +1,7 @@
 """
-DeepSeek client wrapper with retry, fallback to OpenAI, and structured output.
+DeepSeek client — chat completions via OpenAI-compatible API.
 
-Used by sentiment_analyzer.py for batch comment classification.
+Used by sentiment_analyzer.py and rag_engine.py.
 """
 
 import asyncio
@@ -36,17 +36,8 @@ class DeepSeekClient:
         self.model = model or settings.DEEPSEEK_MODEL
         self.temperature = temperature
         self.max_retries = max_retries
-        self._active_provider: str | None = None
 
-    def _build_openai_client(self) -> Any:
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=self.model,
-            temperature=self.temperature,
-            api_key=self.api_key,
-        )
-
-    def _build_deepseek_client(self) -> Any:
+    def _build_client(self) -> Any:
         from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             model=self.model,
@@ -91,44 +82,22 @@ class DeepSeekClient:
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> LLMResponse:
-        """
-        Simple text completion. Falls back to OpenAI if DeepSeek is unavailable.
-        """
+        """Text completion via DeepSeek."""
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        if self.api_key and settings.DEFAULT_LLM_PROVIDER == "deepseek":
-            try:
-                client = self._build_deepseek_client()
-                self._active_provider = "deepseek"
-                result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
-                logger.info(
-                    "llm_call",
-                    provider="deepseek",
-                    model=self.model,
-                    latency_ms=result.latency_ms,
-                    tokens=result.tokens_used,
-                )
-                return result
-            except Exception as e:
-                logger.warning("deepseek_unavailable_fallback", error=str(e))
-
-        if settings.OPENAI_API_KEY:
-            client = self._build_openai_client()
-            self._active_provider = "openai"
-            result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
-            logger.info(
-                "llm_call",
-                provider="openai",
-                model=self.model,
-                latency_ms=result.latency_ms,
-                tokens=result.tokens_used,
-            )
-            return result
-
-        raise RuntimeError("No LLM provider available (DeepSeek and OpenAI keys missing)")
+        client = self._build_client()
+        result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
+        logger.info(
+            "llm_call",
+            provider="deepseek",
+            model=self.model,
+            latency_ms=result.latency_ms,
+            tokens=result.tokens_used,
+        )
+        return result
 
     async def complete_json(
         self,
@@ -137,9 +106,7 @@ class DeepSeekClient:
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> dict[str, Any]:
-        """
-        Completion parsed as JSON. Useful for structured sentiment responses.
-        """
+        """Completion parsed as JSON."""
         import json
         result = await self.complete(prompt, system, temperature=temperature, max_tokens=max_tokens)
         try:

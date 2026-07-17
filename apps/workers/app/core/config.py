@@ -13,7 +13,6 @@ class Settings(BaseSettings):
 
     APIFY_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
-    DEFAULT_LLM_PROVIDER: str = "deepseek"
 
 
 settings = Settings()

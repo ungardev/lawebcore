@@ -1,53 +1,59 @@
 """
-Embeddings — extended with batch support and DeepSeek fallback.
+Embeddings — fastembed (local, no API cost).
 
-Used by indexer.py to bulk-embed P.I.A.R. content.
+Uses sentence-transformers/all-MiniLM-L6-v2 (384 dimensions).
+No OpenAI or external API required.
 """
 
-import asyncio
 from typing import Any
 
 import structlog
 
-from shared_core import settings
-
 logger = structlog.get_logger(__name__)
 
+_model: Any = None
 
-async def embed_text(text: str, model: str = "text-embedding-3-small") -> list[float]:
-    """Embed a single string using OpenAI embeddings API."""
+
+def _get_model() -> Any:
+    global _model
+    if _model is None:
+        from fastembed import TextEmbedding
+        _model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return _model
+
+
+async def embed_text(text: str) -> list[float]:
+    """Embed a single string using fastembed (384-dim)."""
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        resp = await client.embeddings.create(model=model, input=text)
-        return resp.data[0].embedding
+        model = _get_model()
+        result = list(model.embed([text]))
+        return result[0].tolist()
     except Exception as e:
         logger.error("embedding_failed", error=str(e))
         raise
 
 
-async def embed_texts(texts: list[str], model: str = "text-embedding-3-small") -> list[list[float]]:
+async def embed_texts(texts: list[str]) -> list[list[float]]:
     """
-    Embed multiple strings in a single batch request.
-    Falls back to individual calls if batch fails.
+    Embed multiple strings in a single batch request using fastembed.
+    Returns list of 384-dim vectors.
     """
     if not texts:
         return []
 
     try:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-        resp = await client.embeddings.create(model=model, input=texts)
-        return [item.embedding for item in resp.data]
+        model = _get_model()
+        results = list(model.embed(texts))
+        return [r.tolist() for r in results]
     except Exception as e:
-        logger.warning("batch_embedding_failed_fallback", error=str(e))
+        logger.warning("batch_embedding_failed", error=str(e))
         results: list[list[float]] = []
         for text in texts:
             try:
-                vec = await embed_text(text, model)
+                vec = await embed_text(text)
                 results.append(vec)
             except Exception:
-                results.append([0.0] * 1536)
+                results.append([0.0] * 384)
         return results
 
 

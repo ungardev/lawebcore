@@ -147,7 +147,7 @@ class AIService:
             INSERT INTO ai_messages (conversation_id, role, content, model_provider, model_name)
             VALUES (:cid, 'assistant', :content, :prov, :model)
             """),
-            {"cid": str(conv_id), "content": answer_text, "prov": settings.DEFAULT_LLM_PROVIDER, "model": settings.DEFAULT_LLM_MODEL},
+            {"cid": str(conv_id), "content": answer_text, "prov": "deepseek", "model": settings.DEEPSEEK_MODEL},
         )
         await db.commit()
 
