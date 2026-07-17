@@ -21,7 +21,11 @@ class Settings(BaseSettings):
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     API_CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "https://lawebcore.vercel.app",
+        ]
     )
 
     @field_validator("API_CORS_ORIGINS", mode="before")
