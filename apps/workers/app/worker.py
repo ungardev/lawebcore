@@ -20,10 +20,10 @@ from sqlalchemy import select, update
 from shared_core import settings
 from shared_core import db_session
 from shared_core import supabase_rest
-from discovery import brief_parser_agent
-from discovery import query_builder
-from discovery import result_ranker
-from discovery import BriefStructured, CandidateMetrics, Platform
+from discovery.brief_parser import brief_parser_agent
+from discovery.query_builder import query_builder
+from discovery.result_ranker import result_ranker
+from discovery.schemas import BriefStructured, CandidateMetrics, Platform
 from discovery.tools import (
     apify_client,
     meta_client,
