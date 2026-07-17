@@ -52,3 +52,19 @@ datasets
 
 .DS_Store
 Thumbs.db
+
+*.md
+!README.md
+00_documento_maestro*
+01_objetivo*
+02_modelo*
+03_fuente*
+04_motor*
+05_funcionalidad*
+06_informe*
+13_data*
+HISTORIAL*
+docs/
+scripts/
+test_*
+apify_token.png
