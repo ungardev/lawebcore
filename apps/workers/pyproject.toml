@@ -4,10 +4,6 @@ version = "0.1.0"
 description = "La Web Core - ARQ async workers"
 requires-python = ">=3.12"
 dependencies = [
-    # Shared packages (monorepo)
-    "shared-core @ file:///app/packages/shared-core",
-    "shared-ai @ file:///app/packages/shared-ai",
-    "discovery @ file:///app/packages/discovery",
     # ARQ worker framework
     "arq>=0.26.3",
     "redis>=5.2.0",
