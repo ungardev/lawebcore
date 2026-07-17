@@ -18,12 +18,15 @@ class SeedStatusResponse(BaseModel):
 async def _upsert(table: str, row: dict, on_conflict_col: str | None = None) -> dict:
     """Insert or update a row via Supabase REST API (service role)."""
     from shared_core import supabase_rest
-    filters = [f"{on_conflict_col}=eq.{row[on_conflict_col]}"] if on_conflict_col else None
-    result = await supabase_rest.select(table=table, select="id", filters=filters, limit=1)
-    if result:
-        await supabase_rest.update(table=table, filters=[f"id=eq.{result[0]['id']}"], data=row)
+    if on_conflict_col:
+        filters = [f"{on_conflict_col}=eq.{row[on_conflict_col]}"]
+        result = await supabase_rest.select(table=table, select="id", filters=filters, limit=1)
+        if result:
+            await supabase_rest.update(table=table, filters=[f"id=eq.{result[0]['id']}"], values=row)
+        else:
+            await supabase_rest.insert(table=table, values=row, on_conflict=[on_conflict_col])
     else:
-        await supabase_rest.insert(table=table, data=row)
+        await supabase_rest.insert(table=table, values=row)
     return row
 
 
