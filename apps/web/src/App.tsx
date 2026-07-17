@@ -12,9 +12,9 @@ import { ClientsPage } from '@/features/clients/ClientsPage';
 import { BrandsPage } from '@/features/brands/BrandsPage';
 import { InfluencersPage } from '@/features/influencers/InfluencersPage';
 import { AIAssistantPage } from '@/features/ai-assistant/AIAssistantPage';
-import { DiscoveryChatPage } from '@/features/discovery/pages/DiscoveryChatPage';
-import { DiscoverySearchPage } from '@/features/discovery/pages/DiscoverySearchPage';
-import { DiscoveryRunsListPage } from '@/features/discovery/pages/DiscoveryRunsListPage';
+import { LensChatPage } from '@/features/lens/pages/LensChatPage';
+import { LensSearchPage } from '@/features/lens/pages/LensSearchPage';
+import { LensRunsListPage } from '@/features/lens/pages/LensRunsListPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 
 export default function App() {
@@ -39,10 +39,10 @@ export default function App() {
           <Route path="brands" element={<BrandsPage />} />
           <Route path="influencers" element={<InfluencersPage />} />
           <Route path="ai" element={<AIAssistantPage />} />
-          <Route path="influencer-search" element={<DiscoveryChatPage />} />
-          <Route path="influencer-search/:id" element={<DiscoveryChatPage />} />
-          <Route path="influencer-search/search" element={<DiscoverySearchPage />} />
-          <Route path="influencer-search/runs" element={<DiscoveryRunsListPage />} />
+          <Route path="influencer-lens" element={<LensChatPage />} />
+          <Route path="influencer-lens/:id" element={<LensChatPage />} />
+          <Route path="influencer-lens/search" element={<LensSearchPage />} />
+          <Route path="influencer-lens/runs" element={<LensRunsListPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>

@@ -21,7 +21,7 @@ const NAV = [
   { to: '/brands', label: 'Marcas', icon: Tags },
   { to: '/influencers', label: 'Influencers', icon: Users },
   { to: '/ai', label: 'Asistente IA', icon: Sparkles },
-  { to: '/influencer-search', label: 'Influencer Search', icon: Search },
+  { to: '/influencer-lens', label: 'Influencer Lens', icon: Search },
   { to: '/settings', label: 'Configuracion', icon: Settings },
 ];
 

@@ -13,7 +13,7 @@ import type { Platform } from '../types/discovery';
 
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'youtube', 'x', 'facebook'];
 
-export function DiscoverySearchPage() {
+export function LensSearchPage() {
   const navigate = useNavigate();
   const { run, candidates, isLoading, error, createRun, pollRun, saveCandidate, dismissCandidate } = useDiscoveryRun();
 

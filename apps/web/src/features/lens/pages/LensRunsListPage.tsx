@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { discoveryApi } from '../api/discoveryApi';
+import { lensApi } from '../api/lensApi';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: React.Rea
   cancelled: { label: 'Cancelado', icon: <XCircle className="w-4 h-4" />, className: 'bg-muted text-muted-foreground' },
 };
 
-export function DiscoveryRunsListPage() {
+export function LensRunsListPage() {
   const navigate = useNavigate();
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,7 +25,7 @@ export function DiscoveryRunsListPage() {
   const fetchRuns = async (pageNum: number) => {
     setIsLoading(true);
     try {
-      const { data } = await import('@/lib/api').then((m) => m.api.get('/discovery/runs', { params: { limit, offset: (pageNum - 1) * limit } }));
+      const { data } = await import('@/lib/api').then((m) => m.api.get('/lens/runs', { params: { limit, offset: (pageNum - 1) * limit } }));
       if (pageNum === 1) setRuns(data);
       else setRuns((prev) => [...prev, ...data]);
     } catch (e) {
@@ -46,10 +46,10 @@ export function DiscoveryRunsListPage() {
             Historial de búsquedas
           </h1>
           <p className="text-sm text-muted-foreground">
-            Todas las ejecuciones de Discovery
+            Todas las ejecuciones de Influencer Lens
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/influencer-search/search')}>
+        <Button variant="outline" size="sm" onClick={() => navigate('/influencer-lens/search')}>
           Nueva búsqueda
         </Button>
       </div>
@@ -74,7 +74,7 @@ export function DiscoveryRunsListPage() {
                   <tr
                     key={run.id}
                     className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/influencer-search/search?run=${run.id}`)}
+                    onClick={() => navigate(`/influencer-lens/search?run=${run.id}`)}
                   >
                     <td className="px-4 py-3 text-muted-foreground">
                       {run.created_at ? new Date(run.created_at).toLocaleDateString('es-ES', {

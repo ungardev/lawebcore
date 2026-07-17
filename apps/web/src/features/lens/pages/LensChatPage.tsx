@@ -6,25 +6,27 @@ import { ChatMessage } from '../components/ChatMessage';
 import { CandidateCard } from '../components/CandidateCard';
 import { CandidateCardSkeleton } from '../components/CandidateCardSkeleton';
 import { BriefConfirmCard } from '../components/BriefConfirmCard';
-import { DiscoveryEmptyState } from '../components/DiscoveryEmptyState';
+import { LensEmptyState } from '../components/LensEmptyState';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { discoveryApi } from '../api/discoveryApi';
+import { lensApi } from '../api/lensApi';
 import { cn } from '@/lib/utils';
 import type { DiscoveryConversation } from '../types/discovery';
 
-const WELCOME = `¡Hola! Soy el asistente de Discovery de P.I.A.R. Puedo ayudarte a descubrir influencers ideales para tus campañas.
+const WELCOME = `¡Hola! Soy el asistente de Influencer Lens de La Web Core, la plataforma de gestión de campañas de La Web Figital Agency.
+
+Puedo ayudarte a descubrir influencers ideales para tus campañas de Purina Dog Chow y cualquier otra marca.
 
 Simplemente descríbeme tu producto o campaña en lenguaje natural. Por ejemplo:
 
-• "Busco influencers de fitness en Colombia, presupuesto $2000 USD"
-• "Necesito micro-influencers de comida mexicana en México DF"
-• "Creatores de viaje y aventura en España, público femenino 25-35"
+• "Busco influencers de mascotas en Venezuela, presupuesto $2000 USD"
+• "Necesito micro-influencers de comida para perros en Colombia"
+• "Creatores de contenido sobre animales en México, público femenino 25-35"
 
 ¿En qué puedo ayudarte?`;
 
-export function DiscoveryChatPage() {
+export function LensChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
@@ -46,14 +48,14 @@ export function DiscoveryChatPage() {
   } = useDiscoveryConversation();
 
   useEffect(() => {
-    discoveryApi.conversations.list({ limit: 20 }).then(setConversations).catch(() => {});
+    lensApi.conversations.list({ limit: 20 }).then(setConversations).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (id) {
-      loadConversation(id).catch(() => navigate('/influencer-search'));
+      loadConversation(id).catch(() => navigate('/influencer-lens'));
     } else if (conversations.length > 0) {
-      navigate(`/influencer-search/${conversations[0].id}`, { replace: true });
+      navigate(`/influencer-lens/${conversations[0].id}`, { replace: true });
     }
   }, [id]);
 
@@ -66,7 +68,7 @@ export function DiscoveryChatPage() {
 
     if (!conversation) {
       const conv = await startConversation(input);
-      navigate(`/influencer-search/${conv.id}`);
+      navigate(`/influencer-lens/${conv.id}`);
       setInput('');
       return;
     }
@@ -78,7 +80,7 @@ export function DiscoveryChatPage() {
   const handleNewConversation = async () => {
     const conv = await startConversation();
     setConversations((prev) => [conv, ...prev]);
-    navigate(`/influencer-search/${conv.id}`);
+    navigate(`/influencer-lens/${conv.id}`);
   };
 
   const allCandidates = turns.flatMap((t) => t.candidates ?? []);
@@ -89,15 +91,15 @@ export function DiscoveryChatPage() {
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Sparkles className="w-6 md:w-7 text-primary" />
-            Discovery
+            Influencer Lens
           </h1>
           <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
-            Busca por nicho, industria o describe tu producto ideal
+            Descubre influencers ideales para tus campañas
           </p>
         </div>
         <Button onClick={handleNewConversation} size="sm" className="gap-1.5 flex-shrink-0">
           <Plus className="w-4 h-4" />
-          Nueva búsqueda
+          Nueva busqueda
         </Button>
       </div>
 
@@ -115,14 +117,14 @@ export function DiscoveryChatPage() {
               conversations.map((conv) => (
                 <button
                   key={conv.id}
-                  onClick={() => navigate(`/influencer-search/${conv.id}`)}
+                  onClick={() => navigate(`/influencer-lens/${conv.id}`)}
                   className={cn(
                     'w-full text-left px-3 py-2 border-b border-border/50 hover:bg-muted transition-colors',
                     conv.id === id && 'bg-muted',
                   )}
                 >
                   <p className="text-xs font-medium truncate">
-                    {conv.accumulated_brief?.slice(0, 40) || 'Nueva búsqueda'}
+                    {conv.accumulated_brief?.slice(0, 40) || 'Nueva busqueda'}
                   </p>
                   <p className="text-[10px] text-muted-foreground">
                     {new Date(conv.last_message_at).toLocaleDateString('es-ES')}
@@ -136,10 +138,10 @@ export function DiscoveryChatPage() {
         <Card className="flex-1 flex flex-col p-0 overflow-hidden">
           {!conversation && !isLoading ? (
             <div className="flex-1 flex flex-col items-center justify-center p-6">
-              <DiscoveryEmptyState variant="no_conversations" />
+              <LensEmptyState variant="no_conversations" />
               <Button onClick={handleNewConversation} className="mt-4 gap-2">
                 <MessageSquare className="w-4 h-4" />
-                Iniciar primera búsqueda
+                Iniciar primera busqueda
               </Button>
             </div>
           ) : (
@@ -185,7 +187,7 @@ export function DiscoveryChatPage() {
                     {turn.run_summary && (
                       <div className="mt-2 px-1">
                         <p className="text-xs text-muted-foreground">
-                          Búsqueda: {turn.run_summary.total_found} encontrados,
+                          Busqueda: {turn.run_summary.total_found} encontrados,
                           mejor score {turn.run_summary.top_score}/100,
                           plataformas: {turn.run_summary.platforms_queried.join(', ')}
                         </p>

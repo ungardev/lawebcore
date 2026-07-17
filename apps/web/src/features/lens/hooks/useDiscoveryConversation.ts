@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { discoveryApi } from '../api/discoveryApi';
+import { lensApi } from '../api/lensApi';
 import type { BriefStructured, ChatTurn, DiscoveryCandidate, DiscoveryConversation, DiscoveryMessage } from '../types/discovery';
 
 export function useDiscoveryConversation() {
@@ -14,7 +14,7 @@ export function useDiscoveryConversation() {
     setIsLoading(true);
     setError(null);
     try {
-      const conv = await discoveryApi.conversations.create(initialBrief);
+      const conv = await lensApi.conversations.create(initialBrief);
       setConversation(conv);
       setTurns([]);
       setPendingBrief(null);
@@ -31,7 +31,7 @@ export function useDiscoveryConversation() {
     setIsLoading(true);
     setError(null);
     try {
-      const conv = await discoveryApi.conversations.get(conversationId);
+      const conv = await lensApi.conversations.get(conversationId);
       setConversation(conv);
 
       const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m: DiscoveryMessage) => ({
@@ -63,7 +63,7 @@ export function useDiscoveryConversation() {
     setError(null);
 
     try {
-      const result = await discoveryApi.conversations.sendMessage(conversation.id, content);
+      const result = await lensApi.conversations.sendMessage(conversation.id, content);
       await loadConversation(conversation.id);
 
       if (result.discovery_run_id) {
@@ -99,7 +99,7 @@ export function useDiscoveryConversation() {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await new Promise((r) => setTimeout(r, interval));
       try {
-        const run = await discoveryApi.search.getRun(runId);
+        const run = await lensApi.search.getRun(runId);
         const metadata = (run.metadata || {}) as Record<string, unknown>;
         const progress = {
           current_step: (metadata.current_step as string) || "running",
@@ -113,7 +113,7 @@ export function useDiscoveryConversation() {
           await loadConversation(conversationId);
           if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
             try {
-              const candidates = await discoveryApi.search.getCandidates(runId, { limit: 20 });
+              const candidates = await lensApi.search.getCandidates(runId, { limit: 20 });
               setTurns((prev) => {
                 const lastIdx = prev.length - 1;
                 if (lastIdx < 0) return prev;
@@ -174,11 +174,11 @@ export function useDiscoveryConversation() {
   }, [conversation, pendingBrief, sendMessage]);
 
   const saveCandidate = useCallback(async (candidateId: string) => {
-    await discoveryApi.candidates.save(candidateId);
+    await lensApi.candidates.save(candidateId);
   }, []);
 
   const dismissCandidate = useCallback(async (candidateId: string) => {
-    await discoveryApi.candidates.dismiss(candidateId);
+    await lensApi.candidates.dismiss(candidateId);
     setTurns((prev) =>
       prev.map((t) =>
         t.candidates

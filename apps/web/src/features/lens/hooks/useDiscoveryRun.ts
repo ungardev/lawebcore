@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { discoveryApi } from '../api/discoveryApi';
+import { lensApi } from '../api/lensApi';
 import type { DiscoveryCandidate, DiscoveryRun, Platform } from '../types/discovery';
 
 export function useDiscoveryRun() {
@@ -8,11 +8,11 @@ export function useDiscoveryRun() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createRun = useCallback(async (brief: Parameters<typeof discoveryApi.search.createRun>[0]) => {
+  const createRun = useCallback(async (brief: Parameters<typeof lensApi.search.createRun>[0]) => {
     setIsLoading(true);
     setError(null);
     try {
-      const newRun = await discoveryApi.search.createRun(brief);
+      const newRun = await lensApi.search.createRun(brief);
       setRun(newRun);
       return newRun;
     } catch (e) {
@@ -28,8 +28,8 @@ export function useDiscoveryRun() {
     setError(null);
     try {
       const [loadedRun, loadedCandidates] = await Promise.all([
-        discoveryApi.search.getRun(runId),
-        discoveryApi.search.getCandidates(runId, { limit: 50 }),
+        lensApi.search.getRun(runId),
+        lensApi.search.getCandidates(runId, { limit: 50 }),
       ]);
       setRun(loadedRun);
       setCandidates(loadedCandidates);
@@ -63,7 +63,7 @@ export function useDiscoveryRun() {
     createRun,
     loadRun,
     pollRun,
-    saveCandidate: discoveryApi.candidates.save,
-    dismissCandidate: discoveryApi.candidates.dismiss,
+    saveCandidate: lensApi.candidates.save,
+    dismissCandidate: lensApi.candidates.dismiss,
   };
 }
