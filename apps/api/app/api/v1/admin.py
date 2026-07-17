@@ -388,6 +388,9 @@ async def seed_all(x_seed_token: str = Header(None)):
     if not db_url:
         raise HTTPException(status_code=500, detail="DATABASE_URL not configured on server")
 
+    # asyncpg.connect() does not accept "postgresql+asyncpg://" — convert to "postgresql://"
+    db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+
     results = {}
     errors = []
 
