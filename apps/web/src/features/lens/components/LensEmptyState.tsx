@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 
 type EmptyStateVariant = 'no_conversations' | 'no_results' | 'no_candidates';
 
-interface DiscoveryEmptyStateProps {
+interface LensEmptyStateProps {
   variant?: EmptyStateVariant;
   className?: string;
 }
@@ -26,7 +26,7 @@ const variants: Record<EmptyStateVariant, { icon: React.ReactNode; title: string
   },
 };
 
-export function DiscoveryEmptyState({ variant = 'no_conversations', className }: DiscoveryEmptyStateProps) {
+export function LensEmptyState({ variant = 'no_conversations', className }: LensEmptyStateProps) {
   const v = variants[variant];
 
   return (
