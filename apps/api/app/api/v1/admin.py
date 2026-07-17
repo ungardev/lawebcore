@@ -48,8 +48,6 @@ def _tier_by_followers(followers: int) -> str:
 # 1. SEED PURINA DOG CHOW
 # ============================================================
 async def _seed_purina() -> dict:
-    USER_ID = "00000000-0000-0000-0000-000000000001"
-    BU_ID   = "00000000-0000-0000-0000-000000000003"
     CLIENT_ID   = "f0000000-0000-0000-0000-000000000001"
     BRAND_ID    = "f0000000-0000-0000-0000-000000000002"
     CAMPAIGN_ID = "f0000000-0000-0000-0000-000000000003"
@@ -60,7 +58,6 @@ async def _seed_purina() -> dict:
         "legal_name": "Nestlé Venezuela C.A.", "tax_id": "J-00045678-9",
         "industry": "Alimentos y Bebidas", "website": "https://www.nestle.com.ve",
         "is_active": True, "metadata": {"country": "Venezuela", "region": "Latam"},
-        "created_by": USER_ID,
     }, on_conflict_col="id")
 
     # Brand
@@ -82,11 +79,9 @@ async def _seed_purina() -> dict:
         "end_date": datetime(2026, 8, 15).date(),
         "budget_total": 15000.0, "budget_currency": "USD",
         "num_influencers": 20, "status": "CAMPAÑA_INTERNA",
-        "owner_user_id": USER_ID, "business_unit_id": BU_ID,
         "tags": ["pet", "dog", "venezuela", "purina", "awareness"],
         "notes": "Campaña demo para pitch Nestlé Venezuela.",
         "metadata": {"hashtags": ["#DogChowVenezuela", "#AmorPerruno", "#PurinaVE"]},
-        "created_by": USER_ID,
     }, on_conflict_col="id")
 
     # 20 Influencers (Purina demo)
@@ -130,7 +125,7 @@ async def _seed_purina() -> dict:
             "content_niches": niches, "languages": ["es"],
             "status": "active", "tags": [city.lower(), tier.lower()],
             "metadata": {"source": "seed_demo"},
-            "source": "manual", "created_by": USER_ID,
+            "source": "manual",
         }, on_conflict_col="id")
 
         # Social account
@@ -223,7 +218,6 @@ async def _seed_purina() -> dict:
 # 2. SEED SCOUTING VE — 15 perfiles de Ignacio
 # ============================================================
 async def _seed_scouting_ve() -> dict:
-    USER_ID = "00000000-0000-0000-0000-000000000001"
     tier_fee = {"NANO": 150, "MICRO": 400, "MID": 1200}
 
     influencers = [
@@ -266,7 +260,7 @@ async def _seed_scouting_ve() -> dict:
                 "tier_fee_usd": tier_fee.get(tier, 200),
                 "scouting_date": "2026-07-17",
             },
-            "source": "manual", "created_by": USER_ID,
+            "source": "manual", 
         }, on_conflict_col="id")
 
         try:
@@ -310,7 +304,6 @@ async def _seed_scouting_ve() -> dict:
 # 3. SEED MATRIZ DOLCE GUSTO — 14 perfiles Nestlé
 # ============================================================
 async def _seed_matriz_dg() -> dict:
-    USER_ID = "00000000-0000-0000-0000-000000000001"
     tier_fee = {"NANO": 150, "MICRO": 400, "MID": 1200, "MACRO": 3000}
 
     influencers = [
@@ -364,7 +357,7 @@ async def _seed_matriz_dg() -> dict:
                 "driver": driver,
                 "tier_fee_usd": tier_fee.get(tier, 200),
             },
-            "source": "manual", "created_by": USER_ID,
+            "source": "manual", 
         }, on_conflict_col="id")
 
         posts = min(600, max(30, followers // 400))
