@@ -1,11 +1,32 @@
-[build]
+# railway.toml - Monorepo: API + Workers services
+# https://docs.railway.app/reference/trainfile
+
+[[services]]
+name = "api"
+[services.build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/api/Dockerfile"
+
+[services.deploy]
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+healthcheckPath = "/api/v1/health"
+
+[services.env]
+PYTHONUNBUFFERED = "1"
+API_CORS_ORIGINS = '["http://localhost:5173","http://localhost:3000","https://lawebcore.vercel.app"]'
+
+[[services]]
+name = "workers"
+[services.build]
 builder = "DOCKERFILE"
 dockerfilePath = "apps/workers/Dockerfile"
 
-[deploy]
+[services.deploy]
 startCommand = "arq app.worker.WorkerSettings"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-[env]
+[services.env]
 PYTHONUNBUFFERED = "1"
