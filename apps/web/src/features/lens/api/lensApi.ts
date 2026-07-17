@@ -11,15 +11,15 @@ import type {
 export const lensApi = {
   conversations: {
     list: async (params?: { user_id?: string; status_filter?: string; limit?: number }) => {
-      const { data } = await api.get<DiscoveryConversation[]>('/lens/conversations', { params });
+      const { data } = await api.get<DiscoveryConversation[]>('/lens/discovery/conversations', { params });
       return data;
     },
     get: async (conversationId: string) => {
-      const { data } = await api.get<DiscoveryConversation>(`/lens/conversations/${conversationId}`);
+      const { data } = await api.get<DiscoveryConversation>(`/lens/discovery/conversations/${conversationId}`);
       return data;
     },
     create: async (initial_brief?: string) => {
-      const { data } = await api.post<DiscoveryConversation>('/lens/conversations', { initial_brief });
+      const { data } = await api.post<DiscoveryConversation>('/lens/discovery/conversations', { initial_brief });
       return data;
     },
     sendMessage: async (
@@ -32,7 +32,7 @@ export const lensApi = {
       run_summary?: { total_found: number; top_score: number; platforms_queried: Platform[] };
       discovery_run_id?: string;
     }> => {
-      const { data } = await api.post(`/lens/conversations/${conversationId}/messages`, { content });
+      const { data } = await api.post(`/lens/discovery/conversations/${conversationId}/messages`, { content });
       return data;
     },
   },
@@ -53,18 +53,18 @@ export const lensApi = {
       platforms?: Platform[];
       max_candidates?: number;
     }) => {
-      const { data } = await api.post<DiscoveryRun>('/lens/search', brief);
+      const { data } = await api.post<DiscoveryRun>('/lens/discovery/search', brief);
       return data;
     },
     getRun: async (runId: string) => {
-      const { data } = await api.get<DiscoveryRun>(`/lens/runs/${runId}`);
+      const { data } = await api.get<DiscoveryRun>(`/lens/discovery/runs/${runId}`);
       return data;
     },
     getCandidates: async (
       runId: string,
       params?: { status_filter?: string; min_score?: number; limit?: number; offset?: number },
     ) => {
-      const { data } = await api.get<DiscoveryCandidate[]>(`/lens/runs/${runId}/candidates`, { params });
+      const { data } = await api.get<DiscoveryCandidate[]>(`/lens/discovery/runs/${runId}/candidates`, { params });
       return data;
     },
   },
@@ -72,13 +72,13 @@ export const lensApi = {
   candidates: {
     save: async (candidateId: string) => {
       const { data } = await api.post<{ influencer_id: string; candidate_id: string }>(
-        `/lens/candidates/${candidateId}/save`,
+        `/lens/discovery/candidates/${candidateId}/save`,
       );
       return data;
     },
     dismiss: async (candidateId: string, reason?: string) => {
       const { data } = await api.post<{ candidate_id: string; status: string }>(
-        `/lens/candidates/${candidateId}/dismiss`,
+        `/lens/discovery/candidates/${candidateId}/dismiss`,
         { reason },
       );
       return data;
@@ -87,14 +87,14 @@ export const lensApi = {
 
   costs: async (params?: { provider?: string }) => {
     const { data } = await api.get<Array<{ provider: string; cost_usd: number; request_count: number }>>(
-      '/lens/costs',
+      '/lens/discovery/costs',
       { params },
     );
     return data;
   },
 
   metrics: async (): Promise<DiscoveryMetrics> => {
-    const { data } = await api.get<DiscoveryMetrics>('/lens/metrics');
+    const { data } = await api.get<DiscoveryMetrics>('/lens/discovery/metrics');
     return data;
   },
 };
