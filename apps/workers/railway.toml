@@ -1,6 +1,6 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "apps/workers/Dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "arq app.worker.WorkerSettings"
