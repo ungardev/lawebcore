@@ -36,7 +36,7 @@ from typing import Any
 
 import structlog
 
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 
 logger = structlog.get_logger(__name__)
 

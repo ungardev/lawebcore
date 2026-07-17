@@ -8,7 +8,7 @@ from typing import Optional
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
 
-from app.core.config import settings
+from shared_core import settings
 
 logger = structlog.get_logger(__name__)
 

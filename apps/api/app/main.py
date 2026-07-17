@@ -12,9 +12,7 @@ from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
 from sqlalchemy import text
 
-from app.core.config import settings
-from app.core.db import close_db, init_db
-from app.core.supabase_rest import supabase_rest
+from shared_core import settings, close_db, init_db, supabase_rest
 from app.api.v1 import api_router
 from app.core.logging import configure_logging
 
@@ -113,7 +111,7 @@ async def health():
 
 @app.get("/api/v1/health/ready", tags=["health"])
 async def readiness():
-    from app.core.db import db_session
+    from shared_core import db_session
     try:
         async with db_session() as session:
             await session.execute(text("SELECT 1"))

@@ -2,7 +2,7 @@
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from app.core.config import settings
+from shared_core import settings
 
 
 def get_llm(provider: str | None = None, temperature: float = 0.7) -> BaseChatModel:

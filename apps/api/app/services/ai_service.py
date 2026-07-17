@@ -17,7 +17,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
+from shared_core import settings
 from app.ai.llm import get_llm
 from shared_ai import embed_text
 

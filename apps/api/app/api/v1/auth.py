@@ -1,6 +1,6 @@
 """Auth endpoints - sync user profile from Supabase REST API."""
 from fastapi import APIRouter, HTTPException
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep, get_current_user
 from app.schemas import UserRead
 

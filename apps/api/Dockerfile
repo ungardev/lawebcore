@@ -8,18 +8,16 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY packages/shared-core/pyproject.toml ./packages/shared-core/pyproject.toml
-COPY packages/shared-ai/pyproject.toml ./packages/shared-ai/pyproject.toml
-COPY packages/discovery/pyproject.toml ./packages/discovery/pyproject.toml
-COPY apps/api/pyproject.toml ./apps/api/pyproject.toml
+COPY packages/shared-core ./packages/shared-core
+COPY packages/shared-ai ./packages/shared-ai
+COPY packages/discovery ./packages/discovery
+COPY apps/api ./apps/api
 
 RUN pip install --upgrade pip && \
     pip install -e ./packages/shared-core \
                 -e ./packages/shared-ai \
                 -e ./packages/discovery \
                 -e ./apps/api
-
-COPY apps/api/app /app/app
 
 EXPOSE 8000
 

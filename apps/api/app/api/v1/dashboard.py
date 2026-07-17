@@ -3,7 +3,7 @@ import structlog
 from decimal import Decimal
 from fastapi import APIRouter, Query
 
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas import DashboardKPIs
 

@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.core.piar_engine import PiarEngine
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas.projections import (
     ProjectionCalculateRequest,

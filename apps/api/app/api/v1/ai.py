@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import time
 import structlog
 
-from app.core.db import get_db
+from shared_core import get_db
 from app.core.security import CurrentUserDep
 from app.schemas import AIChatRequest, AIChatResponse, AIGenerateRequest
 from app.services.ai_service import AIService

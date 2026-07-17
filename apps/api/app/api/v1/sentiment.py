@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.ai.sentiment_analyzer import analyze_comments_full, SentimentDistribution
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])

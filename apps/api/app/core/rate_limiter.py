@@ -6,7 +6,7 @@ from slowapi.util import get_remote_address
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 
-from app.core.config import settings
+from shared_core import settings
 
 
 def get_user_identifier(request: Request) -> str:

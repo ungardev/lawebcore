@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.db import get_db
+from shared_core import get_db
 from app.core.security import CurrentUserDep
 from app.schemas import UserRead
 

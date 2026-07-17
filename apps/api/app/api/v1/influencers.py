@@ -1,6 +1,6 @@
 """Influencers endpoints."""
 from fastapi import APIRouter, HTTPException, Query
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep
 from app.schemas import InfluencerRead, InfluencerCreate, InfluencerMetricsRead
 

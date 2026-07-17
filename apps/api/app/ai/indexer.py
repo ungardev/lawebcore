@@ -147,7 +147,7 @@ async def index_publicacion(
 ) -> int:
     """Index or re-index a single publicacion in the vector store."""
     if pub_data is None:
-        from app.core.supabase_rest import supabase_rest
+        from shared_core import supabase_rest
         rows = await supabase_rest.table(
             "publicaciones", select="*", eq_filters={"id": pub_id}, limit=1
         )
@@ -177,7 +177,7 @@ async def index_publicaciones_by_campaign(
     campaign_id: str,
 ) -> int:
     """Re-index all publicaciones for a campaign."""
-    from app.core.supabase_rest import supabase_rest
+    from shared_core import supabase_rest
     rows = await supabase_rest.table(
         "publicaciones",
         select="*",
@@ -216,7 +216,7 @@ async def index_influencer_score(
 
 async def index_benchmarks(db: AsyncSession) -> int:
     """Index all LWFA benchmarks."""
-    from app.core.supabase_rest import supabase_rest
+    from shared_core import supabase_rest
     rows = await supabase_rest.table("tier_benchmarks", select="*", limit=20)
     total = 0
     for row in rows:
@@ -247,7 +247,7 @@ async def reindex_all_piar(db: AsyncSession, limit: int = 1000) -> dict[str, int
     logger.info("piar_reindex_start", limit=limit)
     counts: dict[str, int] = {}
 
-    from app.core.supabase_rest import supabase_rest
+    from shared_core import supabase_rest
 
     pubs = await supabase_rest.table("publicaciones", select="id", limit=limit)
     pub_total = 0

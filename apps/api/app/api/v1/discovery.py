@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.security import CurrentUserDep
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from discovery.orchestrator import orchestrator
 from discovery.schemas import (
     BriefStructured,

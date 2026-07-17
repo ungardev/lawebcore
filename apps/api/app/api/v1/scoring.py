@@ -14,7 +14,7 @@ from app.core.piar_benchmarks import (
     compare_with_benchmark,
     get_benchmark_by_followers,
 )
-from app.core.supabase_rest import supabase_rest
+from shared_core import supabase_rest
 from app.core.security import CurrentUserDep
 
 router = APIRouter()
