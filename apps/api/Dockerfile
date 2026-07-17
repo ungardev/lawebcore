@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.12
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -8,23 +8,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY packages/shared-core/pyproject.toml ./packages/shared-core/pyproject.toml
-RUN pip install --upgrade pip && pip install packages/shared-core
-
 COPY packages/shared-ai/pyproject.toml ./packages/shared-ai/pyproject.toml
-RUN pip install packages/shared-ai
-
 COPY packages/discovery/pyproject.toml ./packages/discovery/pyproject.toml
-RUN pip install packages/discovery
-
 COPY apps/api/pyproject.toml ./apps/api/pyproject.toml
-RUN pip install apps/api
+
+RUN pip install --upgrade pip && \
+    pip install packages/shared-core packages/shared-ai packages/discovery apps/api
 
 COPY apps/api/app /app/app
 
