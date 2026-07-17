@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ai.embeddings import embed_texts, chunk_text
+from shared_ai import embed_texts, chunk_text
 
 logger = structlog.get_logger(__name__)
 

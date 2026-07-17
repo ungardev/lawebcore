@@ -5,8 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app
 
-# Build argument to invalidate cache — change value to force rebuild
-ARG RAILWAY_BUILD_ID=ee335e9
+ARG RAILWAY_BUILD_ID=refactor
 ENV RAILWAY_BUILD_ID=${RAILWAY_BUILD_ID}
 
 WORKDIR /app
@@ -16,18 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install workers runtime dependencies (arq, redis, pydantic, langchain, etc.)
-COPY apps/workers/pyproject.toml ./pyproject.toml
-RUN pip install --upgrade pip && pip install -e .
+COPY packages/shared-core/pyproject.toml ./packages/shared-core/pyproject.toml
+RUN pip install --upgrade pip && pip install packages/shared-core
 
-# Layer 1: Workers' own code (provides /app/app/worker.py and /app/app/__init__.py)
+COPY packages/shared-ai/pyproject.toml ./packages/shared-ai/pyproject.toml
+RUN pip install packages/shared-ai
+
+COPY packages/discovery/pyproject.toml ./packages/discovery/pyproject.toml
+RUN pip install packages/discovery
+
+COPY apps/workers/pyproject.toml ./apps/workers/pyproject.toml
+RUN pip install apps/workers
+
 COPY apps/workers/app /app/app
-
-# Layer 2: API modules overlay onto /app/app/
-# Docker COPY does NOT delete files only present in destination, so
-# /app/app/worker.py (from layer 1) is preserved even though apps/api/app/ has no worker.py
-# apps/api/app/ has no worker.py (verified), so COPY cannot overwrite it
-# Result: single unified /app/app/ tree, no namespace collisions
-COPY apps/api/app /app/app
 
 CMD ["arq", "app.worker.WorkerSettings"]

@@ -17,14 +17,14 @@ from arq import cron
 from arq.connections import RedisSettings
 from sqlalchemy import select, update
 
-from app.core.config import settings
-from app.core.db import db_session
-from app.core.supabase_rest import supabase_rest
-from app.discovery.brief_parser import brief_parser_agent
-from app.discovery.query_builder import query_builder
-from app.discovery.result_ranker import result_ranker
-from app.discovery.schemas import BriefStructured, CandidateMetrics, Platform
-from app.discovery.tools import (
+from shared_core import settings
+from shared_core import db_session
+from shared_core import supabase_rest
+from discovery import brief_parser_agent
+from discovery import query_builder
+from discovery import result_ranker
+from discovery import BriefStructured, CandidateMetrics, Platform
+from discovery.tools import (
     apify_client,
     meta_client,
     metricool_client,
@@ -490,7 +490,7 @@ async def embed_document_task(ctx, document_id: str) -> dict:
     if not doc:
         return {"error": "Document not found"}
 
-    from app.ai.embeddings import embed_texts
+    from shared_ai import embed_texts
     from app.ai.indexer import index_document_chunks
 
     text = doc.get("content", "")

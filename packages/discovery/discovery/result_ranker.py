@@ -1,4 +1,4 @@
-"""ResultRanker — scoring y matemáticas para candidatos de discovery."""
+"""ResultRanker — scoring and math for discovery candidates."""
 
 from discovery.schemas import (
     AudienceGender,
@@ -47,15 +47,12 @@ NICHE_KEYWORDS = {
 
 
 class ResultRanker:
-    """Puntúa candidatos con un match_score de 0-100."""
-
     def rank(
         self,
         candidate: CandidateMetrics,
         brief: BriefStructured,
         brand_historical_er: float | None = None,
     ) -> MatchScoreResult:
-        """Calcula el match_score para un candidato."""
         niche_score = self._niche_relevance(candidate, brief)
         geo_score = self._geo_relevance(candidate, brief)
         audience_score = self._audience_relevance(candidate, brief)
@@ -89,7 +86,6 @@ class ResultRanker:
         )
 
     def _niche_relevance(self, candidate: CandidateMetrics, brief: BriefStructured) -> float:
-        """Calcula qué tan relevante es el nicho del candidato para el brief."""
         if not candidate.audience_interests and not candidate.bio:
             return 0.5
 
@@ -113,7 +109,6 @@ class ResultRanker:
         return min(niche_matches / len(brief.niches), 1.0)
 
     def _geo_relevance(self, candidate: CandidateMetrics, brief: BriefStructured) -> float:
-        """Calcula relevancia geográfica."""
         if not brief.audience_countries:
             return 1.0
 
@@ -141,7 +136,6 @@ class ResultRanker:
     def _audience_relevance(
         self, candidate: CandidateMetrics, brief: BriefStructured
     ) -> float:
-        """Calcula relevancia de la audiencia."""
         score = 0.0
         factors = 0
 
@@ -167,7 +161,6 @@ class ResultRanker:
         return score / factors if factors > 0 else 0.5
 
     def _gender_match(self, candidate: CandidateMetrics, brief: BriefStructured) -> float:
-        """Evalúa match de género."""
         if brief.audience_gender == AudienceGender.ALL:
             return 1.0
 
@@ -181,7 +174,6 @@ class ResultRanker:
         return 0.5
 
     def _age_match(self, candidate: CandidateMetrics, brief: BriefStructured) -> float:
-        """Evalúa match de rango etario."""
         if not candidate.audience_age_buckets:
             return 0.5
 
@@ -199,7 +191,6 @@ class ResultRanker:
         return min(relevant_share, 1.0)
 
     def _parse_age_bucket(self, label: str) -> tuple[int, int]:
-        """Parsea un bucket etario (ej. '18-24' → (18, 24))."""
         if "-" in label:
             parts = label.split("-")
             return int(parts[0]), int(parts[1])
@@ -209,7 +200,6 @@ class ResultRanker:
         return 18, 65
 
     def _content_quality(self, candidate: CandidateMetrics) -> float:
-        """Evalúa calidad de contenido del candidato."""
         if not candidate.engagement_rate and not candidate.audience_quality:
             return 0.5
 
@@ -228,14 +218,12 @@ class ResultRanker:
         return er_score * 0.6 + quality_score * 0.4
 
     def _get_tier(self, followers: int) -> str | None:
-        """Infiere el tier basado en followers."""
         for tier, bench in TIER_BENCHMARKS.items():
             if bench["followers_min"] <= followers < bench["followers_max"]:
                 return tier
         return None
 
     def _estimate_cost(self, candidate: CandidateMetrics) -> float:
-        """Estima el costo por post del candidato en USD."""
         followers = candidate.followers or 0
         tier = self._get_tier(followers)
 
@@ -261,7 +249,6 @@ class ResultRanker:
         return round(base, 2)
 
     def _expected_reach(self, candidate: CandidateMetrics) -> int:
-        """Estima reach proyectado (followers × factor de penetración)."""
         followers = candidate.followers or 0
         platform_factor = {
             Platform.INSTAGRAM: 0.70,
@@ -275,7 +262,6 @@ class ResultRanker:
     def _expected_engagement(
         self, candidate: CandidateMetrics, expected_reach: int
     ) -> float:
-        """Estima engagement proyectado (reach × ER)."""
         er = candidate.engagement_rate or 0.03
         return expected_reach * er
 
@@ -285,7 +271,6 @@ class ResultRanker:
         brand_er: float | None,
         estimated_cost: float,
     ) -> float | None:
-        """Estima ROI: (engagement_value × engagement) / cost."""
         if not estimated_cost or estimated_cost == 0:
             return None
 
@@ -295,7 +280,6 @@ class ResultRanker:
     def _generate_rationale(
         self, candidate: CandidateMetrics, brief: BriefStructured, score: float
     ) -> str:
-        """Genera una justificación textual del match score."""
         parts = []
 
         if candidate.engagement_rate:

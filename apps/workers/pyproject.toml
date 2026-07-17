@@ -4,10 +4,13 @@ version = "0.1.0"
 description = "La Web Core - ARQ async workers"
 requires-python = ">=3.12"
 dependencies = [
+    # Shared packages (monorepo)
+    "shared-core @ file:///app/packages/shared-core",
+    "shared-ai @ file:///app/packages/shared-ai",
+    "discovery @ file:///app/packages/discovery",
     # ARQ worker framework
     "arq>=0.26.3",
     "redis>=5.2.0",
-    # Shared with API (worker uses app.discovery tools + app.core.* via runtime imports)
     "pydantic>=2.9.0",
     "pydantic-settings>=2.6.0",
     "sqlalchemy[asyncio]>=2.0.36",
@@ -17,7 +20,6 @@ dependencies = [
     "gotrue>=2.10.0",
     "httpx>=0.27.2",
     "structlog>=24.4.0",
-    # Discovery module needs LLM client (DeepSeek uses OpenAI SDK)
     "openai>=1.55.0",
     "anthropic>=0.39.0",
     "tiktoken>=0.8.0",

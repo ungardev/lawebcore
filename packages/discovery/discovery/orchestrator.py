@@ -1,8 +1,12 @@
-"""LangGraph Orchestrator — máquina de estados para discovery conversacional IA."""
+"""LangGraph Orchestrator — state machine for conversational discovery."""
 
 import asyncio
 from typing import Any
 from uuid import UUID
+
+import structlog
+
+logger = structlog.get_logger(__name__)
 
 from discovery.brief_parser import brief_parser_agent
 from discovery.query_builder import query_builder, SearchQuery
@@ -21,8 +25,6 @@ from discovery.tools import apify_client, meta_client, metricool_client, tiktok_
 
 
 class ConversationState:
-    """Estado en memoria de una conversación (guardado en DB por memory.py)."""
-
     def __init__(self):
         self.step: ConversationStep = ConversationStep.START
         self.brief_structured: BriefStructured | None = None
@@ -34,13 +36,10 @@ class ConversationState:
 
 
 class DiscoveryOrchestrator:
-    """Orquestador LangGraph-style para el flujo de discovery conversacional."""
-
     def __init__(self):
         self.state: dict[UUID, ConversationState] = {}
 
     async def create_conversation(self, conversation_id: UUID, initial_brief: str | None = None) -> dict[str, Any]:
-        """Crea una conversación nueva y procesa el brief inicial si se provee."""
         state = ConversationState()
         self.state[conversation_id] = state
 
@@ -59,7 +58,6 @@ class DiscoveryOrchestrator:
     async def process_message(
         self, conversation_id: UUID, message: MessageCreate
     ) -> dict[str, Any]:
-        """Procesa un mensaje del usuario dentro de una conversación existente."""
         if conversation_id not in self.state:
             raise ValueError(f"Conversation {conversation_id} not found")
 
@@ -71,7 +69,6 @@ class DiscoveryOrchestrator:
     async def _process_message(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Máquina de estados que procesa cada mensaje."""
         state = self.state[conversation_id]
 
         if state.step == ConversationStep.START:
@@ -97,7 +94,6 @@ class DiscoveryOrchestrator:
     async def _step_start(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Estado inicial: parsear el primer brief."""
         state = self.state[conversation_id]
 
         try:
@@ -132,7 +128,6 @@ class DiscoveryOrchestrator:
     async def _step_brief(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Brief confirmado → delegar ejecución al worker."""
         state = self.state[conversation_id]
 
         if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
@@ -182,7 +177,6 @@ class DiscoveryOrchestrator:
     async def _step_refining(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Refinando criterios del brief."""
         state = self.state[conversation_id]
 
         try:
@@ -213,7 +207,6 @@ class DiscoveryOrchestrator:
     async def _step_candidates_review(
         self, conversation_id: UUID, content: str
     ) -> dict[str, Any]:
-        """Usuario revisando candidatos."""
         state = self.state[conversation_id]
 
         if any(kw in content.lower() for kw in ["otra búsqueda", "nueva búsqueda", "reiniciar"]):
@@ -238,7 +231,6 @@ class DiscoveryOrchestrator:
     async def _execute_discovery(
         self, conversation_id: UUID
     ) -> dict[str, Any]:
-        """Ejecuta la búsqueda de candidatos en todas las plataformas."""
         state = self.state[conversation_id]
         brief = state.brief_structured
 
@@ -308,7 +300,6 @@ class DiscoveryOrchestrator:
     async def _execute_query(
         self, platform: Any, query: SearchQuery
     ) -> list[dict[str, Any]]:
-        """Ejecuta una query en la plataforma correspondiente."""
         if platform.value == "instagram":
             if query.query_type == "hashtag_search":
                 return await apify_client.search_instagram_by_hashtag(
@@ -336,7 +327,6 @@ class DiscoveryOrchestrator:
     def _raw_to_candidate_metrics(
         self, raw: dict[str, Any], platform: Any
     ) -> CandidateMetrics:
-        """Convierte el payload raw de cada fuente a CandidateMetrics."""
         from discovery.schemas import Platform
 
         p = Platform(platform.value) if isinstance(platform, Any) else platform
@@ -385,7 +375,6 @@ class DiscoveryOrchestrator:
         return CandidateMetrics(platform=p, handle="unknown", raw_payload=raw)
 
     def _brief_to_text(self, brief: BriefStructured | None) -> str:
-        """Convierte un BriefStructured a texto legible."""
         if not brief:
             return "Brief no disponible."
 
@@ -414,7 +403,6 @@ class DiscoveryOrchestrator:
         return "\n".join(parts)
 
     def _candidates_to_text(self, candidates: list[CandidateWithScore]) -> str:
-        """Convierte una lista de candidatos a texto legible."""
         lines = []
         for i, c in enumerate(candidates[:5], 1):
             m = c.metrics

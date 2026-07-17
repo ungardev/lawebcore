@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.ai.llm import get_llm
-from app.ai.embeddings import embed_text
+from shared_ai import embed_text
 
 logger = structlog.get_logger(__name__)
 

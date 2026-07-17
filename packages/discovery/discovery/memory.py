@@ -1,10 +1,10 @@
-"""Persistencia de estado conversacional para el módulo de Discovery."""
+"""Persistence of conversational state for the Discovery module."""
 
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from app.core.supabase_rest import supabase_rest
+from shared_core.supabase_rest import supabase_rest
 from discovery.schemas import ConversationStep, DiscoverySearchRequest
 
 
@@ -15,7 +15,6 @@ async def save_conversation(
     step: str = "start",
     state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Guarda o actualiza una conversación en la BD."""
     values = {
         "id": str(conversation_id),
         "user_id": str(user_id),
@@ -34,7 +33,6 @@ async def save_conversation(
 
 
 async def get_conversation(conversation_id: UUID) -> dict[str, Any] | None:
-    """Obtiene una conversación por ID."""
     return await supabase_rest.select_one(
         table="discovery_conversations",
         select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,status,started_at,last_message_at",
@@ -46,7 +44,6 @@ async def update_conversation(
     conversation_id: UUID,
     updates: dict[str, Any],
 ) -> None:
-    """Actualiza campos de una conversación."""
     await supabase_rest.update(
         table="discovery_conversations",
         filters=[f"id=eq.{conversation_id}"],
@@ -64,7 +61,6 @@ async def save_message(
     cost_usd: float | None = None,
     latency_ms: int | None = None,
 ) -> dict[str, Any]:
-    """Guarda un mensaje en la conversación."""
     values = {
         "conversation_id": str(conversation_id),
         "role": role,
@@ -87,7 +83,6 @@ async def launch_discovery_run(
     created_by: UUID,
     bu_id: UUID | None = None,
 ) -> dict[str, Any]:
-    """Crea un discovery_run en la BD y lo encola en el worker ARQ."""
     run_values = {
         "brief_text": f"Search: {brief.product_name or brief.industry or 'Influencers'}",
         "brief_parsed": brief.model_dump(),
@@ -118,10 +113,6 @@ async def launch_discovery_run(
 
     run_record = run[0] if isinstance(run, list) else run
     run_id = run_record["id"]
-
-    # Nota: el enqueue al worker ARQ se hace en apps/api/app/api/v1/discovery.py
-    # via _run_discovery_job() despues de create_discovery_run(). Esta funcion
-    # solo persiste estado conversacional.
 
     return {
         "id": UUID(run_id),

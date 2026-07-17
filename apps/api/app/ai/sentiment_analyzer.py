@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from app.ai.deepseek_client import deepseek_client, LLMResponse
+from shared_ai import deepseek_client, LLMResponse
 
 logger = structlog.get_logger(__name__)
 

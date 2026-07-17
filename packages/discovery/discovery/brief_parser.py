@@ -1,11 +1,11 @@
-"""BriefParser agent — interpreta texto libre y lo convierte en BriefStructured."""
+"""BriefParser agent — interprets free text into BriefStructured."""
 
 import re
 from typing import Any
 
 import structlog
 
-from app.ai.deepseek_client import deepseek_client
+from shared_ai.deepseek_client import deepseek_client
 from discovery.schemas import BriefStructured
 
 logger = structlog.get_logger(__name__)
@@ -85,10 +85,7 @@ _COUNTRY_NAME_TO_ISO = {
 
 
 class BriefParserAgent:
-    """Agent que parsea texto libre de brief a estructura."""
-
     async def parse(self, text: str) -> BriefStructured:
-        """Parsea el texto libre del usuario y retorna un BriefStructured."""
         user_prompt = BRIEF_PARSER_USER_TEMPLATE.format(brief_text=text)
 
         response = await deepseek_client.complete(
@@ -107,14 +104,12 @@ class BriefParserAgent:
         return self._parse_response(response.content, text)
 
     def _extract_json(self, raw: str) -> str | None:
-        """Extrae el bloque JSON del response de DeepSeek."""
         match = re.search(r'\{.*\}', raw, re.DOTALL)
         if match:
             return match.group()
         return None
 
     def _coerce_to_int(self, value: Any, default: int) -> int:
-        """Convierte un valor a int, con fallback robusto."""
         if value is None:
             return default
         if isinstance(value, int):
@@ -131,7 +126,6 @@ class BriefParserAgent:
             return default
 
     def _normalize_enum_value(self, value: str, allowed_values: set[str], default: str) -> str:
-        """Normaliza un valor de enum a lowercase y valida contra allowed."""
         if not value:
             return default
         normalized = str(value).strip().lower()
@@ -146,7 +140,6 @@ class BriefParserAgent:
         return default
 
     def _sanitize_brief_data(self, data: dict[str, Any]) -> dict[str, Any]:
-        """Sanea los datos crudos del LLM antes de crear BriefStructured."""
         sanitized = dict(data)
 
         for age_field in ["audience_age_min", "audience_age_max"]:
@@ -203,7 +196,6 @@ class BriefParserAgent:
         return sanitized
 
     def _parse_response(self, raw: str, original_text: str) -> BriefStructured:
-        """Parsea el JSON crudo del LLM a BriefStructured."""
         import json
 
         try:

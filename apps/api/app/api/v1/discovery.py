@@ -8,8 +8,8 @@ from pydantic import BaseModel
 
 from app.core.security import CurrentUserDep
 from app.core.supabase_rest import supabase_rest
-from app.discovery.orchestrator import orchestrator
-from app.discovery.schemas import (
+from discovery.orchestrator import orchestrator
+from discovery.schemas import (
     BriefStructured,
     ConversationResponse,
     ConversationStep,
@@ -39,7 +39,7 @@ class InlineAssistantMessage(BaseModel):
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUserDep):
     """Crea una conversación nueva de discovery."""
-    from app.discovery.memory import conversation_memory
+    from discovery.memory import conversation_memory
 
     conversation_id = uuidlib.uuid4()
     result = await orchestrator.create_conversation(
@@ -90,7 +90,7 @@ async def list_conversations(
 @router.get("/conversations/{conversation_id}")
 async def get_conversation(conversation_id: UUID):
     """Obtiene detalle de una conversación con sus mensajes."""
-    from app.discovery.memory import conversation_memory
+    from discovery.memory import conversation_memory
 
     conv = await conversation_memory.get_conversation(conversation_id)
     if not conv:
@@ -114,7 +114,7 @@ async def send_message(
     user: CurrentUserDep,
 ):
     """Procesa un mensaje del usuario y retorna la respuesta IA."""
-    from app.discovery.memory import conversation_memory
+    from discovery.memory import conversation_memory
 
     user_message_record = await supabase_rest.insert(
         table="discovery_messages",
@@ -206,7 +206,7 @@ async def send_message(
 @router.post("/search", response_model=DiscoveryRunResponse)
 async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDep):
     """Crea y ejecuta un discovery_run sin chat conversacional."""
-    from app.discovery.memory import conversation_memory
+    from discovery.memory import conversation_memory
     from app.core.worker_enqueuer import enqueue_discovery_run
 
     run = await conversation_memory.launch_discovery_run(

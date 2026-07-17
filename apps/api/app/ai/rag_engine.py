@@ -13,8 +13,8 @@ from typing import Any
 
 import structlog
 
-from app.ai.deepseek_client import deepseek_client
-from app.ai.embeddings import embed_text
+from shared_ai import deepseek_client
+from shared_ai import embed_text
 
 logger = structlog.get_logger(__name__)
 

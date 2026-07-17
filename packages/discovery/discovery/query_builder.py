@@ -1,4 +1,4 @@
-"""QueryBuilder — transforma BriefStructured en queries por plataforma."""
+"""QueryBuilder — transforms BriefStructured into platform-specific queries."""
 
 from typing import Any
 
@@ -6,8 +6,6 @@ from discovery.schemas import BriefStructured, Platform
 
 
 class SearchQuery:
-    """Query individual para una plataforma específica."""
-
     def __init__(
         self,
         platform: Platform,
@@ -23,10 +21,7 @@ class SearchQuery:
 
 
 class QueryBuilder:
-    """Construye queries específicas por plataforma a partir de un BriefStructured."""
-
     def build(self, brief: BriefStructured) -> dict[Platform, list[SearchQuery]]:
-        """Build queries para todas las plataformas especificadas en el brief."""
         queries: dict[Platform, list[SearchQuery]] = {}
 
         for platform in brief.platforms:
@@ -42,7 +37,6 @@ class QueryBuilder:
         return queries
 
     def _build_instagram_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        """Construye queries para Instagram."""
         queries = []
 
         hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
@@ -64,7 +58,6 @@ class QueryBuilder:
         return queries
 
     def _build_tiktok_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        """Construye queries para TikTok."""
         queries = []
 
         keywords = [n.replace(" ", "") for n in brief.niches] + [
@@ -99,7 +92,6 @@ class QueryBuilder:
         return queries
 
     def _build_youtube_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        """Construye queries para YouTube."""
         queries = []
 
         for niche in brief.niches[:5]:
@@ -118,7 +110,6 @@ class QueryBuilder:
         return queries
 
     def _build_x_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        """Construye queries para X/Twitter."""
         queries = []
 
         for niche in brief.niches[:5]:
@@ -156,7 +147,6 @@ class QueryBuilder:
     }
 
     def _niches_to_hashtags(self, niches: list[str], countries: list[str]) -> list[str]:
-        """Convierte niches a hashtags de Instagram/TikTok."""
         hashtags = []
         for niche in niches:
             clean = niche.lower().replace(" ", "").replace("-", "")
@@ -167,7 +157,6 @@ class QueryBuilder:
         return hashtags[:15]
 
     def _tier_to_min_followers(self, brief: BriefStructured) -> int:
-        """Infiere follower mínimo basado en el presupuesto."""
         budget = brief.budget_usd or 0
         if budget >= 10000:
             return 100_000
@@ -180,7 +169,6 @@ class QueryBuilder:
         return 500
 
     def _tier_to_max_followers(self, brief: BriefStructured) -> int:
-        """Infiere follower máximo basado en el presupuesto."""
         budget = brief.budget_usd or 0
         if budget <= 500:
             return 50_000

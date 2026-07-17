@@ -1,5 +1,5 @@
 """P.I.A.R. Discovery Module — Orchestrator y agentes LangGraph."""
 
-from app.discovery.orchestrator import DiscoveryOrchestrator
+from discovery.orchestrator import DiscoveryOrchestrator
 
 __all__ = ["DiscoveryOrchestrator"]
