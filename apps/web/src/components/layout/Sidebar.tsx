@@ -29,19 +29,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     <aside
       className={cn(
         'h-full border-r bg-card flex flex-col transition-all duration-200',
-        collapsed ? 'md:w-16' : 'md:w-64',
-        'w-64'
+        collapsed ? 'md:w-16' : 'md:w-56',
+        'w-56'
       )}
     >
-      <div className={cn('border-b h-16 flex items-center justify-between', collapsed ? 'md:px-3 px-6' : 'px-6')}>
+      <div className={cn('border-b h-14 flex items-center justify-between', collapsed ? 'md:px-3 px-4' : 'px-4')}>
         <div className="flex items-center gap-3 overflow-hidden">
           {collapsed ? (
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
               <span className="text-lg leading-none">W</span>
             </div>
           ) : (
-            <div className="h-10 flex items-center flex-shrink-0">
-              <img src="/logo-laweb.png" alt="La Web Figital Agency" className="h-9 w-auto object-contain" />
+            <div className="h-11 flex items-center flex-shrink-0">
+              <img src="/logo-laweb.png" alt="La Web Figital Agency" className="h-11 w-auto object-contain" />
             </div>
           )}
         </div>
