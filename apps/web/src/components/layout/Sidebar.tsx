@@ -7,7 +7,6 @@ import {
   Sparkles,
   Settings,
   X,
-  PawPrint,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -36,9 +35,15 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     >
       <div className={cn('border-b h-16 flex items-center justify-between', collapsed ? 'md:px-3 px-6' : 'px-6')}>
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
-            <PawPrint className="w-5 h-5" />
-          </div>
+          {collapsed ? (
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
+              <span className="text-lg leading-none">W</span>
+            </div>
+          ) : (
+            <div className="h-10 flex items-center flex-shrink-0">
+              <img src="/logo-laweb.png" alt="La Web Figital Agency" className="h-9 w-auto object-contain" />
+            </div>
+          )}
           <div className={cn('overflow-hidden', collapsed && 'md:hidden')}>
             <h1 className="font-bold text-foreground truncate">La Web</h1>
             <p className="text-xs text-muted-foreground truncate">AI Marketing OS</p>
@@ -78,11 +83,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
-
-      <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'md:p-2 md:text-center')}>
-        <p className={cn(collapsed && 'md:hidden')}>v1.0 — Purina Demo</p>
-        <p className={cn('hidden', collapsed && 'md:block')}>v1.0</p>
-      </div>
     </aside>
   );
 }

@@ -56,15 +56,9 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Bienvenido</h1>
-          <p className="text-sm md:text-base text-muted-foreground">La Web Core — AI Marketing OS de La Web Figital Agency</p>
-        </div>
-        <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-600 px-3 py-1.5 rounded-full text-xs font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          Sistema activo
-        </div>
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold">Bienvenido</h1>
+        <p className="text-sm md:text-base text-muted-foreground">La Web Core — AI Marketing OS de La Web Figital Agency</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
