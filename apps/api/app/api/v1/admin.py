@@ -742,58 +742,52 @@ async def seed_rag_knowledge(x_admin_token: str | None = Header(None)):
     if x_admin_token != settings.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
-    from shared_ai import embed_text
     from shared_core import supabase_rest
 
-    async def _embed_chunk(doc: dict, chunk_text: str, chunk_index: int) -> dict:
-        try:
-            embedding = await embed_text(chunk_text)
-        except Exception:
-            embedding = None
-
-        return {
-            "document_id": str(uuid.uuid4()),
-            "title": doc["title"],
-            "document_type": doc["document_type"],
-            "content": chunk_text,
-            "metadata": doc.get("metadata", {}),
-            "chunk_index": chunk_index,
-            "embedding": str(embedding) if embedding else None,
-        }
-
-    chunks = []
-    for doc in RAG_DOCUMENTS:
-        content = doc["content"]
-        max_chunk = 400
-        words = content.split()
-        chunk_texts = []
-        current_chunk = []
-        current_len = 0
-
+    def _chunk_text(text: str, max_len: int = 400) -> list[str]:
+        words = text.split()
+        chunks, current, current_len = [], [], 0
         for word in words:
-            if current_len + len(word) + 1 <= max_chunk:
-                current_chunk.append(word)
+            if current_len + len(word) + 1 <= max_len:
+                current.append(word)
                 current_len += len(word) + 1
             else:
-                if current_chunk:
-                    chunk_texts.append(" ".join(current_chunk))
-                current_chunk = [word]
-                current_len = len(word)
-
-        if current_chunk:
-            chunk_texts.append(" ".join(current_chunk))
-
-        for i, chunk_text in enumerate(chunk_texts):
-            chunks.append((doc, chunk_text, i))
+                if current:
+                    chunks.append(" ".join(current))
+                current, current_len = [word], len(word)
+        if current:
+            chunks.append(" ".join(current))
+        return chunks
 
     results = []
-    for doc, chunk_text, idx in chunks:
-        chunk = await _embed_chunk(doc, chunk_text, idx)
+    for doc in RAG_DOCUMENTS:
+        doc_id = str(uuid.uuid4())
         try:
-            await supabase_rest.insert(table="document_chunks", values=chunk)
-            results.append({"title": doc["title"], "chunk": idx, "status": "ok"})
+            await supabase_rest.insert(table="documents", values={
+                "id": doc_id,
+                "title": doc["title"],
+                "doc_type": doc.get("document_type", "other"),
+                "source": "seed",
+                "status": "indexed",
+                "metadata": doc.get("metadata", {}),
+            })
         except Exception as e:
-            results.append({"title": doc["title"], "chunk": idx, "status": "error", "error": str(e)})
+            results.append({"title": doc["title"], "status": "error", "error": f"doc: {e}"})
+            continue
+
+        chunks_text = _chunk_text(doc["content"])
+        for idx, chunk_text in enumerate(chunks_text):
+            try:
+                await supabase_rest.insert(table="document_chunks", values={
+                    "document_id": doc_id,
+                    "content": chunk_text,
+                    "metadata": doc.get("metadata", {}),
+                    "chunk_index": idx,
+                    "embedding": None,
+                })
+                results.append({"title": doc["title"], "chunk": idx, "status": "ok"})
+            except Exception as e:
+                results.append({"title": doc["title"], "chunk": idx, "status": "error", "error": str(e)})
 
     ok_count = sum(1 for r in results if r["status"] == "ok")
     return {
