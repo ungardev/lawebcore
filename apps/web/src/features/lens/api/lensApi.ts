@@ -107,4 +107,22 @@ export const lensApi = {
     const { data } = await api.get<DiscoveryMetrics>('/lens/discovery/metrics');
     return data;
   },
+
+  enrichInfluencers: async (params?: { influencer_ids?: string[]; all_active?: boolean }) => {
+    const { data } = await api.post<{
+      total: number;
+      enriched: number;
+      failed: number;
+      cost_usd: number;
+      results: Array<{
+        influencer_id: string;
+        handle: string;
+        success: boolean;
+        followers: number | null;
+        engagement_rate: number | null;
+        error: string | null;
+      }>;
+    }>('/lens/discovery/enrich-influencers', params ?? {});
+    return data;
+  },
 };
