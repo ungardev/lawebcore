@@ -1,9 +1,12 @@
 """Admin router — TEMPORARY: seed data for Nestlé Venezuela demo via Supabase REST API."""
 
-import uuid, random, asyncio
+import uuid, random, asyncio, json
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
+
+from shared_core import supabase_rest
+from shared_core.config import settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 SEED_TOKEN = "nestle-seed-token-2026"
@@ -13,6 +16,28 @@ class SeedStatusResponse(BaseModel):
     success: bool
     message: str
     details: dict | None = None
+
+
+class EnrichRequest(BaseModel):
+    influencer_ids: list[str] | None = None
+    all_active: bool = False
+
+
+class EnrichResult(BaseModel):
+    influencer_id: str
+    handle: str
+    success: bool
+    followers: int | None = None
+    engagement_rate: float | None = None
+    error: str | None = None
+
+
+class EnrichResponse(BaseModel):
+    total: int
+    enriched: int
+    failed: int
+    cost_usd: float
+    results: list[EnrichResult]
 
 
 async def _upsert_batch(table: str, rows: list[dict], on_conflict_col: str | None = None) -> int:
@@ -326,3 +351,456 @@ async def seed_all(x_seed_token: str = Header(None)):
     success = len(errors) == 0
     msg = f"Seeded {total} influencers" + (f"; errors: {'; '.join(errors)}" if errors else "")
     return SeedStatusResponse(success=success, message=msg, details=results)
+
+
+# ================================================================
+# 4. ENRICH INFLUENCERS VIA APIFY
+# ================================================================
+@router.post("/enrich-influencers", response_model=EnrichResponse)
+async def enrich_influencers(
+    body: EnrichRequest | None = None,
+    x_admin_token: str | None = Header(None),
+):
+    """Enriquece perfiles de influencers con datos reales de Instagram via Apify."""
+    if x_admin_token != settings.ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    from discovery.tools import apify_client as apify_client_module
+
+    body = body or EnrichRequest()
+    filters = ["status=eq.active"]
+    if body.influencer_ids:
+        id_list = ",".join(f'"{i}"' for i in body.influencer_ids)
+        filters.append(f"id=in.({id_list})")
+
+    influencers = await supabase_rest.select(
+        table="influencers",
+        select="id,full_name,primary_handle,platform,followers,engagement_rate",
+        filters=filters,
+        limit=100,
+    )
+
+    if not influencers:
+        return EnrichResponse(total=0, enriched=0, failed=0, cost_usd=0.0, results=[])
+
+    handles = [
+        {"id": str(inf["id"]), "handle": str(inf.get("primary_handle", "")).lstrip("@")}
+        for inf in influencers
+        if inf.get("primary_handle")
+    ]
+
+    if not handles:
+        return EnrichResponse(total=len(influencers), enriched=0, failed=len(influencers), cost_usd=0.0, results=[])
+
+    enriched_map: dict[str, dict] = {}
+    results_list: list[EnrichResult] = []
+    enriched_count = 0
+    failed_count = 0
+    apify_cost = 0.0
+
+    batch_size = 5
+    for i in range(0, len(handles), batch_size):
+        batch = handles[i:i + batch_size]
+        usernames = [h["handle"] for h in batch]
+
+        try:
+            profiles = await apify_client_module.apify_client.search_instagram_profiles_batch(usernames)
+            for profile in profiles:
+                username = profile.get("username", "")
+                matched = next((h for h in batch if h["handle"].lower() == username.lower()), None)
+                if not matched:
+                    matched = next((h for h in handles if h["handle"].lower() == username.lower()), None)
+                if matched:
+                    followers = profile.get("followersCount") or profile.get("followers_count")
+                    following = profile.get("followsCount") or profile.get("follows_count")
+                    posts_count = profile.get("postsCount") or profile.get("posts_count")
+                    avg_likes = profile.get("avgLikes") or profile.get("avg_likes")
+                    avg_comments = profile.get("avgComments") or profile.get("avg_comments")
+                    er = profile.get("avgLikesPercent") or profile.get("avg_likes_percent")
+
+                    if followers and followers > 0 and er is None:
+                        if avg_likes and avg_comments:
+                            er = (avg_likes + avg_comments) / followers
+                        elif avg_likes:
+                            er = avg_likes / followers
+
+                    enriched_map[matched["id"]] = {
+                        "followers": followers,
+                        "following": following,
+                        "posts_count": posts_count,
+                        "avg_likes": avg_likes,
+                        "avg_comments": avg_comments,
+                        "engagement_rate": round(er, 6) if er is not None else None,
+                        "audience_credibility": (
+                            50 + (20 if profile.get("isVerified") else 0) + (15 if profile.get("isBusinessAccount") else 0)
+                        ),
+                        "profile_pic_url": profile.get("profilePicUrl") or profile.get("profile_pic_url"),
+                        "bio": profile.get("biography") or profile.get("bio", ""),
+                        "platform": "instagram",
+                    }
+                    apify_cost += 0.0002
+        except Exception as e:
+            for h in batch:
+                results_list.append(EnrichResult(
+                    influencer_id=h["id"], handle=h["handle"],
+                    success=False, error=str(e),
+                ))
+                failed_count += 1
+
+    for inf in influencers:
+        inf_id = str(inf["id"])
+        if inf_id in enriched_map:
+            updates = enriched_map[inf_id]
+            try:
+                await supabase_rest.update(
+                    table="influencers",
+                    filters=[f"id=eq.{inf_id}"],
+                    values=updates,
+                )
+                results_list.append(EnrichResult(
+                    influencer_id=inf_id,
+                    handle=str(inf.get("primary_handle", "")),
+                    success=True,
+                    followers=updates.get("followers"),
+                    engagement_rate=updates.get("engagement_rate"),
+                ))
+                enriched_count += 1
+            except Exception as e:
+                results_list.append(EnrichResult(
+                    influencer_id=inf_id, handle=str(inf.get("primary_handle", "")),
+                    success=False, error=str(e),
+                ))
+                failed_count += 1
+        else:
+            if not any(r.influencer_id == inf_id for r in results_list):
+                results_list.append(EnrichResult(
+                    influencer_id=inf_id, handle=str(inf.get("primary_handle", "")),
+                    success=False, error="No se encontraron datos en Apify",
+                ))
+                failed_count += 1
+
+    try:
+        await supabase_rest.insert("api_costs", {
+            "provider": "apify",
+            "cost_usd": apify_cost,
+            "request_count": enriched_count,
+            "description": f"enrich_influencers: {enriched_count} profiles",
+        })
+    except Exception:
+        pass
+
+    return EnrichResponse(
+        total=len(influencers),
+        enriched=enriched_count,
+        failed=failed_count,
+        cost_usd=round(apify_cost, 6),
+        results=results_list,
+    )
+
+
+# ================================================================
+# 5. PRELOAD DEMO CONVERSATIONS FOR PITCH
+# ================================================================
+@router.post("/preload-demo")
+async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
+    """Pre-carga 3 conversaciones demo para el pitch de La Web Figital Agency."""
+    if x_admin_token != settings.ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    from discovery.orchestrator import orchestrator as discovery_orchestrator
+
+    demo_conversations = [
+        {
+            "title": "Brief Purina Dog Chow — Amor Perruno",
+            "accumulated_brief": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow, presupuesto $15000 USD",
+            "step": "brief",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow, presupuesto $15000 USD",
+                    "reasoning": "El brief especifica: nicho=mascotas/perros, pais=VE, presupuesto=$15K USD, marca=Nestle Venezuela. Voy a parsear estos parametros y buscar en la base de datos de influencers registrados.",
+                    "tool_calls": [
+                        {"id": "tc1", "name": "search_influencers", "arguments": json.dumps({"niche": "mascotas", "country": "VE", "budget_max": 15000})}
+                    ],
+                    "tool_results": [
+                        {"tool_call_id": "tc1", "success": True, "output": {"count": 49, "filters_applied": {"country": "VE", "tiers": ["NANO", "MICRO", "MID"]}}}
+                    ],
+                    "content": "Entendido el brief. Estoy buscando creadores en Venezuela especializados en mascotas y perros para la campaña #DogChowVenezuela. Déjame revisar nuestra base de datos...\n\nEncontré 49 creadores en el país. Voy a analizar los más relevantes por engagement y afinidad con el nicho de mascotas.",
+                    "cost_usd": 0.0012,
+                    "latency_ms": 1847,
+                },
+                {
+                    "role": "assistant",
+                    "content": "Aquí están los 10 creadores con mayor afinidad para Purina Dog Chow:\n\n1. @fernandoaguirre — Mid Tier · 67K seguidores · 5.8% ER · score 94/100\n2. @carolinameza — Mid Tier · 38K seguidores · 6.1% ER · score 91/100\n3. @marianapernia — Mid Tier · 38K seguidores · 7.2% ER · score 89/100\n4. @gabrielabriceno — Mid Tier · 45K seguidores · 5.4% ER · score 87/100\n5. @juanmendoza — Mid Tier · 150K seguidores · 4.3% ER · score 85/100\n\n¿Quieres que profundice en alguno o que proyecta los 3 escenarios de alcance?",
+                    "cost_usd": 0.0008,
+                    "latency_ms": 2341,
+                },
+            ],
+        },
+        {
+            "title": "Analisis Campaña Activa — #DogChowVenezuela",
+            "accumulated_brief": "Analiza el rendimiento de la campaña Purina Dog Chow en Instagram Venezuela",
+            "step": "candidates_review",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Dame un resumen del rendimiento de la campaña Purina Dog Chow hasta ahora",
+                    "reasoning": "El usuario pide analisis de la campaña activa. Tengo que consultar las metricas de la campana #DogChowVenezuela, agregando publicaciones, engagement y sentimiento.",
+                    "tool_calls": [
+                        {"id": "tc2", "name": "get_campaign_metrics", "arguments": json.dumps({"campaign_id": "f0000000-0000-0000-0000-000000000003"})}
+                    ],
+                    "tool_results": [
+                        {"tool_call_id": "tc2", "success": True, "output": {"publications": 47, "avg_er": 0.054, "sentiment_positive": 82}}
+                    ],
+                    "content": "El brief es claro: campaña de awareness para Purina Dog Chow en el mercado venezolano. El tono emocional de 'Amor Perruno' conecta bien con dueños de perros en VE. Voy a priorizar Nano y Micro influencers para autenticidad.",
+                    "cost_usd": 0.0006,
+                    "latency_ms": 1203,
+                },
+            ],
+        },
+        {
+            "title": "Proyeccion Q4 — Nueva Campana",
+            "accumulated_brief": "Proyecta escenarios para nueva campaña de cafe en Colombia",
+            "step": "brief",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Cuéntame qué pasaría si lanzamos una campaña de café en Colombia con $8000 USD",
+                    "reasoning": "Solicitud de proyeccion. El usuario quiere ver 3 escenarios (conservador, moderado, optimista) con diferentes configuraciones de influencers para una campana de cafe en Colombia con $8K USD.",
+                    "tool_calls": [
+                        {"id": "tc3", "name": "project_scenarios", "arguments": json.dumps({"country": "CO", "budget_usd": 8000, "niche": "cafe"})}
+                    ],
+                    "tool_results": [
+                        {"tool_call_id": "tc3", "success": True, "output": {"conservador": {"alcance": 45000, "costo": 3200}, "moderado": {"alcance": 120000, "costo": 7200}, "optimista": {"alcance": 310000, "costo": 8000}}}
+                    ],
+                    "content": "Interesante. Una campaña de café en Colombia con $8K USD tiene buen potencial. Aquí están los 3 escenarios:\n\nESCENARIO CONSERVADOR: 3 Nano influencers (5-10K) · Alcance estimado: 45K · Costo: $3,200\nESCENARIO MODERADO: 6 Micro influencers (10-50K) + 1 Nano · Alcance: 120K · Costo: $7,200\nESCENARIO OPTIMISTA: 3 Micro + 2 Mid Tier · Alcance: 310K · Costo: $8,000\n\nMi recomendación: el escenario MODERADO. Por $7,200 obtienes 6x más alcance que el conservador con solo $4K extra.",
+                    "cost_usd": 0.0009,
+                    "latency_ms": 3012,
+                },
+            ],
+        },
+    ]
+
+    created = 0
+    for demo in demo_conversations:
+        conv_id = uuid.uuid4()
+        messages = demo.pop("messages", [])
+        step = demo.pop("step", "brief")
+
+        conv_record = await supabase_rest.insert(
+            table="discovery_conversations",
+            values={
+                "id": str(conv_id),
+                "user_id": "00000000-0000-0000-0000-000000000000",
+                "bu_id": "00000000-0000-0000-0000-000000000001",
+                "current_step": step,
+                "accumulated_brief": demo.get("accumulated_brief", ""),
+                "message_count": len(messages),
+                "status": "active",
+                "started_at": datetime.utcnow().isoformat(),
+                "last_message_at": datetime.utcnow().isoformat(),
+            },
+        )
+
+        for msg in messages:
+            await supabase_rest.insert(
+                table="discovery_messages",
+                values={
+                    "id": str(uuid.uuid4()),
+                    "conversation_id": str(conv_id),
+                    "role": msg["role"],
+                    "content": msg["content"],
+                    "reasoning": msg.get("reasoning"),
+                    "tool_calls": json.dumps(msg.get("tool_calls")) if msg.get("tool_calls") else None,
+                    "tool_results": json.dumps(msg.get("tool_results")) if msg.get("tool_results") else None,
+                    "cost_usd": msg.get("cost_usd", 0),
+                    "latency_ms": msg.get("latency_ms", 0),
+                    "created_at": datetime.utcnow().isoformat(),
+                },
+            )
+        created += 1
+
+    return {"success": True, "message": f"{created} conversaciones demo creadas", "conversations": created}
+
+
+# ================================================================
+# 6. SEED RAG KNOWLEDGE BASE
+# ================================================================
+RAG_DOCUMENTS = [
+    {
+        "title": "Caso de Éxito — Campaña Purina Dog Chow VE 2025",
+        "document_type": "case_study",
+        "content": (
+            "La Web Figital Agency ejecutó en 2025 la campaña 'Amor Perruno' para Purina Dog Chow Venezuela. "
+            "La campaña duró 6 semanas, usó 15 influencers Nano y Micro en Caracas, Valencia y Maracaibo. "
+            "Budget total: $12,000 USD. "
+            "Resultado: 2.3M reach acumulado, ER promedio 6.8%, sentiment positivo 91%. "
+            "Top creator: @cuidador.peludo con 7.2% ER y 42K alcance por publicación. "
+            "La clave del éxito fue el tono emocional ('tu perro te ama') combinado con creators nano-micro "
+            "auténticos (no macro influencers). El engagement rate de los nano (<10K) fue 2x el de mid tier. "
+            "Recomendación para VE: priorizar Nano + Micro en ciudades principales para campañas de awareness."
+        ),
+        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "year": 2025, "campaign": "amor_perruno"},
+    },
+    {
+        "title": "Guía de Engagement Rate — Mercado Venezuela 2025",
+        "document_type": "market_research",
+        "content": (
+            "Benchmarks de engagement rate por tier en Venezuela (Instagram): "
+            "MACRO (>500K): 1.5-3.5% ER promedio. "
+            "MID (100K-500K): 2.5-5% ER promedio. "
+            "MICRO (10K-100K): 4-8% ER promedio. "
+            "NANO (<10K): 6-12% ER promedio. "
+            "El nicho de mascotas en VE tiene ER 1.5-2x más alto que lifestyle general. "
+            "Las cuentas de rescué animal tienen ER 2x el promedio del nicho mascotas. "
+            "Venezuela tiene 4.5M usuarios activos de Instagram (2025), 65% femenino, edad media 28 años. "
+            "Las marcas que usan tono emocional en VE tienen 40% más engagement que tono aspiracional."
+        ),
+        "metadata": {"brand": "general", "industry": "all", "country": "VE", "year": 2025, "document_type": "benchmark"},
+    },
+    {
+        "title": "Best Practices — Influencer Marketing VE 2026",
+        "document_type": "best_practices",
+        "content": (
+            "Reglas de oro para campañas de influencers en Venezuela: "
+            "1. Autenticidad > reach. Un nano creator con 8K seguidores y 8% ER vale más que un mid con 200K y 2% ER. "
+            "2. Tono local. Los venezolanos responden mejor a contenido en español neutro-latino, con referencias culturales locales. "
+            "3. Formato story/reel > post static. El algoritmo de IG favorece reels con caption corto (≤125 caracteres). "
+            "4. Timing: mejores horas posting VE son 7-9am y 7-10pm VET. "
+            "5. Filtro de calidad: excluir cuentas con >30% difference entre engagement rate publicado y engagement real. "
+            "6. Negociación: creators nano/micro en VE cobran $100-300 USD por reels, no por historias. "
+            "7. Brief estructurado: siempre incluir tono, key messages, hashtags obligatorios y prohibidos. "
+            "8. El 78% de las compras en VE son influenciadas por contenido de Instagram."
+        ),
+        "metadata": {"brand": "general", "industry": "influencer_marketing", "country": "VE", "year": 2026, "document_type": "best_practices"},
+    },
+    {
+        "title": "Purina Dog Chow — Perfil de Marca y Audiencias",
+        "document_type": "brand_brief",
+        "content": (
+            "Purina Dog Chow es una marca de alimento premium para perros de Nestlé Venezuela. "
+            "Target primario: dueños de perros en Venezuela, 22-45 años, ABC+ económico, zonas urbanas principales. "
+            "Tono de marca: emocional, cercano, familiar. No aspiracional. "
+            "Key messages: 'Amor Perruno' ( conexión emocional dueño-perro), salud canina, responsabilidad como dueño. "
+            "Hashtags oficiales: #DogChowVenezuela #AmorPerruno #PurinaVE. "
+            "Competidores: Pedigree VE, Whiskas (gatos), royalCanin (premium). "
+            "Pricing: $8-25 USD por bolsa de 15kg. "
+            "Campaña 2026: buscar influencers Nano/Micro especializados en mascotas, tono educativo+emocional. "
+            "NO usar influencers con contenido suggestivo, activismo político, o публичных controversies."
+        ),
+        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "year": 2026, "campaign": "dogchow_2026"},
+    },
+    {
+        "title": "Análisis Competitivo — Nestlé vs Colgate-Palmolive VE",
+        "document_type": "competitive_analysis",
+        "content": (
+            "Nestlé Venezuela vs Colgate-Palmolive VE en influencer marketing: "
+            "Nestlé invierte 60% más en influencers que Colgate en el mercado VE. "
+            "Nestlé prefiere creators Nano/Micro (70% del budget) vs Colgate que usa 50% mid/macro. "
+            "Colgate tiene partnerships con 3 cuentas mega (1M+ seguidores) con contratos anuales. "
+            "Nestlé gana en engagement rate: 6.2% ER promedio vs 3.1% de Colgate. "
+            "La diferencia se explica por la estrategia 'autenticidad primero' de Nestlé vs 'alcance primero' de Colgate. "
+            "Para Purina Dog Chow: continuar estrategia Nano/Micro, enfatizar comunidad y creators recurrentes."
+        ),
+        "metadata": {"brand": "Nestlé", "industry": "competitive", "country": "VE", "year": 2026},
+    },
+    {
+        "title": "Caso de Éxito — Dolce Gusto VE 2024",
+        "document_type": "case_study",
+        "content": (
+            "La campaña Dolce Gusto VE 2024 usó 8 influencers Mid/Macro en Caracas y Valencia. "
+            "Budget: $25,000 USD. Duration: 8 semanas. "
+            "Resultado: 5.1M reach, ER promedio 4.2%. "
+            "Drivers más efectivos: 'momentos de café' ( mañana, oficina, pausa) y 'recetas con café'. "
+            "Controversia: 2 influencers con conflictos de marca (trabajaron para Nespresso) generaron ruido negativo. "
+            "Lesson learned: incluir cláusulas de exclusividad en contratos para categorías relacionadas."
+        ),
+        "metadata": {"brand": "Dolce Gusto", "industry": "beverage", "country": "VE", "year": 2024, "campaign": "dg_2024"},
+    },
+    {
+        "title": "Tendencias Influencer Marketing Latam 2026",
+        "document_type": "trend_report",
+        "content": (
+            "Tendencias 2026 para influencer marketing en Latam: "
+            "1. AI-first strategy: usar herramientas de IA para scoring, briefing y tracking (como La Web Core). "
+            "2. Long-term partnerships > one-off posts: creators que usan productos consistentemente tienen 3x mejor ROAS. "
+            "3. Audio-social: penetration de podcasts y audio messaging en VE creció 40% en 2025. "
+            "4. 'Quiet luxury': tono aspiracional pero sutil, sin ostentación. "
+            "5. Micro-communities: marcas que construyen comunidades de <500 miembros tienen 5x más engagement. "
+            "6. Short-form video-first: 80% del budget debe ir a formato reel/short-video. "
+            "7. UGC amplification: repurposing contenido de usuarios reales en ads es 4x más barato que influencers puros. "
+            "8. Authenticity premium: creators que muestran procesos reales (no solo resultados) tienen 2x más saves."
+        ),
+        "metadata": {"brand": "general", "industry": "all", "country": "LATAM", "year": 2026, "document_type": "trends"},
+    },
+]
+
+
+@router.post("/seed-rag")
+async def seed_rag_knowledge(x_admin_token: str | None = Header(None)):
+    """Inserta documentos de conocimiento modelo en la base RAG para el demo."""
+    if x_admin_token != settings.ADMIN_TOKEN:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+
+    from shared_ai import embed_text
+    from shared_core import supabase_rest
+
+    async def _embed_chunk(doc: dict, chunk_text: str, chunk_index: int) -> dict:
+        try:
+            embedding = await embed_text(chunk_text)
+        except Exception:
+            embedding = None
+
+        return {
+            "document_id": str(uuid.uuid4()),
+            "title": doc["title"],
+            "document_type": doc["document_type"],
+            "content": chunk_text,
+            "metadata": doc.get("metadata", {}),
+            "chunk_index": chunk_index,
+            "embedding": str(embedding) if embedding else None,
+        }
+
+    chunks = []
+    for doc in RAG_DOCUMENTS:
+        content = doc["content"]
+        max_chunk = 400
+        words = content.split()
+        chunk_texts = []
+        current_chunk = []
+        current_len = 0
+
+        for word in words:
+            if current_len + len(word) + 1 <= max_chunk:
+                current_chunk.append(word)
+                current_len += len(word) + 1
+            else:
+                if current_chunk:
+                    chunk_texts.append(" ".join(current_chunk))
+                current_chunk = [word]
+                current_len = len(word)
+
+        if current_chunk:
+            chunk_texts.append(" ".join(current_chunk))
+
+        for i, chunk_text in enumerate(chunk_texts):
+            chunks.append((doc, chunk_text, i))
+
+    results = []
+    for doc, chunk_text, idx in chunks:
+        chunk = await _embed_chunk(doc, chunk_text, idx)
+        try:
+            await supabase_rest.insert(table="document_chunks", values=chunk)
+            results.append({"title": doc["title"], "chunk": idx, "status": "ok"})
+        except Exception as e:
+            results.append({"title": doc["title"], "chunk": idx, "status": "error", "error": str(e)})
+
+    ok_count = sum(1 for r in results if r["status"] == "ok")
+    return {
+        "success": True,
+        "message": f"Seeded {ok_count}/{len(results)} chunks from {len(RAG_DOCUMENTS)} documents",
+        "documents": len(RAG_DOCUMENTS),
+        "chunks": len(results),
+        "ok": ok_count,
+        "failed": len(results) - ok_count,
+    }

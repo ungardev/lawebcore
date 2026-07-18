@@ -125,4 +125,12 @@ export const lensApi = {
     }>('/lens/discovery/enrich-influencers', params ?? {});
     return data;
   },
+
+  preloadDemo: async () => {
+    const { data } = await api.post<{ success: boolean; message: string; conversations: number }>(
+      '/admin/preload-demo',
+      {},
+    );
+    return data;
+  },
 };

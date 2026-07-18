@@ -51,7 +51,7 @@ class DiscoveryOrchestrator:
         return {
             "conversation_id": str(conversation_id),
             "step": state.step.value,
-            "message": "Hola, soy tu asistente de discovery de influencers. Cuéntame sobre la campaña que quieres planificar. ¿Qué producto, marca o servicio quieres promover?",
+            "message": "Soy Influencer Lens, el cerebro estratégico de La Web Figital Agency. Llevo 12 años haciendo influencer marketing en Latam — sé exactamente qué creators funcionan en Venezuela y por qué.\n\nCuéntame sobre la campaña que quieres planificar. ¿Qué producto o marca? ¿Qué mercado? ¿Tienes ya un presupuesto en mente?",
             "candidates": [],
         }
 

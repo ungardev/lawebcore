@@ -43,6 +43,9 @@ NICHE_KEYWORDS = {
     "deportes": ["deportes", "sports", "futbol", "beisbol", "atletismo", "entrenamiento"],
     "arte": ["arte", "art", "pintura", "diseno", "creatividad", "ilustracion"],
     "gaming": ["gaming", "videojuegos", "games", "playstation", "xbox", "twitch"],
+    "mascotas": ["mascotas", "pets", "animals", "perro", "perros", "dog", "dogs", "cat", "cats", "gato", "gatos", "animal", "mascara", "cuidado animal", "veterinaria", "petcare", "petlover", "petlovers"],
+    "mascotas_viral": ["mascotasdivertidas", "viralpets", "mascotasvzla", "dogs_of_vzla", "perrosvzla", "mascotas_col", "petcol", "perros_colombia"],
+    "hogar": ["hogar", "home", "casa", "decoracion", "decoration", "interior", "interiorismo", "hogarvzla"],
 }
 
 
