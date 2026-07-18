@@ -398,13 +398,25 @@ async def enrich_influencers(
     failed_count = 0
     apify_cost = 0.0
 
-    batch_size = 5
+    import logging
+    logger = logging.getLogger(__name__)
+
+    batch_size = 3
     for i in range(0, len(handles), batch_size):
         batch = handles[i:i + batch_size]
         usernames = [h["handle"] for h in batch]
 
         try:
             profiles = await apify_client_module.apify_client.search_instagram_profiles_batch(usernames)
+            if profiles is None:
+                logger.warning(f"Apify returned None for batch {usernames}, skipping")
+                for h in batch:
+                    results_list.append(EnrichResult(
+                        influencer_id=h["id"], handle=h["handle"],
+                        success=False, error="Apify returned no data (profile not found or API unavailable)",
+                    ))
+                    failed_count += 1
+                continue
             for profile in profiles:
                 username = profile.get("username", "")
                 matched = next((h for h in batch if h["handle"].lower() == username.lower()), None)
@@ -507,7 +519,19 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
     if x_admin_token != settings.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
-    from discovery.orchestrator import orchestrator as discovery_orchestrator
+    import logging
+    logger = logging.getLogger(__name__)
+
+    user_id = "00000000-0000-0000-0000-000000000000"
+    bu_id = "00000000-0000-0000-0000-000000000001"
+
+    try:
+        users = await supabase_rest.select("users", select="id", limit=1)
+        if users and len(users) > 0:
+            user_id = str(users[0]["id"])
+            logger.info(f"Using real user_id from DB: {user_id}")
+    except Exception as e:
+        logger.warning(f"Could not fetch real user_id, using fallback: {e}")
 
     demo_conversations = [
         {
@@ -587,37 +611,45 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
         messages = demo.pop("messages", [])
         step = demo.pop("step", "brief")
 
-        conv_record = await supabase_rest.insert(
-            table="discovery_conversations",
-            values={
-                "id": str(conv_id),
-                "user_id": "00000000-0000-0000-0000-000000000000",
-                "bu_id": "00000000-0000-0000-0000-000000000001",
-                "current_step": step,
-                "accumulated_brief": demo.get("accumulated_brief", ""),
-                "message_count": len(messages),
-                "status": "active",
-                "started_at": datetime.utcnow().isoformat(),
-                "last_message_at": datetime.utcnow().isoformat(),
-            },
-        )
-
-        for msg in messages:
-            await supabase_rest.insert(
-                table="discovery_messages",
+        try:
+            conv_record = await supabase_rest.insert(
+                table="discovery_conversations",
                 values={
-                    "id": str(uuid.uuid4()),
-                    "conversation_id": str(conv_id),
-                    "role": msg["role"],
-                    "content": msg["content"],
-                    "reasoning": msg.get("reasoning"),
-                    "tool_calls": json.dumps(msg.get("tool_calls")) if msg.get("tool_calls") else None,
-                    "tool_results": json.dumps(msg.get("tool_results")) if msg.get("tool_results") else None,
-                    "cost_usd": msg.get("cost_usd", 0),
-                    "latency_ms": msg.get("latency_ms", 0),
-                    "created_at": datetime.utcnow().isoformat(),
+                    "id": str(conv_id),
+                    "user_id": user_id,
+                    "bu_id": bu_id,
+                    "current_step": step,
+                    "accumulated_brief": demo.get("accumulated_brief", ""),
+                    "message_count": len(messages),
+                    "status": "active",
+                    "started_at": datetime.utcnow().isoformat(),
+                    "last_message_at": datetime.utcnow().isoformat(),
                 },
             )
+        except Exception as e:
+            logger.exception(f"Failed to insert conversation {demo.get('title')}: {e}")
+            continue
+
+        for msg in messages:
+            try:
+                await supabase_rest.insert(
+                    table="discovery_messages",
+                    values={
+                        "id": str(uuid.uuid4()),
+                        "conversation_id": str(conv_id),
+                        "role": msg["role"],
+                        "content": msg["content"],
+                        "reasoning": msg.get("reasoning"),
+                        "tool_calls": json.dumps(msg.get("tool_calls")) if msg.get("tool_calls") else None,
+                        "tool_results": json.dumps(msg.get("tool_results")) if msg.get("tool_results") else None,
+                        "cost_usd": msg.get("cost_usd", 0),
+                        "latency_ms": msg.get("latency_ms", 0),
+                        "created_at": datetime.utcnow().isoformat(),
+                    },
+                )
+            except Exception as e:
+                logger.warning(f"Failed to insert message for conv {conv_id}: {e}")
+                continue
         created += 1
 
     return {"success": True, "message": f"{created} conversaciones demo creadas", "conversations": created}
