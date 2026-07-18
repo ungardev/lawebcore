@@ -9,13 +9,13 @@ import { CampaignsListPage } from '@/features/campaigns/CampaignsListPage';
 import { CampaignDetailPage } from '@/features/campaigns/CampaignDetailPage';
 import { CampaignKanbanPage } from '@/features/campaigns/CampaignKanbanPage';
 import { ClientsPage } from '@/features/clients/ClientsPage';
-import { BrandsPage } from '@/features/brands/BrandsPage';
-import { InfluencersPage } from '@/features/influencers/InfluencersPage';
-import { AIAssistantPage } from '@/features/ai-assistant/AIAssistantPage';
 import { LensChatPage } from '@/features/lens/pages/LensChatPage';
-import { LensSearchPage } from '@/features/lens/pages/LensSearchPage';
 import { LensRunsListPage } from '@/features/lens/pages/LensRunsListPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
+
+function Redirect({ to }: { to: string }) {
+  return <Navigate to={to} replace />;
+}
 
 export default function App() {
   return (
@@ -30,20 +30,21 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="home" element={<DashboardPage />} />
           <Route path="campaigns" element={<CampaignsListPage />} />
           <Route path="campaigns/kanban" element={<CampaignKanbanPage />} />
           <Route path="campaigns/:id" element={<CampaignDetailPage />} />
           <Route path="clients" element={<ClientsPage />} />
-          <Route path="brands" element={<BrandsPage />} />
-          <Route path="influencers" element={<InfluencersPage />} />
-          <Route path="ai" element={<AIAssistantPage />} />
           <Route path="influencer-lens" element={<LensChatPage />} />
           <Route path="influencer-lens/:id" element={<LensChatPage />} />
-          <Route path="influencer-lens/search" element={<LensSearchPage />} />
           <Route path="influencer-lens/runs" element={<LensRunsListPage />} />
           <Route path="settings" element={<SettingsPage />} />
+
+          <Route path="dashboard" element={<Redirect to="/home" />} />
+          <Route path="influencers" element={<Redirect to="/influencer-lens" />} />
+          <Route path="ai" element={<Redirect to="/influencer-lens" />} />
+          <Route path="brands" element={<Redirect to="/home" />} />
         </Route>
       </Routes>
     </AuthProvider>

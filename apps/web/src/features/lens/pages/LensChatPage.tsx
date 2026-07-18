@@ -7,6 +7,7 @@ import { CandidateCard } from '../components/CandidateCard';
 import { CandidateCardSkeleton } from '../components/CandidateCardSkeleton';
 import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { LensEmptyState } from '../components/LensEmptyState';
+import { ActionChips } from '../components/ActionChips';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,18 +15,16 @@ import { lensApi } from '../api/lensApi';
 import { cn } from '@/lib/utils';
 import type { DiscoveryConversation } from '../types/discovery';
 
-const WELCOME = `¡Hola! Soy el asistente de Influencer Lens de La Web Core, la plataforma de gestión de campañas de La Web Figital Agency.
+const WELCOME = `Soy el cerebro AI de La Web Core, el OS de marketing de influencers de La Web Figital Agency.
 
-Puedo ayudarte a descubrir influencers ideales para tus campañas de Purina Dog Chow y cualquier otra marca.
+Somos la agencia AI #1 en Venezuela. Puedo ayudarte a:
 
-Simplemente descríbeme tu producto o campaña en lenguaje natural. Por ejemplo:
+• Descubrir influencers ideales para cualquier marca o campaña
+• Analizar el rendimiento de tus campañas activas
+• Proyectar escenarios de alcance y engagement
+• Gestionar tu cartera de creadores
 
-• "Busco influencers de mascotas en Venezuela, presupuesto $2000 USD"
-• "Necesito micro-influencers de comida para perros en Colombia"
-• "Creatores de contenido sobre animales en México, público femenino 25-35"
-
-¿En qué puedo ayudarte?`;
-
+Solo describe lo que necesitas en lenguaje natural.`;
 export function LensChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -63,18 +62,19 @@ export function LensChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (text?: string) => {
+    const message = (text ?? input).trim();
+    if (!message || isLoading) return;
 
     if (!conversation) {
-      const conv = await startConversation(input);
+      const conv = await startConversation(message);
       navigate(`/influencer-lens/${conv.id}`);
       setInput('');
       return;
     }
 
-    setInput('');
-    await sendMessage(input);
+    if (!text) setInput('');
+    await sendMessage(message);
   };
 
   const handleNewConversation = async () => {
@@ -94,7 +94,7 @@ export function LensChatPage() {
             Influencer Lens
           </h1>
           <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
-            Descubre influencers ideales para tus campañas
+            El cerebro AI de La Web Figital Agency
           </p>
         </div>
         <Button onClick={handleNewConversation} size="sm" className="gap-1.5 flex-shrink-0">
@@ -226,17 +226,20 @@ export function LensChatPage() {
                 </div>
               )}
 
-              <div className="border-t p-3 md:p-4 flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                  placeholder="Describe tu producto o campaña..."
-                  disabled={isLoading}
-                />
-                <Button onClick={handleSend} disabled={isLoading || !input.trim()} className="flex-shrink-0">
-                  <Send className="w-4 h-4" />
-                </Button>
+              <div className="border-t p-3 md:p-4 flex flex-col gap-2">
+                <ActionChips onSend={(prompt) => handleSend(prompt)} disabled={isLoading} />
+                <div className="flex gap-2">
+                  <Input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="Describe tu producto o campaña..."
+                    disabled={isLoading}
+                  />
+                  <Button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="flex-shrink-0">
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </>
           )}

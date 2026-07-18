@@ -1,27 +1,22 @@
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  Home,
   Megaphone,
   Kanban,
-  Users,
   Building2,
-  Tags,
   Sparkles,
   Settings,
   X,
-  Search,
+  PawPrint,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/home', label: 'Home', icon: Home, end: true },
   { to: '/campaigns', label: 'Campanas', icon: Megaphone, end: true },
   { to: '/campaigns/kanban', label: 'Pipeline', icon: Kanban },
   { to: '/clients', label: 'Clientes', icon: Building2 },
-  { to: '/brands', label: 'Marcas', icon: Tags },
-  { to: '/influencers', label: 'Influencers', icon: Users },
-  { to: '/ai', label: 'Asistente IA', icon: Sparkles },
-  { to: '/influencer-lens', label: 'Influencer Lens', icon: Search },
+  { to: '/influencer-lens', label: 'Influencer Lens', icon: Sparkles },
   { to: '/settings', label: 'Configuracion', icon: Settings },
 ];
 
@@ -41,12 +36,12 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     >
       <div className={cn('border-b h-16 flex items-center justify-between', collapsed ? 'md:px-3 px-6' : 'px-6')}>
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
-            LW
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
+            <PawPrint className="w-5 h-5" />
           </div>
           <div className={cn('overflow-hidden', collapsed && 'md:hidden')}>
-            <h1 className="font-bold text-foreground truncate">La Web Core</h1>
-            <p className="text-xs text-muted-foreground truncate">Figital Agency</p>
+            <h1 className="font-bold text-foreground truncate">La Web</h1>
+            <p className="text-xs text-muted-foreground truncate">AI Marketing OS</p>
           </div>
         </div>
         {onNavigate && (
@@ -85,8 +80,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       </nav>
 
       <div className={cn('p-4 border-t text-xs text-muted-foreground', collapsed && 'md:p-2 md:text-center')}>
-        <p className={cn(collapsed && 'md:hidden')}>v0.1.0 - MVP</p>
-        <p className={cn('hidden', collapsed && 'md:block')}>v0.1</p>
+        <p className={cn(collapsed && 'md:hidden')}>v1.0 — Purina Demo</p>
+        <p className={cn('hidden', collapsed && 'md:block')}>v1.0</p>
       </div>
     </aside>
   );
