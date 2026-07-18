@@ -38,6 +38,11 @@ export function useDiscoveryConversation() {
         id: m.id,
         role: m.role as 'user' | 'assistant',
         content: m.content,
+        reasoning: m.reasoning ?? null,
+        tool_calls: (m.tool_calls as ChatTurn['tool_calls']) ?? null,
+        tool_results: (m.tool_results as ChatTurn['tool_results']) ?? null,
+        cost_usd: m.cost_usd ?? null,
+        latency_ms: m.latency_ms ?? null,
         isLoading: false,
       }));
       setTurns(mappedTurns);

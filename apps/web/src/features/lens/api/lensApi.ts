@@ -6,6 +6,8 @@ import type {
   DiscoveryMetrics,
   DiscoveryRun,
   Platform,
+  ToolCall,
+  ToolResult,
 } from '../types/discovery';
 
 export const lensApi = {
@@ -27,7 +29,15 @@ export const lensApi = {
       content: string,
     ): Promise<{
       user_message: { id: string; created_at: string };
-      assistant_message: { id: string; created_at: string };
+      assistant_message: {
+        id: string;
+        created_at: string;
+        reasoning?: string | null;
+        tool_calls?: ToolCall[] | null;
+        tool_results?: ToolResult[] | null;
+        cost_usd?: number | null;
+        latency_ms?: number | null;
+      };
       candidates: DiscoveryCandidate[];
       run_summary?: { total_found: number; top_score: number; platforms_queried: Platform[] };
       discovery_run_id?: string;

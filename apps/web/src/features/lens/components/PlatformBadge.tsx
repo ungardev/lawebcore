@@ -11,7 +11,7 @@ const platformConfig: Record<Platform, { label: string; className: string }> = {
 
 interface PlatformBadgeProps {
   platform: Platform;
-  size?: 'sm' | 'md';
+  size?: 'xs' | 'sm' | 'md';
   className?: string;
 }
 
@@ -22,7 +22,7 @@ export function PlatformBadge({ platform, size = 'sm', className }: PlatformBadg
     <span
       className={cn(
         'inline-flex items-center rounded-md font-medium',
-        size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs',
+        size === 'xs' ? 'px-1 py-px text-[9px]' : size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs',
         config.className,
         className,
       )}

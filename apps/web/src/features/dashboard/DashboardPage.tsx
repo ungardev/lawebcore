@@ -57,8 +57,18 @@ export function DashboardPage() {
   return (
     <div className="space-y-6 md:space-y-8">
       <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Bienvenido</h1>
-        <p className="text-sm md:text-base text-muted-foreground">La Web Core — AI Marketing OS de La Web Figital Agency</p>
+        <h1 className="text-2xl md:text-3xl font-bold">Tu proxima campaña empieza aqui</h1>
+        <p className="text-sm text-muted-foreground">
+          {isLoading ? (
+            <span className="inline-block w-64 h-4 bg-muted-foreground/20 rounded animate-pulse" />
+          ) : (
+            <>
+              {summary?.active_campaigns ?? 0} campanas activas
+              {summary?.total_influencers ? ` · ${summary.total_influencers} influencers en cartera` : ''}
+              {summary?.total_budget_usd ? ` · ${formatCurrency(Number(summary.total_budget_usd))} en juego` : ''}
+            </>
+          )}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">

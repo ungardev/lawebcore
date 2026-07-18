@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Sparkles, Plus, MessageSquare } from 'lucide-react';
+import { Send, Sparkles, Plus, MessageSquare, DollarSign } from 'lucide-react';
 import { useDiscoveryConversation } from '../hooks/useDiscoveryConversation';
 import { ChatMessage } from '../components/ChatMessage';
-import { CandidateCard } from '../components/CandidateCard';
-import { CandidateCardSkeleton } from '../components/CandidateCardSkeleton';
 import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { LensEmptyState } from '../components/LensEmptyState';
 import { ActionChips } from '../components/ActionChips';
+import { CostBadge } from '../components/CostBadge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +14,7 @@ import { lensApi } from '../api/lensApi';
 import { cn } from '@/lib/utils';
 import type { DiscoveryConversation } from '../types/discovery';
 
-const WELCOME = `Soy el cerebro AI de La Web Core, el OS de marketing de influencers de La Web Figital Agency.
+const WELCOME = `Soy Influencer Lens, el cerebro AI de La Web Core — la plataforma de gestión de campañas de La Web Figital Agency.
 
 Somos la agencia AI #1 en Venezuela. Puedo ayudarte a:
 
@@ -24,13 +23,17 @@ Somos la agencia AI #1 en Venezuela. Puedo ayudarte a:
 • Proyectar escenarios de alcance y engagement
 • Gestionar tu cartera de creadores
 
-Solo describe lo que necesitas en lenguaje natural.`;
+También ejecuto herramientas en tiempo real: busco en la base de datos, consulto APIs de scraping (Apify), rankeo prospectos con scoring de afinidad, y proyecto escenarios de alcance.
+
+Describe lo que necesitas en lenguaje natural y ve cómo trabajo.`;
+
 export function LensChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
   const [conversations, setConversations] = useState<DiscoveryConversation[]>([]);
+  const [totalCost, setTotalCost] = useState(0);
 
   const {
     conversation,
@@ -59,6 +62,11 @@ export function LensChatPage() {
   }, [id]);
 
   useEffect(() => {
+    const cost = turns.reduce((sum, t) => sum + (t.cost_usd ?? 0), 0);
+    setTotalCost(cost);
+  }, [turns]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [turns]);
 
@@ -83,19 +91,25 @@ export function LensChatPage() {
     navigate(`/influencer-lens/${conv.id}`);
   };
 
-  const allCandidates = turns.flatMap((t) => t.candidates ?? []);
-
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] md:h-[calc(100vh-100px)]">
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-3 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
             <Sparkles className="w-6 md:w-7 text-primary" />
             Influencer Lens
           </h1>
-          <p className="text-sm md:text-base text-muted-foreground hidden sm:block">
-            El cerebro AI de La Web Figital Agency
-          </p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              El cerebro AI de La Web Figital Agency
+            </p>
+            {totalCost > 0 && (
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60 bg-muted px-2 py-0.5 rounded-full">
+                <DollarSign className="w-3 h-3" />
+                <span>${totalCost.toFixed(4)} en uso</span>
+              </div>
+            )}
+          </div>
         </div>
         <Button onClick={handleNewConversation} size="sm" className="gap-1.5 flex-shrink-0">
           <Plus className="w-4 h-4" />
@@ -104,7 +118,7 @@ export function LensChatPage() {
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden">
-        <Card className="hidden lg:flex w-64 flex-col p-0 overflow-hidden flex-shrink-0">
+        <Card className="hidden lg:flex w-56 flex-col p-0 overflow-hidden flex-shrink-0">
           <div className="p-3 border-b">
             <h2 className="text-sm font-semibold">Conversaciones</h2>
           </div>
@@ -156,44 +170,12 @@ export function LensChatPage() {
                 )}
 
                 {turns.map((turn) => (
-                  <div key={turn.id}>
-                    <ChatMessage turn={turn} />
-                    {turn.candidates && turn.candidates.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        <p className="text-xs text-muted-foreground font-medium px-1">
-                          Candidatos encontrados ({turn.candidates.length})
-                        </p>
-                        {turn.candidates.map((c) => (
-                          <CandidateCard
-                            key={c.id}
-                            candidate={c}
-                            compact
-                            onSave={saveCandidate}
-                            onDismiss={dismissCandidate}
-                          />
-                        ))}
-                      </div>
-                    )}
-                    {turn.progress && !turn.candidates && (
-                      <div className="mt-4 space-y-2">
-                        <p className="text-xs text-muted-foreground font-medium px-1">
-                          Cargando candidatos...
-                        </p>
-                        {[1, 2, 3].map((i) => (
-                          <CandidateCardSkeleton key={i} compact />
-                        ))}
-                      </div>
-                    )}
-                    {turn.run_summary && (
-                      <div className="mt-2 px-1">
-                        <p className="text-xs text-muted-foreground">
-                          Busqueda: {turn.run_summary.total_found} encontrados,
-                          mejor score {turn.run_summary.top_score}/100,
-                          plataformas: {turn.run_summary.platforms_queried.join(', ')}
-                        </p>
-                      </div>
-                    )}
-                  </div>
+                  <ChatMessage
+                    key={turn.id}
+                    turn={turn}
+                    onSaveCandidate={saveCandidate}
+                    onDismissCandidate={dismissCandidate}
+                  />
                 ))}
 
                 {isLoading && (

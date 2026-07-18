@@ -141,10 +141,28 @@ export interface DiscoveryRunSummary {
   platforms_queried: Platform[];
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+export interface ToolResult {
+  tool_call_id: string;
+  success: boolean;
+  output: unknown;
+  error?: string;
+}
+
 export interface ChatTurn {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  reasoning?: string | null;
+  tool_calls?: ToolCall[] | null;
+  tool_results?: ToolResult[] | null;
+  cost_usd?: number | null;
+  latency_ms?: number | null;
   candidates?: DiscoveryCandidate[];
   brief?: BriefStructured | null;
   run_summary?: DiscoveryRunSummary;
