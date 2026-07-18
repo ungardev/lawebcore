@@ -44,10 +44,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               <img src="/logo-laweb.png" alt="La Web Figital Agency" className="h-9 w-auto object-contain" />
             </div>
           )}
-          <div className={cn('overflow-hidden', collapsed && 'md:hidden')}>
-            <h1 className="font-bold text-foreground truncate">La Web</h1>
-            <p className="text-xs text-muted-foreground truncate">AI Marketing OS</p>
-          </div>
         </div>
         {onNavigate && (
           <button
