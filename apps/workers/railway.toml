@@ -3,9 +3,10 @@ builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = 'sh -c "arq app.worker.WorkerSettings"'
+startCommand = "arq app.worker.WorkerSettings"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
+healthcheckPath = "/health"
 
 [env]
 PYTHONUNBUFFERED = "1"
