@@ -268,7 +268,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
 
     influencers = await supabase_rest.select(
         table="influencers",
-        select="id,full_name,primary_handle,platform,followers,engagement_rate",
+        select="id,full_name,primary_handle",
         filters=filters,
         limit=100,
     )
@@ -355,6 +355,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
+            updates["enriched_at"] = "now()"
             try:
                 await supabase_rest.update(
                     table="influencers",
