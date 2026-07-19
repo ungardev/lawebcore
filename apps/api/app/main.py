@@ -36,6 +36,16 @@ configure_logging(settings.API_ENV)
 
 logger = structlog.get_logger(__name__)
 
+import multiprocessing
+
+
+def _arq_worker_entry():
+    """Entry point for the ARQ worker process."""
+    import asyncio
+    from arq.worker import run_worker
+    from app.workers.worker import WorkerSettings
+    asyncio.run(run_worker(WorkerSettings))
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -45,16 +55,7 @@ async def lifespan(app: FastAPI):
     from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
     await init_worker_pool()
 
-    import multiprocessing
     ctx = multiprocessing.get_context("spawn")
-    from app.workers.worker import WorkerSettings
-
-    def _arq_worker_entry():
-        """Entry point for the ARQ worker process."""
-        import asyncio
-        from arq.worker import run_worker
-        asyncio.run(run_worker(WorkerSettings))
-
     arq_process = ctx.Process(
         target=_arq_worker_entry,
         daemon=True,
