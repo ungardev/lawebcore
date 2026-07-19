@@ -50,7 +50,7 @@ export function LensChatPage() {
   } = useDiscoveryConversation();
 
   useEffect(() => {
-    lensApi.conversations.list({ limit: 20 }).then(setConversations).catch(() => {});
+    lensApi.conversations.list({ limit: 20 }).then((data) => setConversations(Array.isArray(data) ? data : [])).catch(() => setConversations([]));
   }, []);
 
   useEffect(() => {

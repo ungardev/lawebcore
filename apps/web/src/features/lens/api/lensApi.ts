@@ -14,7 +14,7 @@ export const lensApi = {
   conversations: {
     list: async (params?: { user_id?: string; status_filter?: string; limit?: number }) => {
       const { data } = await api.get<DiscoveryConversation[]>('/lens/discovery/conversations', { params });
-      return data;
+      return Array.isArray(data) ? data : [];
     },
     get: async (conversationId: string) => {
       const { data } = await api.get<DiscoveryConversation>(`/lens/discovery/conversations/${conversationId}`);

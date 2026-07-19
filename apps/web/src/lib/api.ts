@@ -7,6 +7,7 @@ export const api: AxiosInstance = axios.create({
   baseURL: `${API_URL}/api/v1`,
   timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
+  validateStatus: (status) => status < 500,
 });
 
 api.interceptors.request.use(async (config) => {
@@ -15,6 +16,9 @@ api.interceptors.request.use(async (config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+  config.headers['Pragma'] = 'no-cache';
+  config.headers['Expires'] = '0';
   return config;
 });
 
@@ -154,7 +158,7 @@ export const importsApi = {
 export const discoveryRunsApi = {
   list: async (params?: { limit?: number; offset?: number }) => {
     const { data } = await api.get<any[]>('/lens/discovery/runs', { params });
-    return data;
+    return Array.isArray(data) ? data : [];
   },
 };
 

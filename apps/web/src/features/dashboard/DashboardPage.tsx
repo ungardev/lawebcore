@@ -122,7 +122,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {recentConversations && recentConversations.length > 0 && (
+      {Array.isArray(recentConversations) && recentConversations.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">Conversaciones recientes del Lens</h2>

@@ -4,6 +4,7 @@ import { Sparkles, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { discoveryRunsApi } from '@/lib/api';
 import type { DiscoveryRun, DiscoveryRunStatus } from '../types/discovery';
 
 const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: React.ReactNode; className: string }> = {
@@ -24,9 +25,9 @@ export function LensRunsListPage() {
   const fetchRuns = async (pageNum: number) => {
     setIsLoading(true);
     try {
-      const { data } = await import('@/lib/api').then((m) => m.api.get('/lens/discovery/runs', { params: { limit, offset: (pageNum - 1) * limit } }));
-      if (pageNum === 1) setRuns(data);
-      else setRuns((prev) => [...prev, ...data]);
+      const data = await discoveryRunsApi.list({ limit, offset: (pageNum - 1) * limit });
+      if (pageNum === 1) setRuns(Array.isArray(data) ? data : []);
+      else setRuns((prev) => [...prev, ...(Array.isArray(data) ? data : [])]);
     } catch (e) {
       console.error(e);
     } finally {
