@@ -3,11 +3,11 @@ import { Brand, Client } from '@/types';
 
 interface KanbanFiltersProps {
   search: string;
-  onSearchChange: (s: string) => void;
+  onSearchChange: (_s: string) => void;
   clientFilter: string;
-  onClientFilterChange: (c: string) => void;
+  onClientFilterChange: (_c: string) => void;
   brandFilter: string;
-  onBrandFilterChange: (b: string) => void;
+  onBrandFilterChange: (_b: string) => void;
   clients: Client[];
   brands: Brand[];
 }

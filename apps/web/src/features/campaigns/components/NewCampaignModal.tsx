@@ -97,7 +97,6 @@ export function NewCampaignModal({ open, onClose }: NewCampaignModalProps) {
   };
 
   const handleCreate = () => {
-    const client = clientMap.get(selectedBrand!.client_id);
     createMutation.mutate({
       brand_id: selectedBrand!.id,
       client_id: selectedBrand!.client_id,

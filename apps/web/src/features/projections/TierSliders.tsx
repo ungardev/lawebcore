@@ -2,7 +2,7 @@ import { INFLUENCER_TIERS } from '@/lib/utils';
 
 interface TierSlidersProps {
   postsPerTier: Record<string, number>;
-  onChange: (tier: string, value: number) => void;
+  onChange: (_tier: string, _value: number) => void;
 }
 
 const TIER_INFO: Record<string, { label: string; range: string }> = {

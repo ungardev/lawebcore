@@ -11,6 +11,7 @@ import { CampaignKanbanPage } from '@/features/campaigns/CampaignKanbanPage';
 import { ClientsPage } from '@/features/clients/ClientsPage';
 import { LensChatPage } from '@/features/lens/pages/LensChatPage';
 import { LensRunsListPage } from '@/features/lens/pages/LensRunsListPage';
+import { LensSearchPage } from '@/features/lens/pages/LensSearchPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 
 function Redirect({ to }: { to: string }) {
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="influencer-lens" element={<LensChatPage />} />
           <Route path="influencer-lens/:id" element={<LensChatPage />} />
           <Route path="influencer-lens/runs" element={<LensRunsListPage />} />
+          <Route path="influencer-lens/search" element={<LensSearchPage />} />
           <Route path="settings" element={<SettingsPage />} />
 
           <Route path="dashboard" element={<Redirect to="/home" />} />

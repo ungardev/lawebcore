@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Eye, EyeOff, Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ function PasswordInput({
   id: string;
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (_v: string) => void;
   error?: string;
   placeholder?: string;
 }) {

@@ -9,18 +9,15 @@ Handles:
 - Integration syncs
 """
 
-import asyncio
 from datetime import datetime, timedelta
 
 import structlog
 from arq import cron
 from arq.connections import RedisSettings
-from sqlalchemy import select, update
 
 from shared_core import settings
 from shared_core import db_session
 from shared_core import supabase_rest
-from discovery.brief_parser import brief_parser_agent
 from discovery.query_builder import query_builder
 from discovery.result_ranker import result_ranker
 from discovery.schemas import BriefStructured, CandidateMetrics, Platform
@@ -259,10 +256,14 @@ async def _execute_platform_query(platform: Platform, query, run_progress: dict 
                 if unique_handles:
                     try:
                         profiles = await apify_client.search_instagram_profiles_batch(unique_handles)
-                        for p in profiles:
-                            username = p.get("username", "")
-                            if username:
-                                profile_map[username] = p
+                        if profiles is None:
+                            logger.warning("Apify returned None for batch, skipping profile enrichment")
+                            profile_map = {}
+                        else:
+                            for p in profiles:
+                                username = p.get("username", "")
+                                if username:
+                                    profile_map[username] = p
                     except Exception as exc:
                         logger.warning("instagram_profile_enrichment_failed", error=str(exc))
 

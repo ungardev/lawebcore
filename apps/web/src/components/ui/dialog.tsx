@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './card';
+import { Card, CardHeader, CardTitle, CardDescription } from './card';
 import { Button } from './button';
 
 const Dialog = DialogPrimitive.Root;

@@ -44,8 +44,8 @@ export function CampaignDetailPage() {
     },
   });
 
-  const generate = useMutation({
-    mutationFn: (promptCode: string) =>
+  const _generate = useMutation({
+    mutationFn: (_promptCode: string) =>
       campaignsApi.create ? campaignsApi.create({} as any) : Promise.resolve(null),
     onError: () => toast.error('Error al generar con IA'),
   });

@@ -1,13 +1,9 @@
 """API v1 router para el módulo de Discovery."""
 
+import contextlib
 import uuid as uuidlib
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-
-from app.core.security import CurrentUserDep
-from shared_core import supabase_rest
 from discovery.orchestrator import orchestrator
 from discovery.schemas import (
     BriefStructured,
@@ -18,8 +14,12 @@ from discovery.schemas import (
     DiscoveryRunStatus,
     DiscoverySearchRequest,
     MessageCreate,
-    MessageResponse,
 )
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+from shared_core import supabase_rest
+
+from app.core.security import CurrentUserDep
 
 
 class EnrichRequest(BaseModel):
@@ -229,6 +229,7 @@ async def send_message(
 async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDep):
     """Crea y ejecuta un discovery_run sin chat conversacional."""
     from discovery.memory import conversation_memory
+
     from app.core.worker_enqueuer import enqueue_discovery_run
 
     run = await conversation_memory.launch_discovery_run(
@@ -297,6 +298,16 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
 
         try:
             profiles = await apify_client.search_instagram_profiles_batch(usernames)
+            if profiles is None:
+                for h in batch:
+                    results.append(EnrichResult(
+                        influencer_id=h["id"],
+                        handle=h["handle"],
+                        success=False,
+                        error="Apify returned no data (profile not found or API unavailable)",
+                    ))
+                    failed_count += 1
+                continue
             for profile in profiles:
                 username = profile.get("username", "")
                 matched = next((h for h in batch if h["handle"].lower() == username.lower()), None)
@@ -379,15 +390,13 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
     apify_cost = enriched_count * 0.0002
     total_cost += apify_cost
 
-    try:
+    with contextlib.suppress(Exception):
         await supabase_rest.insert("api_costs", {
             "provider": "apify",
             "cost_usd": apify_cost,
             "request_count": enriched_count,
             "description": f"enrich_influencers: {enriched_count} profiles",
         })
-    except Exception:
-        pass
 
     return EnrichResponse(
         total=len(influencers),

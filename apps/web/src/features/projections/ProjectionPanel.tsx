@@ -22,7 +22,7 @@ const DEFAULT_POSTS: Record<string, number> = {
   MEGA: 0,
 };
 
-export function ProjectionPanel({ brandId, brandName, onClose }: ProjectionPanelProps) {
+export function ProjectionPanel({ brandId, brandName, onClose: _onClose }: ProjectionPanelProps) {
   const [postsPerTier, setPostsPerTier] = useState<Record<string, number>>(DEFAULT_POSTS);
   const [result, setResult] = useState<ProjectionCalculateResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,7 +43,7 @@ export function ProjectionPanel({ brandId, brandName, onClose }: ProjectionPanel
     try {
       const data = await projectionsApi.calculate(brandId, postsPerTier);
       setResult(data);
-    } catch (err) {
+    } catch (_err) {
       toast.error('Error calculando proyección');
     } finally {
       setLoading(false);
