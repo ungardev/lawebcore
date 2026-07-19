@@ -45,21 +45,22 @@ async def lifespan(app: FastAPI):
     from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
     await init_worker_pool()
 
-    import asyncio
-    import threading
+    import multiprocessing
     from app.workers.worker import WorkerSettings
 
-    def run_arq_worker():
-        """Run ARQ worker in a separate thread with its own event loop."""
-        asyncio.run(_run_arq_worker_sync())
-
-    async def _run_arq_worker_sync():
+    def _arq_worker_entry():
+        """Entry point for the ARQ worker process."""
+        import asyncio
         from arq.worker import run_worker
-        await run_worker(WorkerSettings)
+        asyncio.run(run_worker(WorkerSettings))
 
-    arq_thread = threading.Thread(target=run_arq_worker, daemon=True, name="arq-worker")
-    arq_thread.start()
-    logger.info("arq_worker_started_as_background_thread", thread=arq_thread.name)
+    arq_process = multiprocessing.Process(
+        target=_arq_worker_entry,
+        daemon=True,
+        name="arq-worker",
+    )
+    arq_process.start()
+    logger.info("arq_worker_started_as_separate_process", pid=arq_process.pid)
 
     yield
     logger.info("lawebcore_api_stopping")
