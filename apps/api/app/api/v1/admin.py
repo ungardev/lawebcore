@@ -410,7 +410,7 @@ async def enrich_influencers(
         usernames = [h["handle"] for h in batch]
 
         try:
-            profiles = await apify_client_module.apify_client.search_instagram_profiles_batch(usernames)
+            profiles = await apify_client_module.search_instagram_profiles_batch(usernames)
             if profiles is None:
                 logger.warning(f"Apify returned None for batch {usernames}, skipping")
                 for h in batch:
