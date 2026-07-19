@@ -1,13 +1,12 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "${DOCKERFILE_PATH}"
+dockerfilePath = "Dockerfile.workers"
 
 [deploy]
-startCommand = "${START_COMMAND}"
+startCommand = "arq app.worker.WorkerSettings"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-healthcheckPath = "${HEALTHCHECK_PATH}"
+healthcheckPath = "/health"
 
 [env]
 PYTHONUNBUFFERED = "1"
-API_CORS_ORIGINS = '["http://localhost:5173","http://localhost:3000","https://lawebcore.vercel.app"]'
