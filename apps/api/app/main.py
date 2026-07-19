@@ -46,24 +46,23 @@ async def lifespan(app: FastAPI):
     await init_worker_pool()
 
     import asyncio
+    import threading
     from app.workers.worker import WorkerSettings
-    from arq.worker import create_worker
 
-    async def run_arq_worker():
-        redis_settings = WorkerSettings.redis_settings
-        worker = create_worker(WorkerSettings, redis_settings)
-        await worker.async_run()
+    def run_arq_worker():
+        """Run ARQ worker in a separate thread with its own event loop."""
+        asyncio.run(_run_arq_worker_sync())
 
-    arq_task = asyncio.create_task(run_arq_worker())
-    logger.info("arq_worker_started_as_background_task")
+    async def _run_arq_worker_sync():
+        from arq.worker import run_worker
+        await run_worker(WorkerSettings)
+
+    arq_thread = threading.Thread(target=run_arq_worker, daemon=True, name="arq-worker")
+    arq_thread.start()
+    logger.info("arq_worker_started_as_background_thread", thread=arq_thread.name)
 
     yield
     logger.info("lawebcore_api_stopping")
-    arq_task.cancel()
-    try:
-        await arq_task
-    except asyncio.CancelledError:
-        pass
     await close_worker_pool()
     await supabase_rest.close()
     await close_db()
