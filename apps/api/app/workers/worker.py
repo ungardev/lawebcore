@@ -36,9 +36,11 @@ async def startup(ctx):
     """Initialize worker context (DB, Redis) and start health server."""
     logger.info("workers_starting", env=settings.API_ENV, version="0.1.0")
     ctx["redis"] = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
-    from app.workers.health_server import run_health_server
-    import asyncio
-    asyncio.create_task(run_health_server())
+    import os
+    if os.environ.get("STANDALONE_WORKER") == "true":
+        from app.workers.health_server import run_health_server
+        import asyncio
+        asyncio.create_task(run_health_server())
 
 
 async def shutdown(ctx):

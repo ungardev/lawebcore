@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
     from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
     await init_worker_pool()
 
-    import multiprocessing
+    ctx = multiprocessing.get_context("spawn")
     from app.workers.worker import WorkerSettings
 
     def _arq_worker_entry():
@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
         from arq.worker import run_worker
         asyncio.run(run_worker(WorkerSettings))
 
-    arq_process = multiprocessing.Process(
+    arq_process = ctx.Process(
         target=_arq_worker_entry,
         daemon=True,
         name="arq-worker",
