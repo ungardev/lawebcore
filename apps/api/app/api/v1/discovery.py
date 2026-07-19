@@ -154,6 +154,12 @@ async def send_message(
     )
 
     assistant_content = ai_response["message"]
+    reasoning = ai_response.get("reasoning")
+    tool_calls = ai_response.get("tool_calls")
+    tool_results = ai_response.get("tool_results")
+    cost_usd = ai_response.get("cost_usd", 0.0)
+    latency_ms = ai_response.get("latency_ms", 0)
+    discovery_run_id: str | None = None
 
     if ai_response.get("pending_discovery"):
         from app.core.worker_enqueuer import enqueue_discovery_run
@@ -178,11 +184,10 @@ async def send_message(
                     created_by=user.id,
                 )
                 await enqueue_discovery_run(str(run["id"]))
-                ai_response = ai_response.copy()
-                ai_response["discovery_run_id"] = str(run["id"])
+                discovery_run_id = str(run["id"])
                 assistant_content = (
                     "Estoy buscando candidatos en Instagram, TikTok y YouTube "
-                    "basado en tu brief. Te aviso cuando termine la búsqueda."
+                    "basado en tu brief. Te aviso cuando tenga resultados."
                 )
             except Exception as e:
                 assistant_content = (
@@ -196,10 +201,11 @@ async def send_message(
             "conversation_id": str(conversation_id),
             "role": "assistant",
             "content": assistant_content,
-            "tool_calls": None,
-            "tool_results": None,
-            "cost_usd": 0.0,
-            "latency_ms": 0,
+            "reasoning": reasoning,
+            "tool_calls": tool_calls,
+            "tool_results": tool_results,
+            "cost_usd": cost_usd,
+            "latency_ms": latency_ms,
         },
         returning="representation",
     )
@@ -210,7 +216,7 @@ async def send_message(
         values={
             "last_message_at": "now()",
             "current_step": ai_response.get("step", "brief"),
-            "discovery_run_id": ai_response.get("discovery_run_id"),
+            "discovery_run_id": discovery_run_id,
         },
     )
 
@@ -219,7 +225,7 @@ async def send_message(
         "assistant_message": assistant_record,
         "candidates": ai_response.get("candidates", []),
         "run_summary": ai_response.get("run_summary"),
-        "discovery_run_id": ai_response.get("discovery_run_id"),
+        "discovery_run_id": discovery_run_id,
     }
 
 

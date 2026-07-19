@@ -223,6 +223,35 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "completed_at": datetime.utcnow().isoformat(),
         })
 
+        conv = await supabase_rest.select_one(
+            table="discovery_conversations",
+            select="id",
+            filters=[f"discovery_run_id=eq.{run_id}"],
+        )
+        if conv:
+            from uuid import UUID as pyUUID
+            from discovery.memory import conversation_memory
+            top_candidates = qualified[:10]
+            summary_lines = [
+                f"- **{c['handle']}** ({c['platform']}): "
+                f"Score {c.get('match_score', 0):.0f}/100, "
+                f"{c.get('followers', 0):,} seguidores, "
+                f"ER {c.get('engagement_rate', 0):.1f}%"
+                for c in top_candidates
+            ]
+            content = (
+                f"Terminé la búsqueda. Encontré {len(qualified)} candidatos "
+                f"que coinciden con tu brief.\n\n"
+                + ("Aquí están los más relevantes:\n" + "\n".join(summary_lines) + "\n\n"
+                if summary_lines else "")
+                + "Puedes ver todos en la lista de candidatos."
+            )
+            await conversation_memory.save_message(
+                conversation_id=pyUUID(conv["id"]),
+                role="assistant",
+                content=content,
+            )
+
         await cost_tracker.flush(db_session())
 
         logger.info("discovery_run_completed", run_id=run_id, candidates=total)

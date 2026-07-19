@@ -133,6 +133,7 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     tool_calls: list[dict[str, Any]] | None = None
+    tool_results: list[dict[str, Any]] | None = None
     reasoning: str | None = None
     cost_usd: float | None = None
     latency_ms: int | None = None

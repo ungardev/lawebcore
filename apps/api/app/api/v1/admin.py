@@ -546,6 +546,10 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                 {
                     "role": "user",
                     "content": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow, presupuesto $15000 USD",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Entendido el brief. Estoy buscando creadores en Venezuela especializados en mascotas y perros para la campaña #DogChowVenezuela. Déjame revisar nuestra base de datos...\n\nEncontré 49 creadores en el país. Voy a analizar los más relevantes por engagement y afinidad con el nicho de mascotas.",
                     "reasoning": "El brief especifica: nicho=mascotas/perros, pais=VE, presupuesto=$15K USD, marca=Nestle Venezuela. Voy a parsear estos parametros y buscar en la base de datos de influencers registrados.",
                     "tool_calls": [
                         {"id": "tc1", "name": "search_influencers", "arguments": json.dumps({"niche": "mascotas", "country": "VE", "budget_max": 15000})}
@@ -553,7 +557,6 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                     "tool_results": [
                         {"tool_call_id": "tc1", "success": True, "output": {"count": 49, "filters_applied": {"country": "VE", "tiers": ["NANO", "MICRO", "MID"]}}}
                     ],
-                    "content": "Entendido el brief. Estoy buscando creadores en Venezuela especializados en mascotas y perros para la campaña #DogChowVenezuela. Déjame revisar nuestra base de datos...\n\nEncontré 49 creadores en el país. Voy a analizar los más relevantes por engagement y afinidad con el nicho de mascotas.",
                     "cost_usd": 0.0012,
                     "latency_ms": 1847,
                 },
@@ -573,6 +576,10 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                 {
                     "role": "user",
                     "content": "Dame un resumen del rendimiento de la campaña Purina Dog Chow hasta ahora",
+                },
+                {
+                    "role": "assistant",
+                    "content": "El brief es claro: campaña de awareness para Purina Dog Chow en el mercado venezolano. El tono emocional de 'Amor Perruno' conecta bien con dueños de perros en VE. Voy a priorizar Nano y Micro influencers para autenticidad.",
                     "reasoning": "El usuario pide analisis de la campaña activa. Tengo que consultar las metricas de la campana #DogChowVenezuela, agregando publicaciones, engagement y sentimiento.",
                     "tool_calls": [
                         {"id": "tc2", "name": "get_campaign_metrics", "arguments": json.dumps({"campaign_id": "f0000000-0000-0000-0000-000000000003"})}
@@ -580,7 +587,6 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                     "tool_results": [
                         {"tool_call_id": "tc2", "success": True, "output": {"publications": 47, "avg_er": 0.054, "sentiment_positive": 82}}
                     ],
-                    "content": "El brief es claro: campaña de awareness para Purina Dog Chow en el mercado venezolano. El tono emocional de 'Amor Perruno' conecta bien con dueños de perros en VE. Voy a priorizar Nano y Micro influencers para autenticidad.",
                     "cost_usd": 0.0006,
                     "latency_ms": 1203,
                 },
@@ -594,6 +600,10 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                 {
                     "role": "user",
                     "content": "Cuéntame qué pasaría si lanzamos una campaña de café en Colombia con $8000 USD",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Interesante. Una campaña de café en Colombia con $8K USD tiene buen potencial. Aquí están los 3 escenarios:\n\nESCENARIO CONSERVADOR: 3 Nano influencers (5-10K) · Alcance estimado: 45K · Costo: $3,200\nESCENARIO MODERADO: 6 Micro influencers (10-50K) + 1 Nano · Alcance: 120K · Costo: $7,200\nESCENARIO OPTIMISTA: 3 Micro + 2 Mid Tier · Alcance: 310K · Costo: $8,000\n\nMi recomendación: el escenario MODERADO. Por $7,200 obtienes 6x más alcance que el conservador con solo $4K extra.",
                     "reasoning": "Solicitud de proyeccion. El usuario quiere ver 3 escenarios (conservador, moderado, optimista) con diferentes configuraciones de influencers para una campana de cafe en Colombia con $8K USD.",
                     "tool_calls": [
                         {"id": "tc3", "name": "project_scenarios", "arguments": json.dumps({"country": "CO", "budget_usd": 8000, "niche": "cafe"})}
@@ -601,7 +611,6 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                     "tool_results": [
                         {"tool_call_id": "tc3", "success": True, "output": {"conservador": {"alcance": 45000, "costo": 3200}, "moderado": {"alcance": 120000, "costo": 7200}, "optimista": {"alcance": 310000, "costo": 8000}}}
                     ],
-                    "content": "Interesante. Una campaña de café en Colombia con $8K USD tiene buen potencial. Aquí están los 3 escenarios:\n\nESCENARIO CONSERVADOR: 3 Nano influencers (5-10K) · Alcance estimado: 45K · Costo: $3,200\nESCENARIO MODERADO: 6 Micro influencers (10-50K) + 1 Nano · Alcance: 120K · Costo: $7,200\nESCENARIO OPTIMISTA: 3 Micro + 2 Mid Tier · Alcance: 310K · Costo: $8,000\n\nMi recomendación: el escenario MODERADO. Por $7,200 obtienes 6x más alcance que el conservador con solo $4K extra.",
                     "cost_usd": 0.0009,
                     "latency_ms": 3012,
                 },
