@@ -9,6 +9,7 @@ Handles:
 - Integration syncs
 """
 
+import asyncio
 from datetime import datetime, timedelta
 
 import structlog
@@ -30,6 +31,11 @@ from discovery.tools import (
 )
 
 logger = structlog.get_logger(__name__)
+
+APIFY_SEMAPHORE = asyncio.Semaphore(3)
+MAX_QUERIES_PER_PLATFORM = 3
+MAX_HANDLES_TO_ENRICH = 10
+MAX_POSTS_PER_HASHTAG = 25
 
 
 async def startup(ctx):
@@ -103,7 +109,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         all_candidates: list[dict] = []
 
         for platform in platforms:
-            platform_queries = queries.get(platform, [])
+            platform_queries = queries.get(platform, [])[:MAX_QUERIES_PER_PLATFORM]
             for q in platform_queries:
                 step_label = f"querying_{platform.value}_{q.query_type}"
                 await _run_update_metadata(run_id, {
@@ -268,7 +274,7 @@ async def _execute_platform_query(platform: Platform, query, run_progress: dict 
             raw_posts = await multi_actor_instagram_client.discover_by_hashtag(
                 hashtag=query.params["hashtag"],
                 country=query.params.get("country", "VE"),
-                results_limit=50,
+                results_limit=MAX_POSTS_PER_HASHTAG,
             )
 
             if raw_posts:
@@ -276,13 +282,14 @@ async def _execute_platform_query(platform: Platform, query, run_progress: dict 
                     p.get("ownerUsername")
                     for p in raw_posts
                     if p.get("ownerUsername")
-                ))
+                ))[:MAX_HANDLES_TO_ENRICH]
                 logger.info("instagram_enriching_profiles", handles_count=len(unique_handles))
 
                 profile_map: dict[str, dict] = {}
                 if unique_handles:
                     try:
-                        profiles = await apify_client.search_instagram_profiles_batch(unique_handles)
+                        async with APIFY_SEMAPHORE:
+                            profiles = await apify_client.search_instagram_profiles_batch(unique_handles)
                         if profiles is None:
                             logger.warning("Apify returned None for batch, skipping profile enrichment")
                             profile_map = {}
@@ -317,14 +324,14 @@ async def _execute_platform_query(platform: Platform, query, run_progress: dict 
             return await tiktok_client.search_content(
                 query=query.params["hashtag"],
                 country=query.params.get("country", "VE"),
-                max_count=100,
+                max_count=30,
             )
     elif platform == Platform.YOUTUBE:
         if query.query_type == "channel_search":
             return await youtube_client.search_channels(
                 query=query.params.get("query", ""),
                 region=query.params.get("region", "VE"),
-                max_results=20,
+                max_results=10,
             )
     return []
 
