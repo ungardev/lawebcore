@@ -1,12 +1,12 @@
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "apps/api/Dockerfile"
+dockerfilePath = "${DOCKERFILE_PATH}"
 
 [deploy]
-startCommand = "sh -c \"if [ \\\"$RAILWAY_SERVICE_NAME\\\" = \\\"lawebcore-workers\\\" ]; then exec arq app.worker.WorkerSettings; else exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers; fi\""
+startCommand = "${START_COMMAND}"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
-healthcheckPath = "/api/v1/health"
+healthcheckPath = "${HEALTHCHECK_PATH}"
 
 [env]
 PYTHONUNBUFFERED = "1"
