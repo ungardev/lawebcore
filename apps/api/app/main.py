@@ -44,8 +44,26 @@ async def lifespan(app: FastAPI):
     await init_db()
     from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
     await init_worker_pool()
+
+    import asyncio
+    from app.workers.worker import WorkerSettings
+    from arq.worker import create_worker
+
+    async def run_arq_worker():
+        redis_settings = WorkerSettings.redis_settings
+        worker = create_worker(WorkerSettings, redis_settings)
+        await worker.async_run()
+
+    arq_task = asyncio.create_task(run_arq_worker())
+    logger.info("arq_worker_started_as_background_task")
+
     yield
     logger.info("lawebcore_api_stopping")
+    arq_task.cancel()
+    try:
+        await arq_task
+    except asyncio.CancelledError:
+        pass
     await close_worker_pool()
     await supabase_rest.close()
     await close_db()
