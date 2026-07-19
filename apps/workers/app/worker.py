@@ -16,7 +16,6 @@ from arq import cron
 from arq.connections import RedisSettings
 
 from shared_core import settings
-from shared_core import db_session
 from shared_core import supabase_rest
 from discovery.query_builder import query_builder
 from discovery.result_ranker import result_ranker
@@ -64,10 +63,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     5. Persiste en discovery_candidates
     6. Actualiza el estado del run
     """
-    from app.core.cost_tracker import get_cost_tracker
-
-    cost_tracker = get_cost_tracker()
-
     try:
         await _run_set_status(run_id, "running")
 
@@ -254,8 +249,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 role="assistant",
                 content=content,
             )
-
-        await cost_tracker.flush(db_session())
 
         logger.info("discovery_run_completed", run_id=run_id, candidates=total)
         return {"run_id": run_id, "candidates": total}
