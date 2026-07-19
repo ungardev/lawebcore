@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     from app.core.worker_enqueuer import close_worker_pool, init_worker_pool
     await init_worker_pool()
 
+    import multiprocessing
     ctx = multiprocessing.get_context("spawn")
     from app.workers.worker import WorkerSettings
 
