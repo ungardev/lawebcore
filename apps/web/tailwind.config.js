@@ -60,7 +60,8 @@ export default {
         info: '#3B82F6',
       },
       fontFamily: {
-        sans: ['Montserrat', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        display: ['Instrument Serif', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {
@@ -79,6 +80,7 @@ export default {
       backgroundImage: {
         'brand-gradient': 'linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)))',
         'brand-gradient-hover': 'linear-gradient(135deg, hsl(var(--brand-pink-hover)), hsl(var(--brand-purple)), hsl(var(--brand-blue-hover)))',
+        'brand-gradient-soft': 'linear-gradient(135deg, hsl(var(--brand-pink) / 0.15), hsl(var(--brand-purple) / 0.15), hsl(var(--brand-blue) / 0.15))',
         'gradient-dark': 'linear-gradient(135deg, #14181F 0%, #2B303B 100%)',
         'gradient-subtle': 'linear-gradient(180deg, #FAFBFB 0%, #F1F2F4 100%)',
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',

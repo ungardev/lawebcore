@@ -1,49 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Megaphone, Building2, Users, DollarSign, Eye, ArrowRight, MessageSquare, ChevronRight } from 'lucide-react';
+import {
+  Sparkles,
+  Megaphone,
+  Building2,
+  Users,
+  DollarSign,
+  Eye,
+  ArrowUpRight,
+  MessageSquare,
+  TrendingUp,
+  Zap,
+  ChevronRight,
+} from 'lucide-react';
 import { dashboardApi } from '@/lib/api';
 import { lensApi } from '@/features/lens/api/lensApi';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import type { DiscoveryConversation } from '@/features/lens/types/discovery';
 
-function KpiCard({ title, value, icon, subtitle }: { title: string; value: string | number; icon: React.ReactNode; subtitle?: string }) {
-  return (
-    <Card className="p-4 flex items-center gap-4">
-      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-        {icon}
-      </div>
-      <div>
-        <p className="text-2xl font-bold">{value}</p>
-        <p className="text-xs text-muted-foreground">{title}</p>
-        {subtitle && <p className="text-[10px] text-muted-foreground/70">{subtitle}</p>}
-      </div>
-    </Card>
-  );
-}
-
-function CTACard({ title, description, icon, to, accent }: { title: string; description: string; icon: React.ReactNode; to: string; accent: string }) {
-  const navigate = useNavigate();
-  return (
-    <button
-      onClick={() => navigate(to)}
-      className="text-left w-full p-5 rounded-2xl border bg-card hover:bg-muted/60 transition-all group"
-    >
-      <div className={`w-10 h-10 rounded-xl ${accent} flex items-center justify-center text-white mb-3`}>
-        {icon}
-      </div>
-      <p className="font-semibold text-foreground mb-1">{title}</p>
-      <p className="text-xs text-muted-foreground leading-relaxed">{description}</p>
-      <div className="mt-3 flex items-center gap-1 text-xs text-primary font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-        Ir <ArrowRight className="w-3 h-3" />
-      </div>
-    </button>
-  );
-}
-
 export function DashboardPage() {
   const navigate = useNavigate();
+
   const { data: summary, isLoading } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => dashboardApi.summary({}),
@@ -54,104 +31,265 @@ export function DashboardPage() {
     queryFn: () => lensApi.conversations.list({ limit: 5 }),
   });
 
+  const activeCount = summary?.active_campaigns ?? 0;
+  const totalCampaigns = summary?.total_campaigns ?? 0;
+  const totalInfluencers = summary?.total_influencers ?? 0;
+  const totalReach = Number(summary?.total_reach ?? 0);
+  const totalBudget = Number(summary?.total_budget_usd ?? 0);
+
   return (
-    <div className="space-y-6 md:space-y-8">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold">Tu proxima campaña empieza aqui</h1>
-        <p className="text-sm text-muted-foreground">
-          {isLoading ? (
-            <span className="inline-block w-64 h-4 bg-muted-foreground/20 rounded animate-pulse" />
-          ) : (
-            <>
-              {summary?.active_campaigns ?? 0} campanas activas
-              {summary?.total_influencers ? ` · ${summary.total_influencers} influencers en cartera` : ''}
-              {summary?.total_budget_usd ? ` · ${formatCurrency(Number(summary.total_budget_usd))} en juego` : ''}
-            </>
-          )}
+    <div className="relative min-h-screen">
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-aurora" />
+
+      <div className="mx-auto max-w-[1400px] px-6 py-8">
+        <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-8 shadow-soft md:p-10">
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-brand opacity-20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-brand-blue opacity-15 blur-3xl" />
+
+          <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-purple opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-brand" />
+                </span>
+                Lens AI está listo · sincronizando {activeCount} campañas
+              </div>
+
+              <h1 className="font-display text-5xl leading-[1.02] tracking-tight text-foreground md:text-6xl">
+                Tu próxima <span className="text-gradient-brand">campaña</span> empieza aquí.
+              </h1>
+
+              <p className="mt-4 text-base text-muted-foreground md:text-lg">
+                {isLoading ? (
+                  <span className="inline-block h-4 w-72 animate-pulse rounded bg-muted" />
+                ) : (
+                  <>
+                    <span className="font-semibold text-foreground">{activeCount}</span> campañas activas
+                    {totalInfluencers ? (
+                      <>
+                        {' · '}
+                        <span className="font-semibold text-foreground">{formatNumber(totalInfluencers)}</span> influencers en cartera
+                      </>
+                    ) : null}
+                    {totalBudget ? (
+                      <>
+                        {' · '}
+                        <span className="font-semibold text-foreground">{formatCurrency(totalBudget)}</span> en juego
+                      </>
+                    ) : null}
+                  </>
+                )}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate('/influencer-lens')}
+                className="group inline-flex items-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white shadow-glow transition-transform hover:-translate-y-0.5"
+              >
+                <Sparkles className="h-4 w-4" />
+                Abrir Influencer Lens
+                <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </button>
+              <button
+                onClick={() => navigate('/campaigns')}
+                className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+              >
+                Nueva campaña
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-6 grid gap-4 md:grid-cols-3">
+          <QuickCard
+            onClick={() => navigate('/influencer-lens')}
+            icon={<Sparkles className="h-5 w-5" />}
+            title="Abrir Influencer Lens"
+            copy="Busca, descubre y evalúa influencers con inteligencia artificial para tus campañas."
+            tone="pink"
+          />
+          <QuickCard
+            onClick={() => navigate('/campaigns')}
+            icon={<Megaphone className="h-5 w-5" />}
+            title="Gestionar campañas"
+            copy="Crea y administra tus campañas de influencer marketing. Ve el pipeline de ejecución."
+            tone="purple"
+          />
+          <QuickCard
+            onClick={() => navigate('/clients')}
+            icon={<Building2 className="h-5 w-5" />}
+            title="Administrar clientes"
+            copy="Consulta y gestiona tus clientes, marcas y contactos comerciales."
+            tone="blue"
+          />
+        </section>
+
+        <section className="mt-10">
+          <div className="mb-4 flex items-baseline justify-between">
+            <h2 className="font-display text-2xl tracking-tight text-foreground">Resumen ejecutivo</h2>
+            <span className="text-xs text-muted-foreground">Actualizado hace instantes</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Kpi
+              icon={<Megaphone className="h-4 w-4" />}
+              label="Campañas activas"
+              value={String(activeCount)}
+              sub={`${totalCampaigns} totales`}
+            />
+            <Kpi
+              icon={<Users className="h-4 w-4" />}
+              label="Influencers"
+              value={formatNumber(totalInfluencers)}
+              sub="en cartera"
+            />
+            <Kpi
+              icon={<Eye className="h-4 w-4" />}
+              label="Reach total"
+              value={formatNumber(totalReach)}
+              sub="últimos 30 días"
+            />
+            <Kpi
+              icon={<DollarSign className="h-4 w-4" />}
+              label="Budget total"
+              value={formatCurrency(totalBudget)}
+              sub="en ejecución"
+            />
+          </div>
+        </section>
+
+        {Array.isArray(recentConversations) && recentConversations.length > 0 && (
+          <section className="mt-10 mb-8 grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display text-2xl tracking-tight text-foreground">
+                  Conversaciones recientes del Lens
+                </h2>
+                <button
+                  onClick={() => navigate('/influencer-lens')}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-brand-purple hover:text-brand-pink"
+                >
+                  Ver todas <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
+                {recentConversations.map((conv: DiscoveryConversation, i: number) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => navigate(`/influencer-lens/${conv.id}`)}
+                    className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-muted/50 ${
+                      i !== recentConversations.length - 1 ? 'border-b border-border/60' : ''
+                    }`}
+                  >
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-brand-soft text-brand-purple">
+                      <MessageSquare className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {conv.accumulated_brief?.slice(0, 80) || 'Nueva búsqueda'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(conv.last_message_at).toLocaleDateString('es-ES', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <aside className="rounded-2xl border border-border/60 bg-card p-6 shadow-soft">
+              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-brand text-white shadow-glow">
+                <TrendingUp className="h-4 w-4" />
+              </div>
+              <h3 className="font-display text-xl tracking-tight text-foreground">Optimiza tu próximo brief</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Lens aprende de cada búsqueda. Añade objetivos de marca, KPIs y presupuesto para descubrir creadores con mejor fit.
+              </p>
+              <button
+                onClick={() => navigate('/influencer-lens')}
+                className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-purple hover:text-brand-pink"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                Iniciar nueva búsqueda
+              </button>
+            </aside>
+          </section>
+        )}
+
+        <p className="mt-12 text-center text-xs text-muted-foreground">
+          La Web Figital Agency © {new Date().getFullYear()} · Powered by Lens AI
         </p>
       </div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        <CTACard
-          title="Abrir Influencer Lens"
-          description="Busca, descubre y evalua influencers con inteligencia artificial para tus campañas."
-          icon={<Sparkles className="w-5 h-5" />}
-          to="/influencer-lens"
-          accent="bg-gradient-to-br from-blue-600 to-blue-800"
-        />
-        <CTACard
-          title="Gestionar Campanas"
-          description="Crea y administra tus campañas de influencer marketing. Ve el pipeline de ejecucion."
-          icon={<Megaphone className="w-5 h-5" />}
-          to="/campaigns"
-          accent="bg-gradient-to-br from-pink-500 to-rose-600"
-        />
-        <CTACard
-          title="Administrar Clientes"
-          description="Consulta y gestiona tus clientes, marcas y contactos comerciales."
-          icon={<Building2 className="w-5 h-5" />}
-          to="/clients"
-          accent="bg-gradient-to-br from-amber-500 to-orange-600"
-        />
+function QuickCard({
+  onClick,
+  icon,
+  title,
+  copy,
+  tone,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  copy: string;
+  tone: 'pink' | 'purple' | 'blue';
+}) {
+  const tones = {
+    pink: 'from-brand-pink to-brand-purple',
+    purple: 'from-brand-purple to-brand-blue',
+    blue: 'from-brand-blue to-brand-purple',
+  };
+  return (
+    <button
+      onClick={onClick}
+      className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-6 text-left shadow-soft transition-all hover:-translate-y-1 hover:shadow-elevated"
+    >
+      <div
+        className={`mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${tones[tone]} text-white shadow-glow`}
+      >
+        {icon}
       </div>
+      <h3 className="font-display text-xl tracking-tight text-foreground">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy}</p>
+      <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-brand-purple opacity-0 transition-opacity group-hover:opacity-100">
+        Abrir <ArrowUpRight className="h-3 w-3" />
+      </div>
+      <div className="pointer-events-none absolute -bottom-16 -right-16 h-40 w-40 rounded-full bg-gradient-brand opacity-0 blur-3xl transition-opacity group-hover:opacity-30" />
+    </button>
+  );
+}
 
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Resumen ejecutivo</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-          <KpiCard
-            title="Campanas activas"
-            value={isLoading ? '—' : (summary?.active_campaigns ?? '—')}
-            icon={<Megaphone className="w-5 h-5" />}
-            subtitle={`${summary?.total_campaigns ?? 0} totales`}
-          />
-          <KpiCard
-            title="Influencers"
-            value={isLoading ? '—' : formatNumber(summary?.total_influencers)}
-            icon={<Users className="w-5 h-5" />}
-          />
-          <KpiCard
-            title="Reach total"
-            value={isLoading ? '—' : formatNumber(summary?.total_reach)}
-            icon={<Eye className="w-5 h-5" />}
-          />
-          <KpiCard
-            title="Budget total"
-            value={isLoading ? '—' : formatCurrency(summary?.total_budget_usd ? Number(summary.total_budget_usd) : 0)}
-            icon={<DollarSign className="w-5 h-5" />}
-          />
+function Kpi({
+  icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-elevated">
+      <div className="flex items-center justify-between">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand-purple">
+          {icon}
         </div>
       </div>
-
-      {Array.isArray(recentConversations) && recentConversations.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">Conversaciones recientes del Lens</h2>
-            <Button variant="ghost" size="sm" onClick={() => navigate('/influencer-lens')} className="text-xs gap-1">
-              Ver todas <ChevronRight className="w-3 h-3" />
-            </Button>
-          </div>
-          <Card className="divide-y">
-            {recentConversations.map((conv) => (
-              <button
-                key={conv.id}
-                onClick={() => navigate(`/influencer-lens/${conv.id}`)}
-                className="w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors flex items-center gap-3"
-              >
-                <MessageSquare className="w-4 h-4 text-primary flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">
-                    {conv.accumulated_brief?.slice(0, 60) || 'Nueva busqueda'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(conv.last_message_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-              </button>
-            ))}
-          </Card>
-        </div>
-      )}
+      <p className="mt-4 font-display text-4xl tracking-tight text-foreground">{value}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }
