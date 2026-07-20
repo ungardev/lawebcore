@@ -92,23 +92,23 @@ export function LensChatPage() {
   };
 
   return (
-    <div className="mx-auto max-w-[1500px] px-6 py-8">
-      <div className="mb-6 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+    <div className="flex flex-col h-[calc(100vh-64px)] px-6 py-4">
+      <div className="mb-4 flex-shrink-0 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
+            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
               <Sparkles className="h-5 w-5" />
             </div>
-            <h1 className="font-display text-5xl tracking-tight text-foreground">Influencer Lens</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Influencer Lens</h1>
           </div>
-          <div className="flex items-center gap-3 mt-2">
+          <div className="flex items-center gap-3 mt-1.5">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
             </span>
             <span className="text-xs font-medium text-foreground">Lens AI · online</span>
             <span className="text-muted-foreground">·</span>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground hidden md:block">
               El cerebro AI de La Web Figital Agency · Descubre creadores con datos reales de Apify.
             </p>
             {totalCost > 0 && (
@@ -125,13 +125,13 @@ export function LensChatPage() {
         </Button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-soft overflow-hidden">
-          <div className="mb-2 flex items-center justify-between px-2 pt-1">
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr] flex-1 min-h-0">
+        <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-soft overflow-hidden flex flex-col">
+          <div className="mb-2 flex items-center justify-between px-2 pt-1 flex-shrink-0">
             <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Conversaciones</h3>
             <span className="text-[10px] text-muted-foreground">{conversations.length}</span>
           </div>
-          <div className="space-y-1">
+          <div className="flex-1 overflow-y-auto space-y-1">
             {conversations.length === 0 ? (
               <div className="p-3 text-xs text-muted-foreground text-center">
                 Sin conversaciones
@@ -162,7 +162,7 @@ export function LensChatPage() {
 
         <div className="flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
           {!conversation && !isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-6">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 min-h-[400px]">
               <LensEmptyState variant="no_conversations" />
               <Button onClick={handleNewConversation} className="mt-4 gap-2">
                 <MessageSquare className="w-4 h-4" />

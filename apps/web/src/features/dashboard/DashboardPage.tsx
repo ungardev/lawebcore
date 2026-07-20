@@ -51,7 +51,7 @@ export function DashboardPage() {
               Lens AI está listo · sincronizando {activeCount} campañas
             </div>
 
-            <h1 className="font-display text-5xl leading-[1.02] tracking-tight text-foreground md:text-6xl">
+            <h1 className="font-bold text-5xl leading-[1.02] tracking-tight text-foreground md:text-6xl">
               Tu próxima <span className="text-gradient-brand">campaña</span> empieza aquí.
             </h1>
 
@@ -123,7 +123,7 @@ export function DashboardPage() {
 
       <section className="mt-10">
         <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="font-display text-2xl tracking-tight text-foreground">Resumen ejecutivo</h2>
+          <h2 className="font-bold text-2xl tracking-tight text-foreground">Resumen ejecutivo</h2>
           <span className="text-xs text-muted-foreground">Actualizado hace instantes</span>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -161,7 +161,7 @@ export function DashboardPage() {
       <section className="mt-10 grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-2xl tracking-tight text-foreground">
+            <h2 className="font-bold text-2xl tracking-tight text-foreground">
               Conversaciones recientes del Lens
             </h2>
             <button
@@ -217,7 +217,7 @@ export function DashboardPage() {
 
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-2xl tracking-tight text-foreground">Top creadores</h2>
+            <h2 className="font-bold text-2xl tracking-tight text-foreground">Top creadores</h2>
             <TrendingUp className="h-4 w-4 text-brand-purple" />
           </div>
           <div className="space-y-3">
@@ -261,7 +261,7 @@ export function DashboardPage() {
 
       <section className="mt-10 mb-8">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-2xl tracking-tight text-foreground">Pipeline en vivo</h2>
+          <h2 className="font-bold text-2xl tracking-tight text-foreground">Pipeline en vivo</h2>
           <button
             onClick={() => navigate('/campaigns/kanban')}
             className="inline-flex items-center gap-1 text-xs font-medium text-brand-purple hover:text-brand-pink"
@@ -317,7 +317,7 @@ function QuickCard({
       >
         {icon}
       </div>
-      <h3 className="font-display text-xl tracking-tight text-foreground">{title}</h3>
+      <h3 className="font-bold text-xl tracking-tight text-foreground">{title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy}</p>
       <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-brand-purple opacity-0 transition-opacity group-hover:opacity-100">
         Abrir <ArrowUpRight className="h-3 w-3" />
@@ -349,7 +349,7 @@ function Kpi({
           {trend}
         </span>
       </div>
-      <p className="mt-4 font-display text-4xl tracking-tight text-foreground">{value}</p>
+      <p className="mt-4 font-bold text-4xl tracking-tight text-foreground">{value}</p>
       <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
       <p className="text-xs text-muted-foreground">{sub}</p>
     </div>

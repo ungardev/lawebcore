@@ -101,9 +101,9 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
   .font-display {
-    font-family: 'Instrument Serif', ui-serif, Georgia, serif;
-    font-weight: 400;
-    letter-spacing: -0.02em;
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 }
 

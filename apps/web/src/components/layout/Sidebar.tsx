@@ -90,32 +90,51 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
     >
       <div className="relative flex h-16 items-center justify-between border-b border-sidebar-border px-4">
         <NavLink to="/home" onClick={onNavigate} className="flex items-center gap-2.5">
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-            <img
-              src="/logo-laweb.png"
-              alt="La Web"
-              className="h-9 w-9 rounded-xl object-cover"
-            />
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">La Web</span>
-              <span className="text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/50">
-                Figital Agency
-              </span>
+          {collapsed ? (
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-brand text-sm font-bold text-white shadow-glow">
+              W
             </div>
+          ) : (
+            <>
+              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
+                <img
+                  src="/logo-laweb.png"
+                  alt="La Web"
+                  className="h-9 w-9 rounded-xl object-cover"
+                />
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">La Web</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/50">
+                  Figital Agency
+                </span>
+              </div>
+            </>
           )}
         </NavLink>
 
-        {onNavigate && (
-          <button
-            onClick={onNavigate}
-            className="rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
-            aria-label="Cerrar menú"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
+        <div className="flex items-center gap-1">
+          {onCollapse && (
+            <button
+              onClick={onCollapse}
+              className="hidden md:flex items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+              aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+            >
+              <ChevronLeft
+                className={cn('h-4 w-4 transition-transform duration-200', collapsed && 'rotate-180')}
+              />
+            </button>
+          )}
+          {onNavigate && (
+            <button
+              onClick={onNavigate}
+              className="rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
+              aria-label="Cerrar menú"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       <nav className="relative flex-1 space-y-6 overflow-y-auto px-3 py-5">
@@ -157,22 +176,6 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
           <div className="mt-3 mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-gradient-brand text-xs font-semibold text-white">
             UV
           </div>
-        )}
-
-        {onCollapse && (
-          <button
-            onClick={onCollapse}
-            className={cn(
-              'mt-2 hidden w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-sidebar-foreground/50 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground md:flex',
-              collapsed && 'justify-center'
-            )}
-            aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-          >
-            <ChevronLeft
-              className={cn('h-4 w-4 transition-transform', collapsed && 'rotate-180')}
-            />
-            {!collapsed && <span>Colapsar</span>}
-          </button>
         )}
       </div>
     </aside>
