@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,75 +6,68 @@
 
 @layer base {
   :root {
-    /* Hub tokens (light) */
-    --background: 0 0% 98%;
-    --foreground: 220 20% 10%;
+    /* Neutros (light) — cálidos, no grises planos */
+    --background: 30 20% 98.5%;
+    --foreground: 240 15% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 10%;
+    --card-foreground: 240 15% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 10%;
-    --primary: 220 20% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 220 15% 20%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 220 10% 95%;
-    --muted-foreground: 220 10% 40%;
-    --accent: 220 20% 15%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 10% 88%;
-    --input: 220 10% 88%;
-    --ring: 220 20% 10%;
-    --radius: 0.5rem;
+    --popover-foreground: 240 15% 9%;
+    --primary: 240 15% 9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 10% 96%;
+    --secondary-foreground: 240 15% 9%;
+    --muted: 240 10% 96%;
+    --muted-foreground: 240 6% 46%;
+    --accent: 292 84% 61%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 10% 91%;
+    --input: 240 10% 91%;
+    --ring: 292 84% 61%;
+    --radius: 0.75rem;
 
-    /* Brand tokens (signature gradient pink → purple → blue) */
+    /* Brand — firma pink → purple → blue */
     --brand-pink: 330 81% 60%;
-    --brand-pink-hover: 330 81% 52%;
-    --brand-purple: 270 70% 65%;
+    --brand-purple: 271 91% 65%;
     --brand-blue: 217 91% 60%;
-    --brand-blue-hover: 217 91% 53%;
 
-    /* Brand color hex values for direct use */
     --color-brand-pink: #ec4899;
     --color-brand-purple: #a855f7;
     --color-brand-blue: #3b82f6;
 
-    /* Sidebar token */
-    --sidebar: 220 20% 97%;
+    --sidebar: 30 15% 97%;
 
-    /* Hover token - soft gray for interactive elements */
-    --hover: 220 10% 95%;
-    --hover-foreground: 220 20% 10%;
+    --hover: 240 10% 95%;
+    --hover-foreground: 240 15% 9%;
   }
 
   .dark {
-    --background: 220 20% 8%;
+    --background: 240 15% 6%;
     --foreground: 0 0% 98%;
-    --card: 220 15% 10%;
+    --card: 240 12% 9%;
     --card-foreground: 0 0% 98%;
-    --popover: 220 15% 10%;
+    --popover: 240 12% 9%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
-    --primary-foreground: 220 20% 10%;
-    --secondary: 220 15% 15%;
+    --primary-foreground: 240 15% 9%;
+    --secondary: 240 10% 13%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 220 15% 15%;
-    --muted-foreground: 220 10% 60%;
-    --accent: 220 15% 18%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --muted: 240 10% 13%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 292 84% 61%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 0 0% 98%;
+    --border: 240 10% 16%;
+    --input: 240 10% 16%;
+    --ring: 292 84% 61%;
 
-    /* Hover token - dark gray for dark mode */
-    --hover: 220 15% 18%;
+    --hover: 240 10% 16%;
     --hover-foreground: 0 0% 98%;
 
-    /* Sidebar token dark */
-    --sidebar: 220 20% 10%;
+    --sidebar: 240 12% 9%;
   }
 }
 
@@ -82,63 +75,80 @@
   * {
     @apply border-border;
   }
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  .font-display {
+    font-family: 'Instrument Serif', ui-serif, Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
   }
 }
 
 @layer utilities {
+  .bg-gradient-brand {
+    background-image: linear-gradient(135deg, #ec4899 0%, #a855f7 50%, #3b82f6 100%);
+  }
+  .bg-gradient-brand-soft {
+    background-image: linear-gradient(
+      135deg,
+      rgba(236, 72, 153, 0.12) 0%,
+      rgba(168, 85, 247, 0.12) 50%,
+      rgba(59, 130, 246, 0.12) 100%
+    );
+  }
+  .text-gradient-brand {
+    background-image: linear-gradient(135deg, #ec4899 0%, #a855f7 50%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   .bg-aurora {
-    background:
-      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--brand-pink) / 0.15), transparent),
-      radial-gradient(ellipse 60% 40% at 80% 0%, hsl(var(--brand-purple) / 0.1), transparent),
-      radial-gradient(ellipse 50% 30% at 100% 20%, hsl(var(--brand-blue) / 0.08), transparent);
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(236, 72, 153, 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(168, 85, 247, 0.08), transparent 60%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(59, 130, 246, 0.06), transparent 60%);
+  }
+  .dark .bg-aurora {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(236, 72, 153, 0.12), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(168, 85, 247, 0.14), transparent 60%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(59, 130, 246, 0.10), transparent 60%);
   }
 
-  .bg-aurora-dark {
-    background:
-      radial-gradient(ellipse 100% 60% at 50% -30%, hsl(var(--brand-pink) / 0.2), transparent),
-      radial-gradient(ellipse 80% 50% at 70% -10%, hsl(var(--brand-purple) / 0.15), transparent),
-      radial-gradient(ellipse 60% 40% at 90% 10%, hsl(var(--brand-blue) / 0.1), transparent);
+  .shadow-soft {
+    box-shadow: 0 1px 2px rgba(15, 15, 30, 0.04), 0 4px 12px rgba(15, 15, 30, 0.04);
+  }
+  .shadow-elevated {
+    box-shadow: 0 4px 12px rgba(15, 15, 30, 0.06), 0 16px 40px rgba(15, 15, 30, 0.08);
+  }
+  .shadow-glow {
+    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
   }
 
-  .gradient-brand {
-    background: linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)));
-  }
-
-  .gradient-brand-hover {
-    background: linear-gradient(135deg, hsl(var(--brand-pink-hover)), hsl(var(--brand-purple)), hsl(var(--brand-blue-hover)));
-  }
+  .text-brand-pink { color: #ec4899; }
+  .text-brand-purple { color: #a855f7; }
+  .text-brand-blue { color: #3b82f6; }
+  .bg-brand-pink { background-color: #ec4899; }
+  .bg-brand-purple { background-color: #a855f7; }
+  .bg-brand-blue { background-color: #3b82f6; }
 
   .glass {
     background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
-
   .glass-dark {
     background: rgba(0, 0, 0, 0.4);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-  }
-
-  .shadow-soft {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  }
-
-  .shadow-elevated {
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  }
-
-  .shadow-glow {
-    box-shadow: 0 0 24px rgba(168, 85, 247, 0.25);
-  }
-
-  .text-gradient-brand {
-    background: linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
   }
 }

@@ -20,18 +20,11 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen bg-background relative overflow-hidden">
-      {/* Aurora background blobs */}
-      <div
-        className="fixed inset-0 z-0 pointer-events-none"
-        aria-hidden="true"
-      >
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full bg-brand-pink/10 blur-[120px] animate-pulse" />
-        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] rounded-full bg-brand-purple/10 blur-[100px] animate-pulse" />
-        <div className="absolute top-1/3 right-0 w-[400px] h-[400px] rounded-full bg-brand-blue/8 blur-[80px] animate-pulse" />
-      </div>
+      {/* Aurora background */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-aurora" />
 
       <div className="relative z-10 hidden md:block">
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={collapsed} onCollapse={toggleCollapsed} />
       </div>
 
       <div
@@ -47,7 +40,7 @@ export function AppLayout() {
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <Sidebar onNavigate={() => setMobileOpen(false)} />
+          <Sidebar onNavigate={() => setMobileOpen(false)} onCollapse={toggleCollapsed} />
         </div>
       </div>
 
