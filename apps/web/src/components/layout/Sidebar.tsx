@@ -96,7 +96,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               <img
                 src="/logo-laweb.png"
                 alt="La Web"
-                className="h-full w-auto object-contain"
+                className="h-14 w-auto object-contain"
               />
             </div>
           )}
