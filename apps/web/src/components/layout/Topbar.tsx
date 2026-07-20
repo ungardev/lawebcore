@@ -2,11 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/features/auth/AuthProvider';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { LogOut, Menu, Search, Bell, Command } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { LogOut, Search, Bell, Command, PanelLeftClose, PanelLeft } from 'lucide-react';
 
 interface TopbarProps {
-  onToggleSidebar?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function initialsOf(name: string | null | undefined): string {
@@ -15,18 +15,8 @@ function initialsOf(name: string | null | undefined): string {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
-const ROUTE_META: Record<string, { title: string; subtitle: string }> = {
-  '/home': { title: 'Home', subtitle: 'Vista general de tu operación' },
-  '/campaigns': { title: 'Campañas', subtitle: 'Todas las campañas activas y su estado' },
-  '/campaigns/kanban': { title: 'Pipeline', subtitle: 'Flujo operativo por etapa' },
-  '/clients': { title: 'Clientes', subtitle: 'Cuentas corporativas y marcas' },
-  '/influencer-lens': { title: 'Influencer Lens', subtitle: 'Descubrimiento con IA' },
-  '/settings': { title: 'Configuración', subtitle: 'Preferencias del workspace' },
-};
-
-export function Topbar({ onToggleSidebar }: TopbarProps) {
+export function Topbar({ collapsed = false, onToggleCollapse }: TopbarProps) {
   const { user, signOut } = useAuth();
-  const location = useLocation();
   const { data: profile } = useQuery({
     queryKey: ['auth-me'],
     queryFn: () => authApi.me(),
@@ -38,32 +28,25 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
     (user?.user_metadata as Record<string, string> | null)?.full_name?.trim() ||
     null;
 
-  const meta =
-    ROUTE_META[location.pathname] ??
-    { title: 'Workspace', subtitle: 'La Web Figital Agency' };
-
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:px-6">
-      {onToggleSidebar && (
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border/60 bg-background/80 px-4 backdrop-blur-xl md:px-6">
+      {onToggleCollapse && (
         <Button
           variant="ghost"
           size="icon"
-          onClick={onToggleSidebar}
-          className="md:hidden"
-          aria-label="Abrir menú"
+          onClick={onToggleCollapse}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
         >
-          <Menu className="h-5 w-5" />
+          {collapsed ? (
+            <PanelLeft className="h-5 w-5" />
+          ) : (
+            <PanelLeftClose className="h-5 w-5" />
+          )}
         </Button>
       )}
 
-      <div className="hidden min-w-0 flex-col md:flex">
-        <h1 className="truncate text-sm font-semibold leading-tight text-foreground">
-          {meta.title}
-        </h1>
-        <p className="truncate text-xs text-muted-foreground">{meta.subtitle}</p>
-      </div>
-
-      <div className="ml-auto hidden max-w-md flex-1 md:block">
+      <div className="flex-1 md:max-w-2xl">
         <div className="group relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" />
           <input
@@ -77,7 +60,7 @@ export function Topbar({ onToggleSidebar }: TopbarProps) {
         </div>
       </div>
 
-      <div className="ml-auto flex items-center gap-2 md:ml-0">
+      <div className="ml-auto flex items-center gap-2">
         <Button variant="ghost" size="icon" className="relative" aria-label="Notificaciones">
           <Bell className="h-[18px] w-[18px]" />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-gradient-to-br from-primary to-accent shadow-glow" />

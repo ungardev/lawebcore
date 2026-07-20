@@ -27,7 +27,7 @@ export function AppLayout() {
       </div>
 
       <div className="relative z-10 hidden md:block">
-        <Sidebar collapsed={collapsed} onCollapse={toggleCollapsed} />
+        <Sidebar collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
       <div
@@ -43,16 +43,14 @@ export function AppLayout() {
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <Sidebar onNavigate={() => setMobileOpen(false)} onCollapse={toggleCollapsed} />
+          <Sidebar onNavigate={() => setMobileOpen(false)} />
         </div>
       </div>
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar
-          onToggleSidebar={() => {
-            if (window.innerWidth < 768) setMobileOpen((p) => !p);
-            else toggleCollapsed();
-          }}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
         />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto min-h-full w-full max-w-[1600px] p-4 md:p-6 lg:p-8">

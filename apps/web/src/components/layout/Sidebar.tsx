@@ -6,8 +6,6 @@ import {
   Building2,
   Sparkles,
   Settings,
-  X,
-  ChevronLeft,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -29,10 +27,9 @@ const NAV_FOOTER = [
 interface SidebarProps {
   collapsed?: boolean;
   onNavigate?: () => void;
-  onCollapse?: () => void;
 }
 
-export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarProps) {
+export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const renderItem = (item: (typeof NAV_MAIN)[number] & { badge?: string; end?: boolean }) => {
     const Icon = item.icon;
     return (
@@ -88,8 +85,8 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
         collapsed ? 'w-[72px]' : 'w-64'
       )}
     >
-      <div className="relative flex h-16 items-center justify-between border-b border-sidebar-border px-4">
-        <NavLink to="/home" onClick={onNavigate} className="flex items-center gap-2.5">
+      <div className="flex h-16 items-center justify-center border-b border-sidebar-border px-4">
+        <NavLink to="/home" onClick={onNavigate}>
           {collapsed ? (
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-brand text-sm font-bold text-white shadow-glow">
               W
@@ -99,34 +96,11 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
               <img
                 src="/logo-laweb.png"
                 alt="La Web"
-                className="h-10 w-10 object-contain"
+                className="h-12 w-12 object-contain"
               />
             </div>
           )}
         </NavLink>
-
-        <div className="flex items-center gap-1">
-          {onCollapse && (
-            <button
-              onClick={onCollapse}
-              className="hidden md:flex items-center justify-center rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              aria-label={collapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
-            >
-              <ChevronLeft
-                className={cn('h-4 w-4 transition-transform duration-200', collapsed && 'rotate-180')}
-              />
-            </button>
-          )}
-          {onNavigate && (
-            <button
-              onClick={onNavigate}
-              className="rounded-lg p-1.5 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground md:hidden"
-              aria-label="Cerrar menú"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
       </div>
 
       <nav className="relative flex-1 min-w-0 px-3 py-5">
