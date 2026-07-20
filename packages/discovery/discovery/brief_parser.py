@@ -29,8 +29,13 @@ REGLAS DE ORO:
 5. Audience gender: "female" por defecto para campañas de mascotas, belleza, lifestyle.
 6. Si algo falta o es ambiguo, PREGUNTA. No asumas valores inventados.
 7. additional_context: aquí va todo lo que no encaje en los campos pero sea relevante para el scoring.
+8. Tono: usa EXACTAMENTE estas palabras — sin abbreviaturas, sin cortes:
+   - emocional, divertivo, formal, casual, humorístico, inspirador, educativo, lujoso, premium, auténtico, real, competitivo, ambivalente, corporativo, infantil, juvenil, maternal, femenino, masculino, neutro, mincioso.
+   - IMPORTANTE: "emocional" se escribe COMPLETO, nunca "emocio", "emociona", "emocion", "emocive".
+   - "divertido" se escribe completo, nunca "divert", "diverti".
+   - Escribe las palabras con tildes cuando corresponda (humorístico, éducatif, auténtico, ambivalente, maternal).
 
-Tono: profesional pero directo. Cuando confirmes el brief, di algo como "Entendido. Estamos hablando de [resumen de 1 línea]. ¿Confirmas?"."""
+Cuando confirmes el brief, di algo como "Entendido. Estamos hablando de [resumen de 1 línea]. ¿Confirmas?"."""
 
 BRIEF_PARSER_USER_TEMPLATE = """Extrae el brief de la siguiente descripción de campaña:
 
@@ -83,6 +88,45 @@ _COUNTRY_NAME_TO_ISO = {
     "puertorico": "PR",
     "costarica": "CR",
     "guatemala": "GT",
+}
+
+_TONE_NORMALIZATION_MAP = {
+    "emocional": "emocional",
+    "emocio": "emocional",
+    "emociona": "emocional",
+    "emocive": "emocional",
+    "emocion": "emocional",
+    "emocionale": "emocional",
+    "divertido": "divertido",
+    "divert": "divertido",
+    "diverti": "divertido",
+    "formal": "formal",
+    "casual": "casual",
+    "humoristico": "humorístico",
+    "humorist": "humorístico",
+    "humoristica": "humorístico",
+    "inspirador": "inspirador",
+    "inspiradora": "inspirador",
+    "educativo": "educativo",
+    "educativa": "educativo",
+    "lujoso": "lujoso",
+    "luxury": "lujoso",
+    "premium": "premium",
+    "autentico": "auténtico",
+    "autentica": "auténtico",
+    "real": "real",
+    "competitivo": "competitivo",
+    "ambicioso": "ambicioso",
+    "corporativo": "corporativo",
+    "corporativa": "corporativo",
+    "infantil": "infantil",
+    "juvenil": "juvenil",
+    "maternal": "maternal",
+    "femenino": "femenino",
+    "masculino": "masculino",
+    "neutro": "neutro",
+    "mincioso": "mincioso",
+    "mincio": "mincioso",
 }
 
 
@@ -186,7 +230,13 @@ class BriefParserAgent:
         if "niches" in sanitized and not isinstance(sanitized["niches"], list):
             sanitized["niches"] = []
 
-        if "tone" in sanitized and not isinstance(sanitized["tone"], list):
+        if "tone" in sanitized and isinstance(sanitized["tone"], list):
+            normalized_tones = []
+            for t in sanitized["tone"]:
+                t_lower = str(t).strip().lower()
+                normalized_tones.append(_TONE_NORMALIZATION_MAP.get(t_lower, t_lower))
+            sanitized["tone"] = normalized_tones
+        else:
             sanitized["tone"] = []
 
         if "budget_usd" in sanitized and sanitized["budget_usd"] is not None:
