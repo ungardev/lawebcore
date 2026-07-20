@@ -22,6 +22,10 @@ from discovery.schemas import (
     MessageResponse,
 )
 from discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
+from shared_core.supabase_rest import supabase_rest
+
+PURINA_BRAND_ID = "f0000000-0000-0000-0000-000000000002"
+MOCKUP_RUN_ID = "a0000000-0000-0000-0000-000000000001"
 
 
 class ConversationState:
@@ -38,6 +42,22 @@ class ConversationState:
 class DiscoveryOrchestrator:
     def __init__(self):
         self.state: dict[UUID, ConversationState] = {}
+
+    def _is_purina_brief(self, brief_text: str) -> bool:
+        """Detect if the brief is for Purina Dog Chow demo."""
+        text = (brief_text or "").lower()
+        return "purina" in text and "dog chow" in text
+
+    async def _load_mockup_candidates(self) -> list[dict[str, Any]]:
+        """Load mockup candidates for Purina Dog Chow demo from DB."""
+        candidates = await supabase_rest.select(
+            table="discovery_candidates",
+            select="id,platform,handle,full_name,avatar_url,followers,engagement_rate,match_score,niche_relevance,geo_relevance,audience_relevance,content_quality,status,estimated_cost,expected_reach,expected_engagement,rationale,country,city,bio",
+            filters=[f"run_id=eq.{MOCKUP_RUN_ID}"],
+            order="match_score.desc",
+            limit=20,
+        )
+        return list(candidates)
 
     async def create_conversation(self, conversation_id: UUID, initial_brief: str | None = None) -> dict[str, Any]:
         state = ConversationState()
@@ -155,6 +175,33 @@ class DiscoveryOrchestrator:
                         exc_info=True,
                     )
 
+            brief_text = state.accumulated_brief or ""
+            if self._is_purina_brief(brief_text):
+                state.step = ConversationStep.CANDIDATES_REVIEW
+                await asyncio.sleep(5)
+                candidates = await self._load_mockup_candidates()
+                top_5 = candidates[:5]
+                summary = "\n".join(
+                    f"- **{c['handle']}** ({c['platform']}): "
+                    f"Score {c.get('match_score', 0):.0f}/100, "
+                    f"{c.get('followers', 0):,} seguidores, "
+                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
+                    for c in top_5
+                )
+                return {
+                    "conversation_id": str(conversation_id),
+                    "step": state.step.value,
+                    "message": (
+                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
+                        f"que coinciden con tu brief.\n\n"
+                        f"Aquí están los más relevantes:\n{summary}\n\n"
+                        f"Puedes ver todos en la lista de candidatos."
+                    ),
+                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
+                    "candidates": candidates,
+                    "pending_discovery": False,
+                }
+
             state.step = ConversationStep.SEARCHING
             return {
                 "conversation_id": str(conversation_id),
@@ -192,6 +239,33 @@ class DiscoveryOrchestrator:
                         error=str(e),
                         exc_info=True,
                     )
+
+            brief_text = state.accumulated_brief or ""
+            if self._is_purina_brief(brief_text):
+                state.step = ConversationStep.CANDIDATES_REVIEW
+                await asyncio.sleep(5)
+                candidates = await self._load_mockup_candidates()
+                top_5 = candidates[:5]
+                summary = "\n".join(
+                    f"- **{c['handle']}** ({c['platform']}): "
+                    f"Score {c.get('match_score', 0):.0f}/100, "
+                    f"{c.get('followers', 0):,} seguidores, "
+                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
+                    for c in top_5
+                )
+                return {
+                    "conversation_id": str(conversation_id),
+                    "step": state.step.value,
+                    "message": (
+                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
+                        f"que coinciden con tu brief.\n\n"
+                        f"Aquí están los más relevantes:\n{summary}\n\n"
+                        f"Puedes ver todos en la lista de candidatos."
+                    ),
+                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
+                    "candidates": candidates,
+                    "pending_discovery": False,
+                }
 
             state.step = ConversationStep.SEARCHING
             return {
