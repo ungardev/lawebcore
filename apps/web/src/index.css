@@ -6,26 +6,26 @@
 
 @layer base {
   :root {
-    /* Neutros (light) — cálidos, no grises planos */
-    --background: 30 20% 98.5%;
-    --foreground: 240 15% 9%;
+    /* Neutros — blancos limpios */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 240 15% 9%;
+    --card-foreground: 240 10% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 15% 9%;
-    --primary: 240 15% 9%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 240 10% 10%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 10% 96%;
-    --secondary-foreground: 240 15% 9%;
+    --secondary-foreground: 240 10% 10%;
     --muted: 240 10% 96%;
-    --muted-foreground: 240 6% 46%;
-    --accent: 292 84% 61%;
-    --accent-foreground: 0 0% 100%;
+    --muted-foreground: 240 5% 46%;
+    --accent: 240 10% 92%;
+    --accent-foreground: 240 10% 10%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 10% 91%;
-    --input: 240 10% 91%;
-    --ring: 292 84% 61%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
+    --ring: 240 10% 70%;
     --radius: 0.75rem;
 
     /* Brand — firma pink → purple → blue */
@@ -37,37 +37,52 @@
     --color-brand-purple: #a855f7;
     --color-brand-blue: #3b82f6;
 
-    --sidebar: 30 15% 97%;
+    /* Sidebar tokens */
+    --sidebar: 240 10% 97%;
+    --sidebar-foreground: 240 10% 10%;
+    --sidebar-primary: 271 91% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 92%;
+    --sidebar-accent-foreground: 240 10% 10%;
+    --sidebar-border: 240 10% 88%;
+    --sidebar-ring: 271 91% 65%;
 
-    --hover: 240 10% 95%;
-    --hover-foreground: 240 15% 9%;
+    --hover: 240 10% 94%;
+    --hover-foreground: 240 10% 10%;
   }
 
   .dark {
-    --background: 240 15% 6%;
+    --background: 240 12% 6%;
     --foreground: 0 0% 98%;
     --card: 240 12% 9%;
     --card-foreground: 0 0% 98%;
     --popover: 240 12% 9%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
-    --primary-foreground: 240 15% 9%;
+    --primary-foreground: 240 12% 9%;
     --secondary: 240 10% 13%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 10% 13%;
     --muted-foreground: 240 5% 65%;
-    --accent: 292 84% 61%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 240 10% 16%;
+    --accent-foreground: 0 0% 98%;
     --destructive: 0 62% 40%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 10% 16%;
     --input: 240 10% 16%;
-    --ring: 292 84% 61%;
+    --ring: 240 10% 70%;
 
     --hover: 240 10% 16%;
     --hover-foreground: 0 0% 98%;
 
     --sidebar: 240 12% 9%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 271 91% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 14%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 10% 16%;
+    --sidebar-ring: 271 91% 65%;
   }
 }
 
@@ -99,9 +114,9 @@
   .bg-gradient-brand-soft {
     background-image: linear-gradient(
       135deg,
-      rgba(236, 72, 153, 0.12) 0%,
-      rgba(168, 85, 247, 0.12) 50%,
-      rgba(59, 130, 246, 0.12) 100%
+      rgba(236, 72, 153, 0.10) 0%,
+      rgba(168, 85, 247, 0.10) 50%,
+      rgba(59, 130, 246, 0.10) 100%
     );
   }
   .text-gradient-brand {
@@ -113,15 +128,15 @@
 
   .bg-aurora {
     background-image:
-      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(236, 72, 153, 0.08), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(168, 85, 247, 0.08), transparent 60%),
-      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(59, 130, 246, 0.06), transparent 60%);
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(168, 85, 247, 0.05), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(59, 130, 246, 0.05), transparent 60%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(236, 72, 153, 0.04), transparent 60%);
   }
   .dark .bg-aurora {
     background-image:
-      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(236, 72, 153, 0.12), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(168, 85, 247, 0.14), transparent 60%),
-      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(59, 130, 246, 0.10), transparent 60%);
+      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(59, 130, 246, 0.08), transparent 60%),
+      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(236, 72, 153, 0.06), transparent 60%);
   }
 
   .shadow-soft {
@@ -131,7 +146,7 @@
     box-shadow: 0 4px 12px rgba(15, 15, 30, 0.06), 0 16px 40px rgba(15, 15, 30, 0.08);
   }
   .shadow-glow {
-    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.35);
+    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.30);
   }
 
   .text-brand-pink { color: #ec4899; }
@@ -142,13 +157,17 @@
   .bg-brand-blue { background-color: #3b82f6; }
 
   .glass {
-    background: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.70);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+  }
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.40);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
-  .glass-dark {
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+
+  .ring-brand {
+    --tw-ring-color: rgba(168, 85, 247, 0.35);
   }
 }

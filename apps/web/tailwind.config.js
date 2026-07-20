@@ -47,6 +47,16 @@ export default {
           DEFAULT: 'hsl(var(--hover))',
           foreground: 'hsl(var(--hover-foreground))',
         },
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          primary: 'hsl(var(--sidebar-primary))',
+          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
+          accent: 'hsl(var(--sidebar-accent))',
+          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
+          border: 'hsl(var(--sidebar-border))',
+          ring: 'hsl(var(--sidebar-ring))',
+        },
         brand: {
           pink: 'hsl(var(--brand-pink))',
           'pink-hover': 'hsl(var(--brand-pink-hover))',
