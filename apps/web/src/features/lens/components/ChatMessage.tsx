@@ -3,7 +3,8 @@ import { cn } from '@/lib/utils';
 import type { ChatTurn } from '../types/discovery';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCallBlock } from './ToolCallBlock';
-import { InfluencerTable } from './InfluencerTable';
+import { CandidateCard } from './CandidateCard';
+import { SearchProgress } from './SearchProgress';
 import { CostBadge } from './CostBadge';
 
 interface ChatMessageProps {
@@ -57,18 +58,35 @@ export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatM
                       />
                     )}
                     {turn.candidates && turn.candidates.length > 0 && (
-                      <InfluencerTable
-                        candidates={turn.candidates}
-                        onSave={onSaveCandidate}
-                        onDismiss={onDismissCandidate}
-                      />
+                      <div className="mt-3 space-y-3">
+                        <p className="text-xs font-semibold text-foreground">
+                          {turn.candidates.length} candidatos encontrados
+                        </p>
+                        <div className="grid gap-3">
+                          {turn.candidates.map((c) => (
+                            <CandidateCard
+                              key={c.id}
+                              candidate={c}
+                              onSave={onSaveCandidate}
+                              onDismiss={onDismissCandidate}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     )}
+
+                    {turn.progress && !turn.candidates && (
+                      <div className="mt-3">
+                        <SearchProgress
+                          progress={turn.progress}
+                        />
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between mt-2">
-                      {turn.progress && !turn.candidates && (
+                      {!turn.progress && !turn.candidates && (
                         <p className="text-xs text-muted-foreground">
-                          {turn.progress.current_step === 'searching'
-                            ? `Buscando... ${turn.progress.candidates_found} encontrados`
-                            : `Procesando: ${turn.progress.current_step}`}
+                          {turn.content ? '' : 'Procesando...'}
                         </p>
                       )}
                       <CostBadge

@@ -34,6 +34,19 @@ export function useDiscoveryConversation() {
       const conv = await lensApi.conversations.get(conversationId);
       setConversation(conv);
 
+      let candidates: DiscoveryCandidate[] | null = null;
+
+      if (conv.discovery_run_id) {
+        try {
+          const run = await lensApi.search.getRun(conv.discovery_run_id);
+          if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
+            candidates = await lensApi.search.getCandidates(conv.discovery_run_id, { limit: 20 });
+          }
+        } catch {
+          // run not accessible or candidates failed
+        }
+      }
+
       const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m: DiscoveryMessage) => ({
         id: m.id,
         role: m.role as 'user' | 'assistant',
@@ -45,6 +58,15 @@ export function useDiscoveryConversation() {
         latency_ms: m.latency_ms ?? null,
         isLoading: false,
       }));
+
+      if (candidates && candidates.length > 0) {
+        const lastAssistantIdx = [...mappedTurns].reverse().findIndex((t) => t.role === 'assistant');
+        if (lastAssistantIdx !== -1) {
+          const actualIdx = mappedTurns.length - 1 - lastAssistantIdx;
+          mappedTurns[actualIdx] = { ...mappedTurns[actualIdx], candidates };
+        }
+      }
+
       setTurns(mappedTurns);
       setPendingBrief(null);
     } catch (e) {
