@@ -84,7 +84,7 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
   return (
     <aside
       className={cn(
-        'relative flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300',
+        'relative flex h-full flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 overflow-hidden',
         collapsed ? 'w-[72px]' : 'w-64'
       )}
     >
@@ -95,21 +95,13 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
               W
             </div>
           ) : (
-            <>
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center">
-                <img
-                  src="/logo-laweb.png"
-                  alt="La Web"
-                  className="h-9 w-9 rounded-xl object-cover"
-                />
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">La Web</span>
-                <span className="text-[10px] uppercase tracking-[0.18em] text-sidebar-foreground/50">
-                  Figital Agency
-                </span>
-              </div>
-            </>
+            <div className="shrink-0">
+              <img
+                src="/logo-laweb.png"
+                alt="La Web"
+                className="h-10 w-10 object-contain"
+              />
+            </div>
           )}
         </NavLink>
 
@@ -137,23 +129,25 @@ export function Sidebar({ collapsed = false, onNavigate, onCollapse }: SidebarPr
         </div>
       </div>
 
-      <nav className="relative flex-1 space-y-6 overflow-y-auto px-3 py-5">
-        <div className="space-y-1">
-          {!collapsed && (
-            <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/40">
-              Workspace
-            </p>
-          )}
-          {NAV_MAIN.map(renderItem)}
-        </div>
+      <nav className="relative flex-1 min-w-0 px-3 py-5">
+        <div className="h-full space-y-6 overflow-y-auto">
+          <div className="space-y-1">
+            {!collapsed && (
+              <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/40">
+                Workspace
+              </p>
+            )}
+            {NAV_MAIN.map(renderItem)}
+          </div>
 
-        <div className="space-y-1">
-          {!collapsed && (
-            <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/40">
-              Inteligencia
-            </p>
-          )}
-          {NAV_AI.map(renderItem)}
+          <div className="space-y-1">
+            {!collapsed && (
+              <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.16em] text-sidebar-foreground/40">
+                Inteligencia
+              </p>
+            )}
+            {NAV_AI.map(renderItem)}
+          </div>
         </div>
       </nav>
 
