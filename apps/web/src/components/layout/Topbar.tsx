@@ -9,12 +9,6 @@ interface TopbarProps {
   onToggleCollapse?: () => void;
 }
 
-function initialsOf(name: string | null | undefined): string {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
-}
-
 export function Topbar({ collapsed = false, onToggleCollapse }: TopbarProps) {
   const { user, signOut } = useAuth();
   const { data: profile } = useQuery({
@@ -67,13 +61,9 @@ export function Topbar({ collapsed = false, onToggleCollapse }: TopbarProps) {
         </Button>
 
         <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-muted/40 py-1.5 pl-1.5 pr-3">
-          <div className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary via-accent to-secondary text-[11px] font-bold text-primary-foreground shadow-soft">
-            {initialsOf(displayName)}
-            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-emerald-500" />
-          </div>
           <div className="hidden flex-col leading-tight sm:flex">
             <span className="text-[11px] text-muted-foreground">Bienvenido</span>
-            <span className="max-w-[140px] truncate text-xs font-semibold text-foreground">
+            <span className="max-w-[160px] truncate text-xs font-semibold text-foreground">
               {displayName || (user?.email ? user.email.split('@')[0] : 'Usuario')}
             </span>
           </div>
