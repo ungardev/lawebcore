@@ -28,20 +28,29 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'h-full border-r bg-card flex flex-col transition-all duration-200',
+        'h-full flex flex-col glass border-r border-border/40 transition-all duration-200 relative',
         collapsed ? 'md:w-16' : 'md:w-56',
         'w-56'
       )}
     >
-      <div className={cn('border-b h-14 flex items-center justify-between', collapsed ? 'md:px-3 px-4' : 'px-4')}>
+      <div
+        className={cn(
+          'border-b border-border/40 h-14 flex items-center justify-between',
+          collapsed ? 'md:px-3 px-4' : 'px-4'
+        )}
+      >
         <div className="flex items-center gap-3 overflow-hidden">
           {collapsed ? (
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-red-500 flex items-center justify-center text-white font-bold flex-shrink-0 shadow-md">
-              <span className="text-lg leading-none">W</span>
+            <div className="w-10 h-10 rounded-xl gradient-brand flex items-center justify-center text-white shadow-glow flex-shrink-0">
+              <span className="text-lg leading-none font-bold">W</span>
             </div>
           ) : (
             <div className="h-11 flex items-center flex-shrink-0">
-              <img src="/logo-laweb.png" alt="La Web Figital Agency" className="h-11 w-auto object-contain" />
+              <img
+                src="/logo-laweb.png"
+                alt="La Web Figital Agency"
+                className="h-11 w-auto object-contain"
+              />
             </div>
           )}
         </div>
@@ -66,19 +75,42 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150',
                 isActive
-                  ? 'bg-primary text-primary-foreground font-medium'
+                  ? 'bg-gradient-to-r from-brand-pink/10 via-brand-purple/10 to-brand-blue/10 text-foreground font-medium shadow-soft'
                   : 'text-muted-foreground hover:bg-hover hover:text-foreground',
                 collapsed && 'md:justify-center'
               )
             }
           >
             <item.icon className="w-4 h-4 flex-shrink-0" />
-            <span className={cn('truncate', collapsed && 'md:hidden')}>{item.label}</span>
+            <span className={cn('truncate', collapsed && 'md:hidden')}>
+              {item.label}
+            </span>
           </NavLink>
         ))}
       </nav>
+
+      <div className="p-3 border-t border-border/40">
+        <div
+          className={cn(
+            'flex items-center gap-3 px-3 py-2 rounded-lg bg-gradient-to-r from-brand-pink/5 via-brand-purple/5 to-brand-blue/5',
+            collapsed && 'md:justify-center'
+          )}
+        >
+          <div className="w-6 h-6 rounded-md gradient-brand flex items-center justify-center flex-shrink-0">
+            <Sparkles className="w-3 h-3 text-white" />
+          </div>
+          <span
+            className={cn(
+              'text-xs font-medium text-foreground/80',
+              collapsed && 'md:hidden'
+            )}
+          >
+            AI Assistant
+          </span>
+        </div>
+      </div>
     </aside>
   );
 }

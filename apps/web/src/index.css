@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -26,9 +28,10 @@
     --ring: 220 20% 10%;
     --radius: 0.5rem;
 
-    /* Brand tokens (signature gradient pink → blue) */
+    /* Brand tokens (signature gradient pink → purple → blue) */
     --brand-pink: 330 81% 60%;
     --brand-pink-hover: 330 81% 52%;
+    --brand-purple: 270 70% 65%;
     --brand-blue: 217 91% 60%;
     --brand-blue-hover: 217 91% 53%;
 
@@ -36,6 +39,9 @@
     --color-brand-pink: #ec4899;
     --color-brand-purple: #a855f7;
     --color-brand-blue: #3b82f6;
+
+    /* Sidebar token */
+    --sidebar: 220 20% 97%;
 
     /* Hover token - soft gray for interactive elements */
     --hover: 220 10% 95%;
@@ -66,6 +72,9 @@
     /* Hover token - dark gray for dark mode */
     --hover: 220 15% 18%;
     --hover-foreground: 0 0% 98%;
+
+    /* Sidebar token dark */
+    --sidebar: 220 20% 10%;
   }
 }
 
@@ -76,5 +85,60 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+@layer utilities {
+  .bg-aurora {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -20%, hsl(var(--brand-pink) / 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 80% 0%, hsl(var(--brand-purple) / 0.1), transparent),
+      radial-gradient(ellipse 50% 30% at 100% 20%, hsl(var(--brand-blue) / 0.08), transparent);
+  }
+
+  .bg-aurora-dark {
+    background:
+      radial-gradient(ellipse 100% 60% at 50% -30%, hsl(var(--brand-pink) / 0.2), transparent),
+      radial-gradient(ellipse 80% 50% at 70% -10%, hsl(var(--brand-purple) / 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 10%, hsl(var(--brand-blue) / 0.1), transparent);
+  }
+
+  .gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)));
+  }
+
+  .gradient-brand-hover {
+    background: linear-gradient(135deg, hsl(var(--brand-pink-hover)), hsl(var(--brand-purple)), hsl(var(--brand-blue-hover)));
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-elevated {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  .shadow-glow {
+    box-shadow: 0 0 24px rgba(168, 85, 247, 0.25);
+  }
+
+  .text-gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
