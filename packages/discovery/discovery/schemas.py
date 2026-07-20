@@ -66,6 +66,15 @@ class BriefStructured(BaseModel):
     additional_context: str = ""
 
 
+class DiscoveryPlan(BaseModel):
+    keyword_queries: list[str] = Field(default_factory=list)
+    hashtag_queries: list[str] = Field(default_factory=list)
+    enrichment_batch_size: int = 10
+    analytics_top_n: int = 20
+    min_followers: int = 1000
+    max_followers: int = 10_000_000
+
+
 class CandidateMetrics(BaseModel):
     platform: Platform
     platform_user_id: str | None = None

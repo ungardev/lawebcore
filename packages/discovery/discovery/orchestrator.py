@@ -9,7 +9,7 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 from discovery.brief_parser import brief_parser_agent
-from discovery.query_builder import query_builder, SearchQuery
+from discovery.query_builder import query_builder
 from discovery.result_ranker import result_ranker
 from discovery.schemas import (
     BriefStructured,
@@ -18,6 +18,7 @@ from discovery.schemas import (
     ConversationStep,
     DiscoveryRunResponse,
     DiscoverySearchRequest,
+    DiscoveryPlan,
     MessageCreate,
     MessageResponse,
 )
@@ -268,85 +269,25 @@ class DiscoveryOrchestrator:
 
         state.step = ConversationStep.SEARCHING
 
-        queries = query_builder.build(brief)
-        all_candidates: list[CandidateWithScore] = []
-
-        for platform, platform_queries in queries.items():
-            for q in platform_queries:
-                try:
-                    candidates = await self._execute_query(platform, q)
-                    for raw in candidates:
-                        metrics = self._raw_to_candidate_metrics(raw, platform)
-                        score = result_ranker.rank(metrics, brief)
-                        all_candidates.append(
-                            CandidateWithScore(
-                                id=UUID("00000000-0000-0000-0000-000000000001"),
-                                metrics=metrics,
-                                score=score,
-                            )
-                        )
-                except Exception:
-                    pass
-
-        unique_by_handle = {}
-        for c in all_candidates:
-            key = f"{c.metrics.platform.value}:{c.metrics.handle}"
-            if key not in unique_by_handle or c.score.match_score > unique_by_handle[key].score.match_score:
-                unique_by_handle[key] = c
-
-        top_candidates = sorted(
-            unique_by_handle.values(),
-            key=lambda x: x.score.match_score,
-            reverse=True,
-        )[:20]
-
-        state.candidates = top_candidates
-        state.step = ConversationStep.CANDIDATES_REVIEW
-
-        candidates_text = self._candidates_to_text(top_candidates)
+        plan: DiscoveryPlan = query_builder.build(brief)
 
         return {
             "conversation_id": str(conversation_id),
             "step": state.step.value,
             "message": (
-                f"Encontré {len(top_candidates)} candidatos que encajan con tu brief.\n\n"
-                f"{candidates_text}\n\n"
-                f"¿Quieres aprobar algunos, ver más detalles, o hacer otra búsqueda?"
+                f"Ejecutando pipeline de 4 capas con {len(plan.keyword_queries)} keywords "
+                f"y {len(plan.hashtag_queries)} hashtags... "
+                f"El worker procesará todo y te notificaré cuando esté listo."
             ),
-            "candidates": [c.model_dump() for c in top_candidates],
+            "candidates": [],
+            "pending_discovery": True,
             "run_summary": {
-                "total_found": len(all_candidates),
-                "top_score": top_candidates[0].score.match_score if top_candidates else 0,
-                "platforms_queried": [p.value for p in queries.keys()],
+                "keywords_count": len(plan.keyword_queries),
+                "hashtags_count": len(plan.hashtag_queries),
+                "enrichment_batch_size": plan.enrichment_batch_size,
+                "analytics_top_n": plan.analytics_top_n,
             },
         }
-
-    async def _execute_query(
-        self, platform: Any, query: SearchQuery
-    ) -> list[dict[str, Any]]:
-        if platform.value == "instagram":
-            if query.query_type == "hashtag_search":
-                return await apify_client.search_instagram_by_hashtag(
-                    hashtag=query.params["hashtag"],
-                    country=query.params.get("country", "VE"),
-                    min_followers=query.params.get("min_followers", 1000),
-                    max_followers=query.params.get("max_followers", 10_000_000),
-                )
-        elif platform.value == "tiktok":
-            if query.query_type == "hashtag_search":
-                return await tiktok_client.search_content(
-                    query=query.params["hashtag"],
-                    country=query.params.get("country", "VE"),
-                    max_count=50,
-                )
-        elif platform.value == "youtube":
-            channels = await youtube_client.search_channels(
-                query=query.params.get("query", ""),
-                region=query.params.get("region", "VE"),
-                max_results=20,
-            )
-            return channels
-        return []
 
     def _raw_to_candidate_metrics(
         self, raw: dict[str, Any], platform: Any

@@ -1,192 +1,157 @@
-"""QueryBuilder — transforms BriefStructured into platform-specific queries."""
+"""QueryBuilder — transforms BriefStructured into DiscoveryPlan for Apify pipeline."""
 
 from typing import Any
 
-from discovery.schemas import BriefStructured, Platform
+from discovery.schemas import BriefStructured, DiscoveryPlan, Platform
 
 
-PURINA_DOG_CHOW_HASHTAGS = [
-    "#mascotasvzla", "#perrosdevzla", "#mascotas", "#perros",
-    "#adopcion", "#rescate", "#veterinaria", "#saludcanina",
-    "#vzla", "#venezuela", "#doglover", "#nutricioncanina",
-]
+DISCOVERY_KEYWORDS = {
+    "brand_competition": [
+        "DogChow",
+        "Purina",
+        "PurinaDogChow",
+        "Pedigree Venezuela",
+        "Ganador premium perros",
+        "Dogui alimento perros",
+        "RoyalCanin Venezuela",
+        "ProPlan Venezuela",
+    ],
+    "lifecycle_health": [
+        "cachorros",
+        "cachorro perros",
+        "nutricion canina",
+        "veterinaria venezuela",
+        "perro senior",
+        "salud canina",
+        "veterinario perros",
+        "pelaje perro sano",
+        "digestion perros",
+        "alimento premium perros",
+    ],
+    "consumer_personas": [
+        "dog mom",
+        "dog dad",
+        "amor perruno",
+        "adopcion perros venezuela",
+        "rescate animal venezuela",
+        "adopta no compres",
+        "vida con perros",
+        "paseo canino",
+        "perrosdevzla",
+        "mascotasvzla",
+    ],
+    "market_trends": [
+        "comida barf perros",
+        "alimento natural perros",
+        "sin grano perros",
+        "grain free dogs",
+        "dieta cruda perros",
+        "alimento casero perros",
+    ],
+    "nicho_ve": [
+        "mascotasvzla",
+        "perrosdevzla",
+        "vzla",
+        "caracas",
+        "maracaibo",
+        "valencia venezuela",
+        "perros caracas",
+        "mascotas caracas",
+    ],
+}
 
-
-class SearchQuery:
-    def __init__(
-        self,
-        platform: Platform,
-        query_type: str,
-        params: dict[str, Any],
-    ):
-        self.platform = platform
-        self.query_type = query_type
-        self.params = params
-
-    def __repr__(self) -> str:
-        return f"SearchQuery({self.platform.value}/{self.query_type}, {self.params})"
+VE_GEO_KEYWORDS = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "san cristobal"]
 
 
 class QueryBuilder:
-    def build(self, brief: BriefStructured) -> dict[Platform, list[SearchQuery]]:
-        queries: dict[Platform, list[SearchQuery]] = {}
-        brand_hashtags = self._get_brand_hashtags(brief)
+    def build(self, brief: BriefStructured) -> DiscoveryPlan:
+        keywords = self._build_keywords(brief)
+        hashtags = self._build_hashtags(brief)
+        tier = self._get_tier(brief)
+        min_followers = self._tier_to_min_followers(tier)
 
-        for platform in brief.platforms:
-            if platform == Platform.INSTAGRAM:
-                queries[platform] = self._build_instagram_queries(brief, brand_hashtags)
-            elif platform == Platform.TIKTOK:
-                queries[platform] = self._build_tiktok_queries(brief)
-            elif platform == Platform.YOUTUBE:
-                queries[platform] = self._build_youtube_queries(brief)
-            elif platform == Platform.X:
-                queries[platform] = self._build_x_queries(brief)
+        return DiscoveryPlan(
+            keyword_queries=keywords,
+            hashtag_queries=hashtags,
+            enrichment_batch_size=10,
+            analytics_top_n=20,
+            min_followers=min_followers,
+            max_followers=10_000_000,
+        )
 
-        return queries
-
-    def _get_brand_hashtags(self, brief: BriefStructured) -> list[str]:
+    def _build_keywords(self, brief: BriefStructured) -> list[str]:
         product = (brief.product_name or "").lower()
-        if "purina" in product or "dog chow" in product or "mascota" in product or "perro" in product:
-            return PURINA_DOG_CHOW_HASHTAGS
-        return []
+        is_mascota_related = any(
+            kw in product for kw in ["purina", "dog chow", "mascota", "perro", "dog", "pet"]
+        )
 
-    def _build_instagram_queries(self, brief: BriefStructured, brand_hashtags: list[str] | None = None) -> list[SearchQuery]:
-        queries = []
+        if is_mascota_related:
+            all_keywords: list[str] = []
+            for category in DISCOVERY_KEYWORDS.values():
+                all_keywords.extend(category)
+            return list(set(all_keywords))[:40]
 
-        if brand_hashtags:
-            hashtags = list(brand_hashtags)
-        else:
-            hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
-        for hashtag in hashtags[:12]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.INSTAGRAM,
-                    query_type="hashtag_search",
-                    params={
-                        "hashtag": hashtag,
-                        "country": brief.audience_countries[0] if brief.audience_countries else "VE",
-                        "min_followers": self._tier_to_min_followers(brief),
-                        "max_followers": self._tier_to_max_followers(brief),
-                        "city": brief.audience_cities[0] if brief.audience_cities else None,
-                    },
-                )
-            )
+        keywords: list[str] = []
+        for niche in brief.niches:
+            keywords.append(niche)
+            for country in (brief.audience_countries or []):
+                if country == "VE":
+                    keywords.extend(VE_GEO_KEYWORDS)
+        return list(set(keywords))[:40]
 
-        return queries
+    def _build_hashtags(self, brief: BriefStructured) -> list[str]:
+        product = (brief.product_name or "").lower()
+        is_mascota_related = any(
+            kw in product for kw in ["purina", "dog chow", "mascota", "perro", "dog", "pet"]
+        )
 
-    def _build_tiktok_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        queries = []
+        if is_mascota_related:
+            return [
+                "#mascotasvzla",
+                "#perrosdevzla",
+                "#mascotas",
+                "#perros",
+                "#adopcion",
+                "#rescate",
+                "#veterinaria",
+                "#saludcanina",
+                "#vzla",
+                "#venezuela",
+                "#doglover",
+                "#nutricioncanina",
+                "#DogChow",
+                "#Purina",
+                "#Pedigree",
+                "#Cachorros",
+                "#PerroSenior",
+                "#DogMom",
+                "#DogDad",
+                "#AmorPerruno",
+                "#ComidaBarf",
+                "#SinGrano",
+            ]
+        return [f"#{n.lower().replace(' ', '')}" for n in brief.niches[:15]]
 
-        keywords = [n.replace(" ", "") for n in brief.niches] + [
-            n.replace(" ", "") for n in (brief.additional_context or "").split()[:5]
-        ]
-        for keyword in keywords[:10]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.TIKTOK,
-                    query_type="keyword_search",
-                    params={
-                        "keyword": keyword,
-                        "country": brief.audience_countries[0] if brief.audience_countries else "VE",
-                        "min_followers": self._tier_to_min_followers(brief),
-                    },
-                )
-            )
-
-        hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
-        for hashtag in hashtags[:5]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.TIKTOK,
-                    query_type="hashtag_search",
-                    params={
-                        "hashtag": hashtag,
-                        "country": brief.audience_countries[0] if brief.audience_countries else "VE",
-                    },
-                )
-            )
-
-        return queries
-
-    def _build_youtube_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        queries = []
-
-        for niche in brief.niches[:5]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.YOUTUBE,
-                    query_type="channel_search",
-                    params={
-                        "query": niche,
-                        "region": brief.audience_countries[0] if brief.audience_countries else "VE",
-                        "relevance_language": "es",
-                    },
-                )
-            )
-
-        return queries
-
-    def _build_x_queries(self, brief: BriefStructured) -> list[SearchQuery]:
-        queries = []
-
-        for niche in brief.niches[:5]:
-            queries.append(
-                SearchQuery(
-                    platform=Platform.X,
-                    query_type="user_search",
-                    params={
-                        "query": niche,
-                        "country": brief.audience_countries[0] if brief.audience_countries else "VE",
-                    },
-                )
-            )
-
-        return queries
-
-    _COUNTRY_MAP = {
-        "VE": "venezuela",
-        "CO": "colombia",
-        "MX": "mexico",
-        "AR": "argentina",
-        "CL": "chile",
-        "PE": "peru",
-        "EC": "ecuador",
-        "BO": "bolivia",
-        "PA": "panama",
-        "DO": "dominicana",
-        "CR": "costarica",
-        "UY": "uruguay",
-        "PY": "paraguay",
-        "GT": "guatemala",
-        "HN": "honduras",
-        "SV": "salvador",
-        "NI": "nicaragua",
-    }
-
-    def _niches_to_hashtags(self, niches: list[str], countries: list[str]) -> list[str]:
-        hashtags = []
-        for niche in niches:
-            clean = niche.lower().replace(" ", "").replace("-", "")
-            hashtags.append(f"#{clean}")
-            for country in countries[:2]:
-                country_name = self._COUNTRY_MAP.get(country.upper(), country.lower())
-                hashtags.append(f"#{clean}{country_name}")
-        return hashtags[:15]
-
-    def _tier_to_min_followers(self, brief: BriefStructured) -> int:
+    def _get_tier(self, brief: BriefStructured) -> str:
         budget = brief.budget_usd or 0
         if budget >= 10000:
-            return 100_000
+            return "mid"
         elif budget >= 5000:
-            return 50_000
+            return "micro_high"
         elif budget >= 2000:
-            return 10_000
+            return "micro"
         elif budget >= 500:
-            return 1_000
-        return 0
+            return "nano"
+        return "micro"
 
-    def _tier_to_max_followers(self, brief: BriefStructured) -> int:
-        return 10_000_000
+    def _tier_to_min_followers(self, tier: str) -> int:
+        tier_map = {
+            "nano": 500,
+            "micro": 5_000,
+            "micro_high": 20_000,
+            "mid": 100_000,
+        }
+        return tier_map.get(tier, 1_000)
 
 
 query_builder = QueryBuilder()

@@ -10,6 +10,12 @@ from shared_core.config import settings
 
 logger = structlog.get_logger(__name__)
 
+INSTAGRAM_PROFILE_SCRAPER = "apify~instagram-profile-scraper"
+INSTAGRAM_HASHTAG_SCRAPER = "apify/instagram-hashtag-scraper"
+INSTAGRAM_SEARCH_SCRAPER = "apify/instagram-search-scraper"
+ENGAGEMENT_ANALYTICS_SCRAPER = "easy_scraper/instagram-profile-engagement-analytics"
+TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
+
 
 class ApifyClient:
     """Cliente para Apify API v2."""
@@ -98,8 +104,6 @@ class ApifyClient:
         """Obtiene datos de perfil de Instagram vía apify/instagram-profile-scraper."""
         client = await self._get_client()
 
-        actor_id = "apify~instagram-profile-scraper"
-
         run_input = {
             "usernames": [username.lstrip("@")],
             "resultsType": "details",
@@ -107,7 +111,7 @@ class ApifyClient:
         }
 
         response = await client.post(
-            f"/acts/{actor_id}/runs",
+            f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs",
             json=run_input,
         )
         response.raise_for_status()
@@ -115,7 +119,7 @@ class ApifyClient:
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, actor_id, run_id, default_dataset_id)
+        results = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
         return results[0] if results else None
 
     async def search_instagram_profiles_batch(
@@ -173,7 +177,6 @@ class ApifyClient:
     ) -> list[dict[str, Any]]:
         """Busca un batch de hasta 5 perfiles en UNA llamada al actor."""
         client = await self._get_client()
-        actor_id = "apify~instagram-profile-scraper"
 
         run_input = {
             "usernames": [u.lstrip("@") for u in usernames],
@@ -182,7 +185,7 @@ class ApifyClient:
         }
 
         response = await client.post(
-            f"/acts/{actor_id}/runs",
+            f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs",
             json=run_input,
         )
         response.raise_for_status()
@@ -190,7 +193,7 @@ class ApifyClient:
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        items = await self._poll_run(client, actor_id, run_id, default_dataset_id)
+        items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
 
         valid_results = []
         for item in items:
@@ -211,8 +214,6 @@ class ApifyClient:
         """Busca posts de TikTok por hashtag vía clockworks/tiktok-scraper."""
         client = await self._get_client()
 
-        actor_id = "clockworks~tiktok-scraper"
-
         run_input = {
             "hashtags": [hashtag.lstrip("#")],
             "country": country,
@@ -220,7 +221,7 @@ class ApifyClient:
         }
 
         response = await client.post(
-            f"/acts/{actor_id}/runs",
+            f"/acts/{TIKTOK_SCRAPER}/runs",
             json=run_input,
         )
         response.raise_for_status()
@@ -228,7 +229,248 @@ class ApifyClient:
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        return await self._poll_run(client, actor_id, run_id, default_dataset_id)
+        return await self._poll_run(client, TIKTOK_SCRAPER, run_id, default_dataset_id)
+
+    async def search_instagram_users_by_keyword(
+        self,
+        keyword: str,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Busca perfiles de Instagram por keyword/usuario vía instagram-search-scraper."""
+        client = await self._get_client()
+
+        logger.info(
+            "apify_keyword_search_start",
+            keyword=keyword,
+            limit=limit,
+            token_prefix=self.token[:8] if self.token else "EMPTY",
+        )
+
+        run_input = {
+            "searchType": "users",
+            "searchQueries": [keyword],
+            "resultsLimit": limit,
+            "enhanceUserSearchWithFacebookPage": True,
+        }
+
+        response = await client.post(
+            f"/acts/{INSTAGRAM_SEARCH_SCRAPER}/runs",
+            json=run_input,
+        )
+        response.raise_for_status()
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id)
+        logger.info(
+            "apify_keyword_search_done",
+            keyword=keyword,
+            results_count=len(results),
+        )
+        return results
+
+    async def search_trending_hashtags(
+        self,
+        keyword: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """Busca hashtags trending por keyword vía instagram-search-scraper."""
+        client = await self._get_client()
+
+        logger.info(
+            "apify_hashtag_search_start",
+            keyword=keyword,
+            limit=limit,
+        )
+
+        run_input = {
+            "searchType": "hashtag",
+            "searchQueries": [keyword],
+            "resultsLimit": limit,
+        }
+
+        response = await client.post(
+            f"/acts/{INSTAGRAM_SEARCH_SCRAPER}/runs",
+            json=run_input,
+        )
+        response.raise_for_status()
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id)
+        logger.info(
+            "apify_hashtag_search_done",
+            keyword=keyword,
+            results_count=len(results),
+        )
+        return results
+
+    async def search_users_by_multiple_keywords(
+        self,
+        keywords: list[str],
+        limit_per_keyword: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Busca perfiles por múltiples keywords en paralelo usando asyncio.gather."""
+        if not keywords:
+            return []
+
+        logger.info(
+            "apify_multi_keyword_start",
+            keywords_count=len(keywords),
+            limit_per_keyword=limit_per_keyword,
+        )
+
+        tasks = [
+            self.search_instagram_users_by_keyword(kw, limit=limit_per_keyword)
+            for kw in keywords
+        ]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        all_results: list[dict[str, Any]] = []
+        seen_usernames: set[str] = set()
+
+        for i, res in enumerate(results_list):
+            if isinstance(res, Exception):
+                logger.warning(
+                    "apify_keyword_failed",
+                    keyword=keywords[i],
+                    error=str(res),
+                )
+                continue
+            for item in res:
+                username = item.get("username", item.get("ownerUsername", ""))
+                if username and username not in seen_usernames:
+                    seen_usernames.add(username)
+                    all_results.append(item)
+
+        logger.info(
+            "apify_multi_keyword_done",
+            keywords_count=len(keywords),
+            total_unique_results=len(all_results),
+        )
+        return all_results
+
+    async def scrape_hashtag_posts(
+        self,
+        hashtag: str,
+        results_limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Obtiene posts de un hashtag con geotags y engagement vía instagram-hashtag-scraper."""
+        client = await self._get_client()
+
+        clean_hashtag = hashtag.lstrip("#")
+
+        logger.info(
+            "apify_hashtag_posts_start",
+            hashtag=clean_hashtag,
+            results_limit=results_limit,
+        )
+
+        run_input = {
+            "hashtag": clean_hashtag,
+            "resultsLimit": results_limit,
+            "locationName": "Venezuela",
+        }
+
+        response = await client.post(
+            f"/acts/{INSTAGRAM_HASHTAG_SCRAPER}/runs",
+            json=run_input,
+        )
+        response.raise_for_status()
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+        results = await self._poll_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_id, default_dataset_id)
+        logger.info(
+            "apify_hashtag_posts_done",
+            hashtag=clean_hashtag,
+            results_count=len(results),
+        )
+        return results
+
+    async def scrape_hashtags_batch(
+        self,
+        hashtags: list[str],
+        results_per_hashtag: int = 30,
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Hace scrape de múltiples hashtags en paralelo, devuelve dict hashtag -> posts."""
+        if not hashtags:
+            return {}
+
+        logger.info(
+            "apify_hashtags_batch_start",
+            hashtags_count=len(hashtags),
+            results_per_hashtag=results_per_hashtag,
+        )
+
+        tasks = [
+            self.scrape_hashtag_posts(tag, results_limit=results_per_hashtag)
+            for tag in hashtags
+        ]
+        results_list = await asyncio.gather(*tasks, return_exceptions=True)
+
+        batch_results: dict[str, list[dict[str, Any]]] = {}
+        for i, res in enumerate(results_list):
+            hashtag = hashtags[i]
+            if isinstance(res, Exception):
+                logger.warning(
+                    "apify_hashtag_batch_failed",
+                    hashtag=hashtag,
+                    error=str(res),
+                )
+                batch_results[hashtag] = []
+            else:
+                batch_results[hashtag] = res
+
+        total_posts = sum(len(v) for v in batch_results.values())
+        logger.info(
+            "apify_hashtags_batch_done",
+            hashtags_count=len(hashtags),
+            total_posts=total_posts,
+        )
+        return batch_results
+
+    async def analyze_profile_engagement(
+        self,
+        usernames: list[str],
+        posts_to_analyze: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Obtiene métricas avanzadas de engagement para perfiles vía engagement-analytics actor."""
+        if not usernames:
+            return []
+
+        client = await self._get_client()
+
+        logger.info(
+            "apify_engagement_analytics_start",
+            usernames_count=len(usernames),
+            posts_to_analyze=posts_to_analyze,
+        )
+
+        run_input = {
+            "usernames": [u.lstrip("@") for u in usernames],
+            "postsToAnalyze": posts_to_analyze,
+        }
+
+        response = await client.post(
+            f"/acts/{ENGAGEMENT_ANALYTICS_SCRAPER}/runs",
+            json=run_input,
+        )
+        response.raise_for_status()
+        run_data = response.json()
+        run_id = run_data["data"]["id"]
+        default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+        results = await self._poll_run(client, ENGAGEMENT_ANALYTICS_SCRAPER, run_id, default_dataset_id)
+        logger.info(
+            "apify_engagement_analytics_done",
+            usernames_count=len(usernames),
+            results_count=len(results),
+        )
+        return results
 
     async def _enrich_profile_with_er(self, profile: dict[str, Any]) -> None:
         """Calcula engagement_rate desde latestPosts (o posts fallback) y lo inyecta en el profile."""
@@ -265,7 +507,6 @@ class ApifyClient:
     async def _fetch_posts_for_er(self, username: str) -> list[dict[str, Any]]:
         """Fallback: obtiene posts recientes de un perfil para calcular ER."""
         client = await self._get_client()
-        actor_id = "apify~instagram-profile-scraper"
         run_input = {
             "usernames": [username.lstrip("@")],
             "resultsType": "posts",
@@ -273,13 +514,13 @@ class ApifyClient:
         }
 
         try:
-            response = await client.post(f"/acts/{actor_id}/runs", json=run_input)
+            response = await client.post(f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs", json=run_input)
             response.raise_for_status()
             run_data = response.json()
             run_id = run_data["data"]["id"]
             default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-            items = await self._poll_run(client, actor_id, run_id, default_dataset_id)
+            items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
             return items[:12] if items else []
         except Exception as e:
             logger.warning("apify_er_posts_fallback_failed", username=username, error=str(e))

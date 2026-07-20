@@ -63,6 +63,115 @@ NICHE_KEYWORDS = {
     "hogar": ["hogar", "home", "casa", "decoracion", "decoration", "interior", "interiorismo", "hogarvzla"],
 }
 
+BUY_INTENT_KEYWORDS = [
+    "precio", "donde", "link", "comprar", "tienda", "oferta", "disponible",
+    "envio", "pedido", "orden", "carrito", " USD ", "$", "bs", "bolivares",
+    "coupon", "descuento", "promo", "stock",
+]
+
+VE_GEO_INDICATORS = [
+    "caracas", "venezuela", "vzla", "valencia", "maracaibo",
+    "san cristobal", "barquisimeto", "merida", "puerto la cruz",
+    "la guaira", "catia", "petare", "guarenas", "guatire",
+]
+
+IG_CONTENT_TYPES = ["clips", "reels", "carousel", "image", "video", "story"]
+
+
+def calculate_ica(comments: list[str], views: int) -> float:
+    """Index de Conversion Aparentada — comments with buy intent / views."""
+    if not comments or views == 0:
+        return 0.0
+    matches = sum(
+        1 for c in comments
+        if any(kw in (c or "").lower() for kw in BUY_INTENT_KEYWORDS)
+    )
+    return round((matches / len(comments)) * 100, 2)
+
+
+def calculate_geo_foco_real(
+    geotags: list[str],
+    captions: list[str],
+    profile_bio: str = "",
+) -> float:
+    """Geo-Foco Real —交叉 geotags + idioma captions para validar audiencia VE real."""
+    ve_signals = 0
+    total_signals = 0
+
+    for g in (geotags or []):
+        g_lower = (g or "").lower()
+        if any(indicator in g_lower for indicator in VE_GEO_INDICATORS):
+            ve_signals += 1
+        total_signals += 1
+
+    for caption in (captions or []):
+        cap_lower = (caption or "").lower()
+        spanish_keywords = sum(1 for w in ["para ", "con ", "mi ", "los ", "las ", "del ", "una "] if w in cap_lower)
+        if spanish_keywords > 2:
+            ve_signals += 0.5
+        total_signals += 1
+
+    if profile_bio:
+        bio_lower = profile_bio.lower()
+        if any(c in bio_lower for c in ["venezuela", "vzla", "caracas", "🇻🇪"]):
+            ve_signals += 2
+
+    if total_signals == 0:
+        return 0.5
+    return round(min(ve_signals / total_signals, 1.0), 3)
+
+
+def calculate_engagement_velocity(
+    total_likes: int,
+    total_comments: int,
+    posts_count: int,
+    days_since_first_post: int = 30,
+) -> float:
+    """Engagement Velocity — interacciones por dia desde publicacion."""
+    if posts_count == 0 or days_since_first_post == 0:
+        return 0.0
+    total_interactions = (total_likes or 0) + (total_comments or 0)
+    return round(total_interactions / max(posts_count, 1) / max(days_since_first_post, 1), 4)
+
+
+def calculate_business_intent(profile: dict) -> float:
+    """Business Intent Score — 0-1 disposicion comercial del perfil."""
+    score = 0.0
+    if profile.get("externalUrl"):
+        score += 0.4
+    about = profile.get("about") or {}
+    if about.get("facebookPage"):
+        score += 0.4
+    if profile.get("isBusinessAccount") or profile.get("isBusiness"):
+        score += 0.2
+    if profile.get("isVerified"):
+        score += 0.1
+    return round(min(score, 1.0), 3)
+
+
+def calculate_lwfa_composite(
+    engagement_rate: float,
+    business_intent: float,
+    velocity_score: float,
+    geo_foco: float,
+    consistency_score: float = 0.5,
+    clips_pct: float = 0.0,
+) -> float:
+    """LWFA Composite Score — 0-100."""
+    velocity_normalized = min(velocity_score / 100, 1.0)
+    er_normalized = min(engagement_rate / 0.15, 1.0) if engagement_rate else 0.0
+    clips_normalized = clips_pct / 100.0
+
+    return round(
+        0.30 * er_normalized
+        + 0.20 * business_intent
+        + 0.15 * velocity_normalized
+        + 0.15 * geo_foco
+        + 0.10 * consistency_score
+        + 0.10 * clips_normalized,
+        2,
+    )
+
 
 class ResultRanker:
     def rank(

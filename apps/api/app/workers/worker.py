@@ -20,6 +20,13 @@ from shared_core import settings
 from shared_core import supabase_rest
 from discovery.query_builder import query_builder
 from discovery.result_ranker import result_ranker
+from discovery.result_ranker import (
+    calculate_ica,
+    calculate_geo_foco_real,
+    calculate_engagement_velocity,
+    calculate_business_intent,
+    calculate_lwfa_composite,
+)
 from discovery.schemas import BriefStructured, CandidateMetrics, Platform
 from discovery.tools import (
     apify_client,
@@ -33,8 +40,7 @@ from discovery.tools import (
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(3)
-MAX_QUERIES_PER_PLATFORM = 3
-MAX_HANDLES_TO_ENRICH = 30
+MAX_HANDLES_TO_ENRICH = 80
 MAX_POSTS_PER_HASHTAG = 50
 
 
@@ -63,13 +69,13 @@ async def shutdown(ctx):
 
 async def discovery_run_task(ctx, run_id: str) -> dict:
     """
-    Ejecuta un discovery_run completo:
-    1. Carga el run de la BD
-    2. Parsea el brief
-    3. Ejecuta queries en todas las plataformas
-    4. Scorea cada candidato
-    5. Persiste en discovery_candidates
-    6. Actualiza el estado del run
+    Ejecuta un discovery_run completo con pipeline de 4 capas:
+
+    STEP 1: Keyword Discovery — instagram-search-scraper (usuarios por keyword)
+    STEP 2: Hashtag Deep Dive — instagram-hashtag-scraper (posts con geotags)
+    STEP 3: Profile Enrichment — instagram-profile-scraper (followers, latestPosts, country)
+    STEP 4: Engagement Analytics — engagement-analytics actor (LWFA KPIs)
+    STEP 5: LWFA Scoring — 4 KPIs exclusivos + composite score
     """
     try:
         await _run_set_status(run_id, "running")
@@ -86,104 +92,220 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[discovery_run_task] ABORT: Run {run_id} not found", flush=True)
             return {"error": f"Run {run_id} not found"}
 
-        print(f"[discovery_run_task] brief_parsed={run.get('brief_parsed')}", flush=True)
-
         brief_parsed = run.get("brief_parsed", {})
         if isinstance(brief_parsed, str):
             import json
             brief_parsed = json.loads(brief_parsed)
 
         brief = BriefStructured(**brief_parsed)
-        platforms_raw = run.get("platforms", ["instagram"])
-        platforms = [Platform(p) if isinstance(p, str) else p for p in platforms_raw]
+        plan = query_builder.build(brief)
 
-        queries = query_builder.build(brief)
-        print(f"[discovery_run_task] queries built: {list(queries.keys())}", flush=True)
         await _run_update_metadata(run_id, {
-            "current_step": "building_queries",
-            "completed_steps": ["parsing_brief"],
-            "platforms": [p.value for p in platforms],
-            "total_queries": sum(len(queries.get(p, [])) for p in platforms),
+            "current_step": "step1_keyword_discovery",
+            "completed_steps": [],
+            "keywords_count": len(plan.keyword_queries),
+            "hashtags_count": len(plan.hashtag_queries),
             "candidates_found": 0,
         })
-        all_candidates: list[dict] = []
 
-        for platform in platforms:
-            platform_queries = queries.get(platform, [])[:MAX_QUERIES_PER_PLATFORM]
-            for q in platform_queries:
-                step_label = f"querying_{platform.value}_{q.query_type}"
-                await _run_update_metadata(run_id, {
-                    "current_step": step_label,
-                    "current_hashtag": q.params.get("hashtag", q.params.get("query", "")),
-                })
-                logger.info(
-                    "discovery_executing_query",
-                    platform=platform.value,
-                    query_type=q.query_type,
-                    params=q.params,
+        all_profiles: list[dict] = []
+        seen_handles: set[str] = set()
+
+        all_candidates: list[dict] = []
+        analytics_by_handle: dict[str, dict] = {}
+        posts_by_hashtag: dict[str, list[dict]] = {}
+
+        try:
+            await _run_update_metadata(run_id, {"current_step": "step1_keyword_discovery"})
+            users_from_keywords = await apify_client.search_users_by_multiple_keywords(
+                plan.keyword_queries,
+                limit_per_keyword=30,
+            )
+            logger.info(
+                "step1_keyword_discovery_done",
+                users_found=len(users_from_keywords),
+            )
+            for u in users_from_keywords:
+                h = u.get("username", "")
+                if h and h not in seen_handles:
+                    seen_handles.add(h)
+                    all_profiles.append(u)
+
+            await _run_update_metadata(run_id, {
+                "completed_steps": ["step1_keyword_discovery"],
+                "step1_profiles": len(all_profiles),
+                "current_step": "step2_hashtag_discovery",
+            })
+
+            await _run_update_metadata(run_id, {"current_step": "step2_hashtag_deep_dive"})
+            posts_by_hashtag = await apify_client.scrape_hashtags_batch(
+                plan.hashtag_queries,
+                results_per_hashtag=30,
+            )
+            total_hashtag_posts = sum(len(v) for v in posts_by_hashtag.values())
+            logger.info(
+                "step2_hashtag_deep_dive_done",
+                hashtags_scraped=len(posts_by_hashtag),
+                total_posts=total_hashtag_posts,
+            )
+
+            for hashtag, posts in posts_by_hashtag.items():
+                for post in posts:
+                    h = post.get("ownerUsername", "")
+                    if h and h not in seen_handles:
+                        seen_handles.add(h)
+                        all_profiles.append(post)
+
+            await _run_update_metadata(run_id, {
+                "completed_steps": ["step1_keyword_discovery", "step2_hashtag_deep_dive"],
+                "total_unique_handles": len(all_profiles),
+                "current_step": "step3_profile_enrichment",
+            })
+
+            await _run_update_metadata(run_id, {"current_step": "step3_profile_enrichment"})
+            handles_to_enrich = list(seen_handles)[:MAX_HANDLES_TO_ENRICH]
+            logger.info(
+                "step3_enriching_profiles",
+                handles_count=len(handles_to_enrich),
+            )
+
+            enriched_profiles: list[dict] = []
+            if handles_to_enrich:
+                async with APIFY_SEMAPHORE:
+                    enriched_profiles = await apify_client.search_instagram_profiles_batch(
+                        handles_to_enrich
+                    )
+            profile_map = {p.get("username", ""): p for p in enriched_profiles if p.get("username")}
+
+            logger.info(
+                "step3_profile_enrichment_done",
+                enriched=len(profile_map),
+                total_handles=len(handles_to_enrich),
+            )
+
+            await _run_update_metadata(run_id, {
+                "completed_steps": [
+                    "step1_keyword_discovery",
+                    "step2_hashtag_deep_dive",
+                    "step3_profile_enrichment",
+                ],
+                "enriched_profiles": len(profile_map),
+                "current_step": "step4_engagement_analytics",
+            })
+
+            top_handles_for_analytics = sorted(
+                profile_map.keys(),
+                key=lambda h: profile_map[h].get("followersCount", 0) or 0,
+                reverse=True,
+            )[:plan.analytics_top_n]
+
+            if top_handles_for_analytics:
+                await _run_update_metadata(run_id, {"current_step": "step4_engagement_analytics"})
+                analytics_results = await apify_client.analyze_profile_engagement(
+                    top_handles_for_analytics,
+                    posts_to_analyze=30,
                 )
-                try:
-                    candidates = await _execute_platform_query(platform, q)
-                    logger.info(
-                        "discovery_query_done",
-                        platform=platform.value,
-                        query_type=q.query_type,
-                        candidates_count=len(candidates),
-                    )
-                    await _run_update_metadata(run_id, {
-                        "candidates_found": len(all_candidates),
-                        "last_query_platform": platform.value,
-                        "last_query_type": q.query_type,
-                    })
-                    for raw in candidates:
-                        metrics = _raw_to_candidate_dict(raw, platform)
-                        score = result_ranker.rank(
-                            CandidateMetrics(**metrics),
-                            brief,
-                        )
-                        all_candidates.append({
-                            "run_id": run_id,
-                            "platform": platform.value,
-                            "handle": metrics.get("handle", "unknown"),
-                            "full_name": metrics.get("full_name"),
-                            "bio": metrics.get("bio"),
-                            "avatar_url": metrics.get("avatar_url"),
-                            "country": metrics.get("country"),
-                            "city": metrics.get("city"),
-                            "followers": metrics.get("followers"),
-                            "following": metrics.get("following"),
-                            "posts_count": metrics.get("posts_count"),
-                            "avg_likes": metrics.get("avg_likes"),
-                            "avg_comments": metrics.get("avg_comments"),
-                            "avg_views": metrics.get("avg_views"),
-                            "engagement_rate": metrics.get("engagement_rate"),
-                            "audience_credibility": metrics.get("audience_credibility"),
-                            "audience_quality": metrics.get("audience_quality"),
-                            "audience_gender_split": metrics.get("audience_gender_split"),
-                            "audience_age_buckets": metrics.get("audience_age_buckets"),
-                            "match_score": score.match_score,
-                            "niche_relevance": score.niche_relevance,
-                            "geo_relevance": score.geo_relevance,
-                            "audience_relevance": score.audience_relevance,
-                            "content_quality": score.content_quality,
-                            "estimated_cost": score.estimated_cost,
-                            "expected_reach": score.expected_reach,
-                            "expected_engagement": score.expected_engagement,
-                            "roi_estimate": score.roi_estimate,
-                            "rationale": score.rationale,
-                            "status": "new",
-                            "raw_payload": raw,
-                            "fetched_at": datetime.utcnow().isoformat(),
-                        })
-                except Exception as e:
-                    logger.error(
-                        "discovery_query_failed",
-                        platform=platform.value,
-                        query=q.query_type,
-                        params=q.params,
-                        error=str(e),
-                        exc_info=True,
-                    )
+                for a in analytics_results:
+                    handle = a.get("profile_username", a.get("username", ""))
+                    if handle:
+                        analytics_by_handle[handle] = a
+                logger.info(
+                    "step4_analytics_done",
+                    profiles_analyzed=len(analytics_by_handle),
+                )
+
+        except Exception as e:
+            logger.error("discovery_pipeline_steps_1_4_failed", run_id=run_id, error=str(e), exc_info=True)
+            await _run_set_status(run_id, "failed", error=f"Pipeline steps 1-4 failed: {str(e)}")
+            raise
+
+        await _run_update_metadata(run_id, {
+            "completed_steps": [
+                "step1_keyword_discovery",
+                "step2_hashtag_deep_dive",
+                "step3_profile_enrichment",
+                "step4_engagement_analytics",
+            ],
+            "current_step": "step5_lwfa_scoring",
+            "candidates_found": len(all_profiles),
+        })
+
+        for raw in all_profiles:
+            handle = raw.get("username", raw.get("ownerUsername", ""))
+            if not handle:
+                continue
+
+            profile_data = profile_map.get(handle, raw)
+            metrics = _raw_to_candidate_dict(profile_data, Platform.INSTAGRAM)
+            score = result_ranker.rank(CandidateMetrics(**metrics), brief)
+
+            analytics = analytics_by_handle.get(handle, {})
+
+            ica = analytics.get("comment_rate_pct", 0.0)
+            geo_foco = calculate_geo_foco_real(
+                geotags=analytics.get("top_geotags", []),
+                captions=analytics.get("captions_sample", []),
+                profile_bio=profile_data.get("biography", ""),
+            )
+            velocity = analytics.get("avg_engagement_velocity_per_day", 0.0)
+            business_intent = calculate_business_intent(profile_data)
+            consistency = analytics.get("engagement_consistency_score", 0.5)
+            clips_pct = analytics.get("content_mix_clips_pct", 0.0)
+
+            er = metrics.get("engagement_rate") or 0.0
+            lwfa_composite = calculate_lwfa_composite(
+                engagement_rate=er,
+                business_intent=business_intent,
+                velocity_score=velocity,
+                geo_foco=geo_foco,
+                consistency_score=consistency,
+                clips_pct=clips_pct,
+            )
+
+            all_candidates.append({
+                "run_id": run_id,
+                "platform": "instagram",
+                "handle": handle,
+                "full_name": metrics.get("full_name"),
+                "bio": metrics.get("bio"),
+                "avatar_url": metrics.get("avatar_url"),
+                "country": metrics.get("country"),
+                "city": metrics.get("city"),
+                "followers": metrics.get("followers"),
+                "following": metrics.get("following"),
+                "posts_count": metrics.get("posts_count"),
+                "avg_likes": metrics.get("avg_likes"),
+                "avg_comments": metrics.get("avg_comments"),
+                "avg_views": metrics.get("avg_views"),
+                "engagement_rate": er,
+                "audience_credibility": metrics.get("audience_credibility"),
+                "audience_quality": metrics.get("audience_quality"),
+                "audience_gender_split": metrics.get("audience_gender_split"),
+                "audience_age_buckets": metrics.get("audience_age_buckets"),
+                "match_score": lwfa_composite,
+                "niche_relevance": score.niche_relevance,
+                "geo_relevance": score.geo_relevance,
+                "audience_relevance": score.audience_relevance,
+                "content_quality": score.content_quality,
+                "estimated_cost": score.estimated_cost,
+                "expected_reach": score.expected_reach,
+                "expected_engagement": score.expected_engagement,
+                "roi_estimate": score.roi_estimate,
+                "rationale": score.rationale,
+                "status": "new",
+                "raw_payload": {
+                    **raw,
+                    "ica_score": ica,
+                    "geo_foco_score": geo_foco,
+                    "velocity_score": velocity,
+                    "business_intent_score": business_intent,
+                    "consistency_score": consistency,
+                    "clips_pct": clips_pct,
+                    "lwfa_composite": lwfa_composite,
+                    "analytics": analytics,
+                },
+                "fetched_at": datetime.utcnow().isoformat(),
+            })
 
         await _run_update_metadata(run_id, {
             "current_step": "inserting_candidates",
@@ -242,12 +364,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 f"- **{c['handle']}** ({c['platform']}): "
                 f"Score {c.get('match_score', 0):.0f}/100, "
                 f"{c.get('followers', 0):,} seguidores, "
-                f"ER {c.get('engagement_rate', 0):.1f}%"
+                f"ER {c.get('engagement_rate', 0):.1%}"
                 for c in top_candidates
             ]
             content = (
-                f"Terminé la búsqueda. Encontré {total} candidatos "
-                f"que coinciden con tu brief.\n\n"
+                f"Terminé la búsqueda con pipeline de 4 capas. "
+                f"Encontré {total} candidatos para tu brief.\n\n"
                 + ("Aquí están los más relevantes:\n" + "\n".join(summary_lines) + "\n\n"
                 if summary_lines else "")
                 + "Puedes ver todos en la lista de candidatos."
