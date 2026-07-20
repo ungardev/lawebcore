@@ -103,6 +103,7 @@ class ApifyClient:
         run_input = {
             "usernames": [username.lstrip("@")],
             "resultsType": "details",
+            "includeAboutSection": True,
         }
 
         response = await client.post(
@@ -177,6 +178,7 @@ class ApifyClient:
         run_input = {
             "usernames": [u.lstrip("@") for u in usernames],
             "resultsType": "details",
+            "includeAboutSection": True,
         }
 
         response = await client.post(
@@ -193,7 +195,7 @@ class ApifyClient:
         valid_results = []
         for item in items:
             if isinstance(item, dict) and "error" not in item:
-                self._enrich_profile_with_er(item)
+                await self._enrich_profile_with_er(item)
                 valid_results.append(item)
             elif isinstance(item, dict) and item.get("error"):
                 username = item.get("input", {}).get("username", "unknown")
@@ -228,8 +230,8 @@ class ApifyClient:
 
         return await self._poll_run(client, actor_id, run_id, default_dataset_id)
 
-    def _enrich_profile_with_er(self, profile: dict[str, Any]) -> None:
-        """Calcula engagement_rate desde latestPosts y lo inyecta en el profile."""
+    async def _enrich_profile_with_er(self, profile: dict[str, Any]) -> None:
+        """Calcula engagement_rate desde latestPosts (o posts fallback) y lo inyecta en el profile."""
         if profile.get("engagement_rate") is not None:
             return
 
@@ -239,6 +241,12 @@ class ApifyClient:
             return
 
         posts = profile.get("latestPosts") or []
+
+        if not posts:
+            posts = await self._fetch_posts_for_er(profile.get("username", ""))
+            if posts:
+                logger.info("apify_er_posts_fallback", username=profile.get("username"), posts_count=len(posts))
+
         if not posts:
             profile["engagement_rate"] = None
             return
@@ -253,6 +261,29 @@ class ApifyClient:
 
         er = (total_likes + total_comments) / (followers * n)
         profile["engagement_rate"] = round(er, 6)
+
+    async def _fetch_posts_for_er(self, username: str) -> list[dict[str, Any]]:
+        """Fallback: obtiene posts recientes de un perfil para calcular ER."""
+        client = await self._get_client()
+        actor_id = "apify~instagram-profile-scraper"
+        run_input = {
+            "usernames": [username.lstrip("@")],
+            "resultsType": "posts",
+            "postsLimit": 12,
+        }
+
+        try:
+            response = await client.post(f"/acts/{actor_id}/runs", json=run_input)
+            response.raise_for_status()
+            run_data = response.json()
+            run_id = run_data["data"]["id"]
+            default_dataset_id = run_data["data"].get("defaultDatasetId")
+
+            items = await self._poll_run(client, actor_id, run_id, default_dataset_id)
+            return items[:12] if items else []
+        except Exception as e:
+            logger.warning("apify_er_posts_fallback_failed", username=username, error=str(e))
+            return []
 
     async def _poll_run(
         self,

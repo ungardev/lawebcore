@@ -24,17 +24,6 @@ from discovery.schemas import (
 from discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
 from shared_core.supabase_rest import supabase_rest
 
-PURINA_BRAND_ID = "f0000000-0000-0000-0000-000000000002"
-MOCKUP_RUN_ID = "a0000000-0000-0000-0000-000000000001"
-
-DOLCE_GUSTO_HANDLES = [
-    "@armandopoyo", "@sognis", "@isaiaslandaeta", "@dieguisimo",
-    "@alegmassiani", "@irinabozzone", "@anaiotero", "@patrilucia",
-    "@cocinandoconlulu", "@gastro.no.mia", "@isabermudezfebres",
-    "@inacocina", "@maribelpetrola", "@mercedesgraureposteria",
-]
-
-
 class ConversationState:
     def __init__(self):
         self.step: ConversationStep = ConversationStep.START
@@ -49,107 +38,6 @@ class ConversationState:
 class DiscoveryOrchestrator:
     def __init__(self):
         self.state: dict[UUID, ConversationState] = {}
-
-    def _is_purina_brief(self, brief_text: str) -> bool:
-        """Detect if the brief is for Purina Dog Chow demo."""
-        text = (brief_text or "").lower()
-        return "purina" in text and "dog chow" in text
-
-    def _is_dolce_gusto_brief(self, brief_text: str) -> bool:
-        """Detect if the brief is for Nescafe Dolce Gusto demo."""
-        text = (brief_text or "").lower()
-        return "dolce gusto" in text or ("nescafe" in text and "dolce" in text)
-
-    async def _load_dolce_gusto_candidates(self) -> list[dict[str, Any]]:
-        """Load mockup candidates for Nescafe Dolce Gusto demo from DB."""
-        handles_lower = [h.lstrip("@").lower() for h in DOLCE_GUSTO_HANDLES]
-        handles_csv = "(" + ",".join("@" + h for h in handles_lower) + ")"
-
-        social_accounts = await supabase_rest.select(
-            table="influencer_social_accounts",
-            select="id,influencer_id,platform,handle,url",
-            filters=[f"handle=in.{handles_csv}"],
-        )
-
-        if not social_accounts:
-            return []
-
-        influencer_ids = list({sa["influencer_id"] for sa in social_accounts})
-        ids_csv = "(" + ",".join(str(i) for i in influencer_ids) + ")"
-
-        influencers = await supabase_rest.select(
-            table="influencers",
-            select="id,full_name,avatar_url,bio,content_niches,country,city",
-            filters=[f"id=in.{ids_csv}"],
-        )
-        influencers_by_id = {str(i["id"]): i for i in influencers}
-
-        metrics_snapshots = await supabase_rest.select(
-            table="influencer_metrics_snapshot",
-            select="influencer_id,followers,following,posts_count,avg_likes,avg_comments",
-            filters=[f"influencer_id=in.{ids_csv}"],
-            order="snapshot_date.desc",
-        )
-        metrics_by_inf = {}
-        for m in metrics_snapshots:
-            inf_id = str(m["influencer_id"])
-            if inf_id not in metrics_by_inf:
-                metrics_by_inf[inf_id] = m
-
-        social_by_inf = {str(sa["influencer_id"]): sa for sa in social_accounts}
-
-        candidates = []
-        for inf_id, inf in influencers_by_id.items():
-            sa = social_by_inf.get(inf_id)
-            if not sa:
-                continue
-            metrics = metrics_by_inf.get(inf_id, {})
-
-            followers = metrics.get("followers", 0) or 0
-            avg_likes = metrics.get("avg_likes", 0) or 0
-            avg_comments = metrics.get("avg_comments", 0) or 0
-            posts = metrics.get("posts_count", 1) or 1
-            engagement_rate = ((avg_likes + avg_comments) / posts / max(followers, 1)) if followers > 0 else 0
-
-            niches = inf.get("content_niches", []) or []
-            rationale = "Cuenta de " + (", ".join(niches[:3]) if niches else "lifestyle") + ". Venezuela confirmada."
-
-            candidates.append({
-                "id": str(inf_id),
-                "platform": sa.get("platform", "instagram"),
-                "handle": sa.get("handle", ""),
-                "full_name": inf.get("full_name", ""),
-                "avatar_url": inf.get("avatar_url", ""),
-                "followers": followers,
-                "engagement_rate": engagement_rate,
-                "match_score": 85.0,
-                "niche_relevance": 0.9,
-                "geo_relevance": 1.0,
-                "audience_relevance": 0.85,
-                "content_quality": 0.8,
-                "status": "new",
-                "estimated_cost": None,
-                "expected_reach": int(followers * 0.3) if followers else 0,
-                "expected_engagement": int(followers * engagement_rate * 0.1) if followers else 0,
-                "rationale": rationale,
-                "country": inf.get("country", "VE"),
-                "city": inf.get("city", ""),
-                "bio": inf.get("bio", ""),
-            })
-
-        candidates.sort(key=lambda c: c["followers"], reverse=True)
-        return candidates
-
-    async def _load_mockup_candidates(self) -> list[dict[str, Any]]:
-        """Load mockup candidates for Purina Dog Chow demo from DB."""
-        candidates = await supabase_rest.select(
-            table="discovery_candidates",
-            select="id,platform,handle,full_name,followers,engagement_rate,match_score,niche_relevance,geo_relevance,audience_relevance,content_quality,status,estimated_cost,expected_reach,expected_engagement,rationale,country,city,bio",
-            filters=[f"run_id=eq.{MOCKUP_RUN_ID}"],
-            order="match_score.desc",
-            limit=20,
-        )
-        return list(candidates)
 
     async def create_conversation(self, conversation_id: UUID, initial_brief: str | None = None) -> dict[str, Any]:
         state = ConversationState()

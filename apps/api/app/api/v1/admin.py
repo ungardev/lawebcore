@@ -540,29 +540,29 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
     demo_conversations = [
         {
             "title": "Brief Purina Dog Chow — Amor Perruno",
-            "accumulated_brief": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow, presupuesto $15000 USD",
+            "accumulated_brief": "Scouting de influencers para nicho mascotas/perros en Venezuela. El sistema descubre perfiles desde hashtags reales, enriquece con datos de Apify, y rankea por engagement + relevancia geográfica VE.",
             "step": "brief",
             "messages": [
                 {
                     "role": "user",
-                    "content": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow, presupuesto $15000 USD",
+                    "content": "Busca influencers de mascotas en Venezuela para campaña Purina Dog Chow",
                 },
                 {
                     "role": "assistant",
-                    "content": "Entendido el brief. Estoy buscando creadores en Venezuela especializados en mascotas y perros para la campaña #DogChowVenezuela. Déjame revisar nuestra base de datos...\n\nEncontré 49 creadores en el país. Voy a analizar los más relevantes por engagement y afinidad con el nicho de mascotas.",
-                    "reasoning": "El brief especifica: nicho=mascotas/perros, pais=VE, presupuesto=$15K USD, marca=Nestle Venezuela. Voy a parsear estos parametros y buscar en la base de datos de influencers registrados.",
+                    "content": "Perfecto. Estoy ejecutando el discovery en Instagram Venezuela para el nicho mascotas/perros. El sistema va a buscar desde hashtags de nicho VE, enriquecer los perfiles con Apify, y rankear por engagement y relevancia geográfica.\n\nEl proceso toma 30 segundos a 2 minutos. Te muestro los candidatos automáticamente cuando estén listos.",
+                    "reasoning": "Brief de nicho mascotas/perros en VE. El pipeline discovery va a: 1) buscar posts desde hashtags de nicho VE (mascotasvzla, perrosdevzla, adopcion, etc), 2) extraer handles únicos, 3) enriquecer con Apify (followers, latestPosts, ER), 4) rankear por match_score + geo_relevance.",
                     "tool_calls": [
-                        {"id": "tc1", "name": "search_influencers", "arguments": json.dumps({"niche": "mascotas", "country": "VE", "budget_max": 15000})}
+                        {"id": "tc1", "name": "search_influencers", "arguments": json.dumps({"niche": "mascotas", "country": "VE"})}
                     ],
                     "tool_results": [
-                        {"tool_call_id": "tc1", "success": True, "output": {"count": 49, "filters_applied": {"country": "VE", "tiers": ["NANO", "MICRO", "MID"]}}}
+                        {"tool_call_id": "tc1", "success": True, "output": {"count": 0, "filters_applied": {"country": "VE", "tiers": ["NANO", "MICRO", "MID"]}}}
                     ],
                     "cost_usd": 0.0012,
                     "latency_ms": 1847,
                 },
                 {
                     "role": "assistant",
-                    "content": "Aquí están los 10 creadores con mayor afinidad para Purina Dog Chow:\n\n1. @fernandoaguirre — Mid Tier · 67K seguidores · 5.8% ER · score 94/100\n2. @carolinameza — Mid Tier · 38K seguidores · 6.1% ER · score 91/100\n3. @marianapernia — Mid Tier · 38K seguidores · 7.2% ER · score 89/100\n4. @gabrielabriceno — Mid Tier · 45K seguidores · 5.4% ER · score 87/100\n5. @juanmendoza — Mid Tier · 150K seguidores · 4.3% ER · score 85/100\n\n¿Quieres que profundice en alguno o que proyecta los 3 escenarios de alcance?",
+                    "content": "El discovery está corriendo. Apenas tenga los candidatos te los muestro con scores, engagement y ranking completo.",
                     "cost_usd": 0.0008,
                     "latency_ms": 2341,
                 },
@@ -599,17 +599,17 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
             "messages": [
                 {
                     "role": "user",
-                    "content": "Cuéntame qué pasaría si lanzamos una campaña de café en Colombia con $8000 USD",
+                    "content": "Cuéntame qué pasaría si lanzamos una campaña de café en Colombia",
                 },
                 {
                     "role": "assistant",
-                    "content": "Interesante. Una campaña de café en Colombia con $8K USD tiene buen potencial. Aquí están los 3 escenarios:\n\nESCENARIO CONSERVADOR: 3 Nano influencers (5-10K) · Alcance estimado: 45K · Costo: $3,200\nESCENARIO MODERADO: 6 Micro influencers (10-50K) + 1 Nano · Alcance: 120K · Costo: $7,200\nESCENARIO OPTIMISTA: 3 Micro + 2 Mid Tier · Alcance: 310K · Costo: $8,000\n\nMi recomendación: el escenario MODERADO. Por $7,200 obtienes 6x más alcance que el conservador con solo $4K extra.",
-                    "reasoning": "Solicitud de proyeccion. El usuario quiere ver 3 escenarios (conservador, moderado, optimista) con diferentes configuraciones de influencers para una campana de cafe en Colombia con $8K USD.",
+                    "content": "Interesante. Una campaña de café en Colombia tiene buen potencial. Aquí están los 3 escenarios:\n\nESCENARIO CONSERVADOR: 3 Nano influencers (5-10K) · Alcance estimado: 45K\nESCENARIO MODERADO: 6 Micro influencers (10-50K) + 1 Nano · Alcance: 120K\nESCENARIO OPTIMISTA: 3 Micro + 2 Mid Tier · Alcance: 310K\n\nMi recomendación: el escenario MODERADO. Balance ideal entre alcance y autenticidad.",
+                    "reasoning": "Solicitud de proyeccion. El usuario quiere ver 3 escenarios (conservador, moderado, optimista) con diferentes configuraciones de influencers para una campana de cafe en Colombia.",
                     "tool_calls": [
-                        {"id": "tc3", "name": "project_scenarios", "arguments": json.dumps({"country": "CO", "budget_usd": 8000, "niche": "cafe"})}
+                        {"id": "tc3", "name": "project_scenarios", "arguments": json.dumps({"country": "CO", "niche": "cafe"})}
                     ],
                     "tool_results": [
-                        {"tool_call_id": "tc3", "success": True, "output": {"conservador": {"alcance": 45000, "costo": 3200}, "moderado": {"alcance": 120000, "costo": 7200}, "optimista": {"alcance": 310000, "costo": 8000}}}
+                        {"tool_call_id": "tc3", "success": True, "output": {"conservador": {"alcance": 45000}, "moderado": {"alcance": 120000}, "optimista": {"alcance": 310000}}}
                     ],
                     "cost_usd": 0.0009,
                     "latency_ms": 3012,
@@ -673,22 +673,20 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
 # ================================================================
 RAG_DOCUMENTS = [
     {
-        "title": "Caso de Éxito — Campaña Purina Dog Chow VE 2025",
+        "title": "Caso de Éxito — Campaña Purina Dog Chow VE (Histórico)",
         "document_type": "case_study",
         "content": (
-            "La Web Figital Agency ejecutó en 2025 la campaña 'Amor Perruno' para Purina Dog Chow Venezuela. "
-            "La campaña duró 6 semanas, usó 15 influencers Nano y Micro en Caracas, Valencia y Maracaibo. "
-            "Budget total: $12,000 USD. "
-            "Resultado: 2.3M reach acumulado, ER promedio 6.8%, sentiment positivo 91%. "
-            "Top creator: @cuidador.peludo con 7.2% ER y 42K alcance por publicación. "
-            "La clave del éxito fue el tono emocional ('tu perro te ama') combinado con creators nano-micro "
-            "auténticos (no macro influencers). El engagement rate de los nano (<10K) fue 2x el de mid tier. "
+            "La Web Figital Agency ejecutó la campaña 'Amor Perruno' para Purina Dog Chow Venezuela. "
+            "La campaña usó influencers Nano y Micro en ciudades principales de Venezuela. "
+            "El tono emocional ('tu perro te ama') combinado con creators auténticos (no macro influencers) "
+            "generó alto engagement. "
+            "El engagement rate de los nano (<10K) tiende a ser 2x el de mid tier. "
             "Recomendación para VE: priorizar Nano + Micro en ciudades principales para campañas de awareness."
         ),
-        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "year": 2025, "campaign": "amor_perruno"},
+        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "document_type": "case_study"},
     },
     {
-        "title": "Guía de Engagement Rate — Mercado Venezuela 2025",
+        "title": "Guía de Engagement Rate — Mercado Venezuela",
         "document_type": "market_research",
         "content": (
             "Benchmarks de engagement rate por tier en Venezuela (Instagram): "
@@ -698,69 +696,61 @@ RAG_DOCUMENTS = [
             "NANO (<10K): 6-12% ER promedio. "
             "El nicho de mascotas en VE tiene ER 1.5-2x más alto que lifestyle general. "
             "Las cuentas de rescué animal tienen ER 2x el promedio del nicho mascotas. "
-            "Venezuela tiene 4.5M usuarios activos de Instagram (2025), 65% femenino, edad media 28 años. "
-            "Las marcas que usan tono emocional en VE tienen 40% más engagement que tono aspiracional."
+            "Las marcas que usan tono emocional en VE tienen más engagement que tono aspiracional. "
+            "Nota: estos benchmarks se recalculan automáticamente con datos reales de cada campaña."
         ),
-        "metadata": {"brand": "general", "industry": "all", "country": "VE", "year": 2025, "document_type": "benchmark"},
+        "metadata": {"brand": "general", "industry": "all", "country": "VE", "document_type": "benchmark"},
     },
     {
-        "title": "Best Practices — Influencer Marketing VE 2026",
+        "title": "Best Practices — Influencer Marketing Venezuela",
         "document_type": "best_practices",
         "content": (
             "Reglas de oro para campañas de influencers en Venezuela: "
             "1. Autenticidad > reach. Un nano creator con 8K seguidores y 8% ER vale más que un mid con 200K y 2% ER. "
             "2. Tono local. Los venezolanos responden mejor a contenido en español neutro-latino, con referencias culturales locales. "
-            "3. Formato story/reel > post static. El algoritmo de IG favorece reels con caption corto (≤125 caracteres). "
+            "3. Formato story/reel > post static. El algoritmo de IG favorece reels con caption corto. "
             "4. Timing: mejores horas posting VE son 7-9am y 7-10pm VET. "
-            "5. Filtro de calidad: excluir cuentas con >30% difference entre engagement rate publicado y engagement real. "
-            "6. Negociación: creators nano/micro en VE cobran $100-300 USD por reels, no por historias. "
-            "7. Brief estructurado: siempre incluir tono, key messages, hashtags obligatorios y prohibidos. "
-            "8. El 78% de las compras en VE son influenciadas por contenido de Instagram."
+            "5. Filtro de calidad: excluir cuentas con discrepancy alta entre engagement publicado y real. "
+            "6. Brief estructurado: siempre incluir tono, key messages, hashtags obligatorios y prohibidos. "
+            "7. El sistema P.I.A.R. de La Web Core rastrea y reporta engagement real de cada campaña."
         ),
-        "metadata": {"brand": "general", "industry": "influencer_marketing", "country": "VE", "year": 2026, "document_type": "best_practices"},
+        "metadata": {"brand": "general", "industry": "influencer_marketing", "country": "VE", "document_type": "best_practices"},
     },
     {
         "title": "Purina Dog Chow — Perfil de Marca y Audiencias",
         "document_type": "brand_brief",
         "content": (
             "Purina Dog Chow es una marca de alimento premium para perros de Nestlé Venezuela. "
-            "Target primario: dueños de perros en Venezuela, 22-45 años, ABC+ económico, zonas urbanas principales. "
+            "Target primario: dueños de perros en Venezuela, 22-45 años, zonas urbanas principales. "
             "Tono de marca: emocional, cercano, familiar. No aspiracional. "
-            "Key messages: 'Amor Perruno' ( conexión emocional dueño-perro), salud canina, responsabilidad como dueño. "
-            "Hashtags oficiales: #DogChowVenezuela #AmorPerruno #PurinaVE. "
-            "Competidores: Pedigree VE, Whiskas (gatos), royalCanin (premium). "
-            "Pricing: $8-25 USD por bolsa de 15kg. "
-            "Campaña 2026: buscar influencers Nano/Micro especializados en mascotas, tono educativo+emocional. "
-            "NO usar influencers con contenido suggestivo, activismo político, o публичных controversies."
+            "Key messages: 'Amor Perruno' (conexión emocional dueño-perro), salud canina, responsabilidad como dueño. "
+            "Hashtags oficiales: #DogChowVenezuela #AmorPerruno. "
+            "Competidores: Pedigree VE, Whiskas (gatos), Royal Canin (premium). "
+            "Campaña: buscar influencers Nano/Micro especializados en mascotas, tono educativo+emocional. "
+            "NO usar influencers con contenido conflictivo o controversias públicas."
         ),
-        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "year": 2026, "campaign": "dogchow_2026"},
+        "metadata": {"brand": "Purina", "industry": "pet_food", "country": "VE", "document_type": "brand_brief"},
     },
     {
         "title": "Análisis Competitivo — Nestlé vs Colgate-Palmolive VE",
         "document_type": "competitive_analysis",
         "content": (
             "Nestlé Venezuela vs Colgate-Palmolive VE en influencer marketing: "
-            "Nestlé invierte 60% más en influencers que Colgate en el mercado VE. "
-            "Nestlé prefiere creators Nano/Micro (70% del budget) vs Colgate que usa 50% mid/macro. "
-            "Colgate tiene partnerships con 3 cuentas mega (1M+ seguidores) con contratos anuales. "
-            "Nestlé gana en engagement rate: 6.2% ER promedio vs 3.1% de Colgate. "
-            "La diferencia se explica por la estrategia 'autenticidad primero' de Nestlé vs 'alcance primero' de Colgate. "
+            "Nestlé prefiere creators Nano/Micro vs Colgate que usa más mid/macro. "
+            "Nestlé tiende a ganar en engagement rate con estrategia 'autenticidad primero' vs 'alcance primero'. "
             "Para Purina Dog Chow: continuar estrategia Nano/Micro, enfatizar comunidad y creators recurrentes."
         ),
-        "metadata": {"brand": "Nestlé", "industry": "competitive", "country": "VE", "year": 2026},
+        "metadata": {"brand": "Nestlé", "industry": "competitive", "country": "VE", "document_type": "competitive_analysis"},
     },
     {
-        "title": "Caso de Éxito — Dolce Gusto VE 2024",
+        "title": "Caso de Éxito — Dolce Gusto VE (Histórico)",
         "document_type": "case_study",
         "content": (
-            "La campaña Dolce Gusto VE 2024 usó 8 influencers Mid/Macro en Caracas y Valencia. "
-            "Budget: $25,000 USD. Duration: 8 semanas. "
-            "Resultado: 5.1M reach, ER promedio 4.2%. "
-            "Drivers más efectivos: 'momentos de café' ( mañana, oficina, pausa) y 'recetas con café'. "
-            "Controversia: 2 influencers con conflictos de marca (trabajaron para Nespresso) generaron ruido negativo. "
+            "La campaña Dolce Gusto VE usó influencers Mid/Macro en Caracas y Valencia. "
+            "Drivers más efectivos: 'momentos de café' (mañana, oficina, pausa) y 'recetas con café'. "
             "Lesson learned: incluir cláusulas de exclusividad en contratos para categorías relacionadas."
         ),
-        "metadata": {"brand": "Dolce Gusto", "industry": "beverage", "country": "VE", "year": 2024, "campaign": "dg_2024"},
+        "metadata": {"brand": "Dolce Gusto", "industry": "beverage", "country": "VE", "document_type": "case_study"},
     },
     {
         "title": "Tendencias Influencer Marketing Latam 2026",

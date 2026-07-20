@@ -6,14 +6,9 @@ from discovery.schemas import BriefStructured, Platform
 
 
 PURINA_DOG_CHOW_HASHTAGS = [
-    "#DogChowVenezuela", "#AmorPerruno", "#PurinaVE", "#PurinaDogChow",
-    "#mascotasvzla", "#perrosdevzla", "#petloversvzla", "#mascotasdivertidas",
-    "#rescateanimalvzla", "#adopcionvzla", "#petfriendlyvzla",
-]
-
-DOLCE_GUSTO_HASHTAGS = [
-    "#DolceGustoVE", "#DolceGustoVenezuela", "#NescafeDolceGusto", "#CaféDolceGusto",
-    "#CaféEnCasaVE", "#MomentosDolceGusto", "#CafésDeVenezuela",
+    "#mascotasvzla", "#perrosdevzla", "#mascotas", "#perros",
+    "#adopcion", "#rescate", "#veterinaria", "#saludcanina",
+    "#vzla", "#venezuela", "#doglover", "#nutricioncanina",
 ]
 
 
@@ -33,8 +28,6 @@ class SearchQuery:
 
 
 class QueryBuilder:
-    PURINA_BRAND_ID = "f0000000-0000-0000-0000-000000000002"
-
     def build(self, brief: BriefStructured) -> dict[Platform, list[SearchQuery]]:
         queries: dict[Platform, list[SearchQuery]] = {}
         brand_hashtags = self._get_brand_hashtags(brief)
@@ -52,19 +45,18 @@ class QueryBuilder:
         return queries
 
     def _get_brand_hashtags(self, brief: BriefStructured) -> list[str]:
-        brand_id = str(brief.brand_id) if brief.brand_id else ""
-        if brand_id == self.PURINA_BRAND_ID or "purina" in (brief.product_name or "").lower() or "dog chow" in (brief.product_name or "").lower():
+        product = (brief.product_name or "").lower()
+        if "purina" in product or "dog chow" in product or "mascota" in product or "perro" in product:
             return PURINA_DOG_CHOW_HASHTAGS
-        if "dolce gusto" in (brief.product_name or "").lower() or "nescafe" in (brief.product_name or "").lower():
-            return DOLCE_GUSTO_HASHTAGS
         return []
 
     def _build_instagram_queries(self, brief: BriefStructured, brand_hashtags: list[str] | None = None) -> list[SearchQuery]:
         queries = []
 
-        hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
         if brand_hashtags:
-            hashtags = list(brand_hashtags) + hashtags
+            hashtags = list(brand_hashtags)
+        else:
+            hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
         for hashtag in hashtags[:12]:
             queries.append(
                 SearchQuery(
@@ -191,16 +183,9 @@ class QueryBuilder:
             return 10_000
         elif budget >= 500:
             return 1_000
-        return 500
+        return 0
 
     def _tier_to_max_followers(self, brief: BriefStructured) -> int:
-        budget = brief.budget_usd or 0
-        if budget <= 500:
-            return 50_000
-        elif budget <= 2000:
-            return 500_000
-        elif budget <= 5000:
-            return 1_000_000
         return 10_000_000
 
 
