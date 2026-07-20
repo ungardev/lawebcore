@@ -94,6 +94,23 @@ export function useDiscoveryConversation() {
 
       if (result.discovery_run_id) {
         pollRunStatus(result.discovery_run_id, conversation.id);
+      } else if (result.candidates && result.candidates.length > 0) {
+        const assistantMsgId = result.assistant_message?.id;
+        const latestMsg = await lensApi.conversations.get(conversation.id);
+        const latestAssistantMsg = (latestMsg.messages ?? [])
+          .filter((m: { role: string }) => m.role === 'assistant')
+          .pop() as { id: string; content: string } | undefined;
+        setTurns((prev) => {
+          const filtered = prev.filter((t) => t.id !== 'loading');
+          const assistantTurn: ChatTurn = {
+            id: assistantMsgId || `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: latestAssistantMsg?.content || '',
+            candidates: result.candidates,
+            isLoading: false,
+          };
+          return [...filtered, assistantTurn];
+        });
       } else {
         await loadConversation(conversation.id);
       }
