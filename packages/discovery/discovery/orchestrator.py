@@ -144,7 +144,7 @@ class DiscoveryOrchestrator:
         """Load mockup candidates for Purina Dog Chow demo from DB."""
         candidates = await supabase_rest.select(
             table="discovery_candidates",
-            select="id,platform,handle,full_name,avatar_url,followers,engagement_rate,match_score,niche_relevance,geo_relevance,audience_relevance,content_quality,status,estimated_cost,expected_reach,expected_engagement,rationale,country,city,bio",
+            select="id,platform,handle,full_name,followers,engagement_rate,match_score,niche_relevance,geo_relevance,audience_relevance,content_quality,status,estimated_cost,expected_reach,expected_engagement,rationale,country,city,bio",
             filters=[f"run_id=eq.{MOCKUP_RUN_ID}"],
             order="match_score.desc",
             limit=20,
