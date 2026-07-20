@@ -91,10 +91,11 @@ export function useDiscoveryConversation() {
 
     try {
       const result = await lensApi.conversations.sendMessage(conversation.id, content);
-      await loadConversation(conversation.id);
 
       if (result.discovery_run_id) {
         pollRunStatus(result.discovery_run_id, conversation.id);
+      } else {
+        await loadConversation(conversation.id);
       }
 
       return result;
@@ -137,7 +138,6 @@ export function useDiscoveryConversation() {
         };
 
         if ((run.status as string) === 'completed' || (run.status as string) === 'failed' || (run.status as string) === 'partial') {
-          await loadConversation(conversationId);
           if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
             try {
               const candidates = await lensApi.search.getCandidates(runId, { limit: 20 });
