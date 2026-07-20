@@ -1,85 +1,102 @@
-# La Web Core - Roadmap tecnico
+# La Web Core - Roadmap técnico
 
 ## Estado actual
 
-**v0.1.0 (P.I.A.R. MVP + Discovery backend + Frontend Discovery)**
-- API FastAPI deployada en Railway
-- ARQ workers deployados en Railway
+**v0.2.0 (Sprint 1 — "El Ojo que Todo lo Ve" MVP)**
+- ✅ Pipeline de 4 capas Apify deployed en Railway (`4b379d4`)
+- ✅ LWFA Scoring (4 KPIs exclusivos: ICA, Geo-Foco, Velocity, Business Intent)
+- ✅ 28 keywords estratégicas Gemini organizadas en 5 categorías
+- ✅ 3 nuevos actores Apify integrados (search, hashtag, engagement analytics)
+- ✅ Commit histórico: `feat(discovery): Sprint 1 - 4-layer Apify pipeline + LWFA scoring + Gemini keywords`
+- Railway: `https://lawebcore-production.up.railway.app` (200 OK, 7 funciones worker)
+- Vercel: `https://lawebcore.vercel.app`
 - Supabase (DB + Auth + pgvector)
-- Frontend React 19 + Vite en Vercel
-- Modulo Discovery con LangGraph + DeepSeek
-- Frontend Discovery UI (chat, busqueda directa, historial)
 
-## Problemas tecnicos identificados (Jul 2026)
+## Sprint 1 completado (Jul 20 — commit `4b379d4`)
+
+### Arquitectura implementada
+
+```
+STEP 1: search_users_by_multiple_keywords (instagram-search-scraper)
+         28 keywords Gemini → hasta 250 handles únicos
+
+STEP 2: scrape_hashtags_batch (instagram-hashtag-scraper)
+         22 hashtags → ~660 posts con geotags
+
+STEP 3: search_instagram_profiles_batch (instagram-profile-scraper)
+         Top 80 handles enriquecidos con followers + country
+
+STEP 4: analyze_profile_engagement (engagement-analytics actor)
+         Top 20 × 30 posts → velocity, consistency, content_mix
+
+STEP 5: LWFA Scoring → 4 KPIs + composite 0-100
+         ica + geo_foco + velocity + business_intent → match_score
+```
+
+### Archivos modificados (6 archivos, +745 -358 líneas)
+- `packages/discovery/discovery/tools/apify_client.py` — 6 métodos nuevos + 3 actor IDs
+- `packages/discovery/discovery/schemas.py` — +`DiscoveryPlan` schema
+- `packages/discovery/discovery/query_builder.py` — 28 keywords Gemini → `DiscoveryPlan`
+- `packages/discovery/discovery/result_ranker.py` — 5 funciones LWFA scoring
+- `apps/api/app/workers/worker.py` — pipeline 5 pasos refactorizado
+- `packages/discovery/discovery/orchestrator.py` — actualizado para `DiscoveryPlan`
+
+### Costos Sprint 1
+- **Por campaña:** ~$3.30 (Apify Free tier)
+- **Apify Free $5:** ~1.5 campañas completas
+- **Apify CEO $25-29:** ~9-10 campañas/mes
+
+## Problemas técnicos identificados
 
 ### 1. Deps faltantes en pyproject.toml
 
-Sufrimos un crash en Railway porque `slowapi` se importaba en `app/main.py` y `app/core/rate_limiter.py` pero no estaba declarado en `apps/api/pyproject.toml`. Lo mismo pasaba con muchas deps en `apps/workers/pyproject.toml` que el worker necesita al ejecutar tareas de Discovery.
+Sufrimos un crash en Railway porque `slowapi` se importaba en `app/main.py` pero no estaba declarado en `apps/api/pyproject.toml`. Lo mismo pasaba con muchas deps en `apps/workers/pyproject.toml`.
 
-**Fix inmediato aplicado en commit `5303cbc`:**
-- Agregado `slowapi>=0.1.9` a apps/api
-- Duplicadas deps compartidas en apps/workers (structlog, sqlalchemy, supabase, openai, langchain*, httpx, slowapi, etc.)
+**Fix aplicado en commit `5303cbc`.**
 
-**Solucion a largo plazo (DEFERIDA):** Refactor a `packages/core/` (monorepo package compartido entre apps/api y apps/workers).
+**Solución a largo plazo (DEFERIDA):** Refactor a `packages/core/` (monorepo package compartido entre apps/api y apps/workers).
 
 ### 2. Refactor a paquete compartido `packages/core/`
 
-**Por que:** Hoy las deps estan duplicadas entre `apps/api/pyproject.toml` y `apps/workers/pyproject.toml`. Cualquier modulo nuevo que se comparta entre API y workers requiere sincronizar dos archivos. Es fragil.
+**Por qué:** Las deps están duplicadas entre `apps/api/pyproject.toml` y `apps/workers/pyproject.toml`.
 
-**Que se hara:**
+**Qué se hará:**
 1. Crear `packages/core/lawebcore_core/` con:
-   - `config.py` (base settings compartidos: Supabase, AI keys, Redis)
+   - `config.py` (base settings compartidos)
    - `db.py` (SQLAlchemy engine + session)
-   - `logging.py`
-   - `supabase_rest.py`
-   - `cost_tracker.py`
-   - `security.py` (JWT helpers)
-   - `discovery/` completo (brief_parser, query_builder, result_ranker, orchestrator, memory, schemas, tools/*)
-   - `ai/deepseek_client.py` (mover desde apps/api/app/ai/)
-   - `models/` con Base, mixins, ApiCost
+   - `discovery/` completo (mover desde `packages/discovery/`)
 2. Mover esos archivos desde `apps/api/`
-3. Reescribir todos los imports en API y workers de `from app.X` a `from lawebcore_core.X`
-4. Limpiar `apps/api/pyproject.toml` y `apps/workers/pyproject.toml` para que solo declaren deps UI-specificas (FastAPI router, routes en API; arq setup en workers) y dependan de `lawebcore-core` como path dep
-5. Actualizar Dockerfiles: COPY packages/core antes de pip install
-6. Actualizar tests para usar nuevos imports
+3. Reescribir todos los imports
+4. Limpiar `pyproject.toml` de ambas apps
 
 **Tiempo estimado:** 3-4 horas
-**Riesgo:** Medio-alto (toca muchos archivos, riesgo de regresion en PIAR core)
-**Prioridad:** Alta - hacerlo antes de que se acumulen mas modulos compartidos
+**Riesgo:** Medio-alto
+**Prioridad:** Alta
 
-**Decision de diseno necesarias:**
-- Donde viven los modelos SQLAlchemy: core/models/ vs API/models/? (Recomendado: los compartidos en core, los PIAR-specific en API)
-- Config: settings_base.py en core vs settings.py duplicado? (Recomendado: base en core, API extiende)
+### 3. Tests
 
-### 3. Acoplamiento discovery <-> worker
+Hay tests en `apps/api/tests/` que importan `from app.X`. Habrá que actualizarlos en el refactor a core.
 
-`memory.py` tenia una linea muerta que importaba `app.worker` (modulo que no existe en API). Reemplazado por:
-- `app/core/worker_enqueuer.py`: helper de ARQ pool
-- `main.py` lifespan: init/close del pool
-- `discovery.py` endpoint `/search`: llama `enqueue_discovery_run()` despues de crear el run
-
-Solucion actual es funcional. El refactor a `packages/core/` la hara mas limpia.
-
-### 4. Tests
-
-Hay tests en `apps/api/tests/` que importan `from app.X`. Habra que actualizarlos en el refactor a core.
-
-Tests NO se ejecutan en CI aun - considerar agregar GitHub Actions en sprint futuro.
+**Tests NO se ejecutan en CI aún** — considerar agregar GitHub Actions en sprint futuro.
 
 ## Pendientes funcionales
 
-### P.I.A.R. v0.1.0 polish
-- [ ] Verificar end-to-end despues del fix de Railway
-- [ ] Documentar API keys requeridas en Railway
-- [ ] Capturar screenshots del dashboard y Discovery
+### Sprint 2 — Próximo (antes del martes 28 julio)
+- [ ] End-to-end Purina Dog Chow demo completa
+- [ ] Redis cache layer para reducir costo Apify
+- [ ] Meta for Developers app setup (App Review — 2-6 semanas)
+- [ ] Dashboard de costos por campaña en el frontend
 
-### Discovery - siguiente fase
-- [ ] Aplicar para Meta Business API App Review (7-15 dias)
-- [ ] Aplicar para TikTok Research API (7-15 dias)
-- [ ] Implementar persistence layer en orchestrator (hoy solo en memoria)
-- [ ] Agregar feedback loop (user accept/dismiss candidates -> mejorar scoring)
-- [ ] Implementar streaming de respuestas en el chat
-- [ ] Background jobs: re-rank periodico de candidatos top
+### Sprint 3 — Agosto 4
+- [ ] TikTok Research API (post-aprobación 7-15 días)
+- [ ] Outreach automation (Resend email)
+- [ ] Feedback loop (user accept/dismiss → mejora scoring)
+- [ ] Background jobs: re-rank periódico de candidatos top
+
+### Sprint 4 — Agosto 11
+- [ ] Multi-bu / multi-tenant prep
+- [ ] BI dashboard con Metabase
+- [ ] PWA / mobile
 
 ### Observabilidad
 - [ ] Dashboard Grafana con Prometheus metrics
@@ -89,3 +106,17 @@ Tests NO se ejecutan en CI aun - considerar agregar GitHub Actions en sprint fut
 ### Auth + multi-tenant
 - [ ] Validar que BU filtering funciona en todos los endpoints
 - [ ] RLS policies para discovery_* tables (multi-tenant safety)
+
+## Métricas de Sprint 1
+
+| Métrica | Valor |
+|---|---|
+| Commits en Sprint 1 | ~15 |
+| Líneas añadidas (neto) | +387 |
+| Actors Apify integrados | 3 |
+| Métodos Apify nuevos | 6 |
+| KPIs LWFA | 4 |
+| Keywords Gemini | 28 |
+| Hashtags Gemini | 22 |
+| Costo estimado por campaña | $3.30 |
+| Pipeline steps | 5 |

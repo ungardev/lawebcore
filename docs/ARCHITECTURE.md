@@ -15,10 +15,10 @@ La Web Core es el producto interno central de La Web Figital Agency. Reemplaza y
                                    ▼
                   ┌──────────────────────────────────────┐
                   │  FastAPI Backend (Python 3.12 async)  │
-                  │  Railway                              │
+                  │  Railway (lawebcore-production)        │
                   │  - Auth (Supabase JWT)                │
-                  │  - SQLAlchemy 2.0 + asyncpg           │
-                  │  - LangChain AI                       │
+                  │  - SQLAlchemy 2.0 + asyncpg          │
+                  │  - DeepSeek-V3 (LLM)                  │
                   └────┬─────────────────────┬───────────┘
                        │                     │
                        ▼                     ▼
@@ -27,9 +27,9 @@ La Web Core es el producto interno central de La Web Figital Agency. Reemplaza y
               │  - Postgres 16  │    │  - Workers      │
               │  - Auth         │    │  - Jobs async   │
               │  - Storage      │    │  - Cron jobs    │
-              │  - Realtime     │    └─────────────────┘
-              │  - pgvector     │
-              │  - RLS policies │
+              │  - Realtime     │    │  - 7 funciones  │
+              │  - pgvector     │    │    activas      │
+              │  - RLS policies │    └─────────────────┘
               └─────────────────┘
                        │
                        ▼
@@ -92,6 +92,31 @@ Ver `supabase/migrations/` para el detalle. Resumen de las ~30 tablas:
 | `finance` | Finanzas | Budgets, contratos, margenes |
 | `cliente_externo` | Cliente Externo | Solo lectura de sus marcas |
 | `viewer` | Visualizador | Read-only global |
+
+## Discovery Module — "El Ojo que Todo lo Ve"
+
+El módulo de Discovery vive en `packages/discovery/` y se despliega como parte del worker ARQ en Railway. Ver [DISCOVERY_ARCHITECTURE.md](DISCOVERY_ARCHITECTURE.md) para documentación completa.
+
+### Stack
+- **LLM:** DeepSeek-V3 (no OpenAI/Anthropic)
+- **Scraping:** Apify (3 actores Instagram)
+- **Embeddings:** fastembed `all-MiniLM-L6-v2` via pgvector
+
+### Pipeline de 4 capas
+```
+Keyword Discovery (instagram-search-scraper)
+    → Hashtag Deep Dive (instagram-hashtag-scraper)
+    → Profile Enrichment (instagram-profile-scraper)
+    → Engagement Analytics (engagement-analytics actor)
+    → LWFA Scoring (4 KPIs exclusivos)
+```
+
+### LWFA Scoring
+Score 0-100 compuesto por 4 KPIs propietarios:
+1. **ICA** — Index de Conversión Aparentada (buy intent en comentarios)
+2. **Geo-Foco Real** — geotags × idioma captions VE
+3. **Engagement Velocity** — interacciones/día
+4. **Business Intent** — multilink + fb page + business account
 
 ## Patrones tecnicos
 
