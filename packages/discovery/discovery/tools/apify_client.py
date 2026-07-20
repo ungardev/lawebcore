@@ -1,5 +1,6 @@
 """Apify client — scraping de Instagram, TikTok, YouTube vía Apify actors."""
 
+import asyncio
 import structlog
 from typing import Any
 
@@ -120,23 +121,42 @@ class ApifyClient:
         self,
         usernames: list[str],
     ) -> list[dict[str, Any]]:
-        """Busca múltiples perfiles de Instagram en paralelo."""
+        """Busca múltiples perfiles de Instagram en paralelo usando asyncio.gather."""
         if not usernames:
             return []
 
-        results: list[dict[str, Any]] = []
-        batch_size = 5
+        batch_size = 10
+        batches = [usernames[i:i + batch_size] for i in range(0, len(usernames), batch_size)]
 
-        for i in range(0, len(usernames), batch_size):
-            batch = usernames[i:i + batch_size]
-            batch_results = await self._search_instagram_profiles_single_request(batch)
-            results.extend(batch_results)
+        logger.info(
+            "apify_profile_batch_start",
+            total_usernames=len(usernames),
+            num_batches=len(batches),
+            batch_size=batch_size,
+        )
+
+        batch_tasks = [
+            self._search_instagram_profiles_single_request(batch) for batch in batches
+        ]
+        batch_results_list = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+        results: list[dict[str, Any]] = []
+        for i, batch_result in enumerate(batch_results_list):
+            if isinstance(batch_result, Exception):
+                logger.error(
+                    "apify_profile_batch_failed",
+                    batch_index=i,
+                    batch_size=len(batches[i]),
+                    error=str(batch_result),
+                )
+                continue
+            results.extend(batch_result)
             logger.info(
                 "apify_profile_batch_progress",
-                batch_start=i,
-                batch_size=len(batch),
+                batch_index=i,
+                batch_size=len(batches[i]),
+                results_in_batch=len(batch_result),
                 total_results=len(results),
-                total_usernames=len(usernames),
             )
 
         logger.info(

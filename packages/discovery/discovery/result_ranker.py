@@ -43,7 +43,22 @@ NICHE_KEYWORDS = {
     "deportes": ["deportes", "sports", "futbol", "beisbol", "atletismo", "entrenamiento"],
     "arte": ["arte", "art", "pintura", "diseno", "creatividad", "ilustracion"],
     "gaming": ["gaming", "videojuegos", "games", "playstation", "xbox", "twitch"],
-    "mascotas": ["mascotas", "pets", "animals", "perro", "perros", "dog", "dogs", "cat", "cats", "gato", "gatos", "animal", "mascara", "cuidado animal", "veterinaria", "petcare", "petlover", "petlovers"],
+    "mascotas": [
+        "mascotas", "pets", "animals", "perro", "perros", "dog", "dogs", "cat", "cats", "gato", "gatos",
+        "animal", "mascara", "cuidado animal", "veterinaria", "petcare", "petlover", "petlovers",
+        # Razas de perros
+        "goldenretriever", "husky", "schnauzer", "chihuahua", "pitbull", "labrador", "beagle", "cocker",
+        "bulldog", "pastor", "dalmata", "poodle", "rottweiler", "doberman", "boxer", "akita", "shiba",
+        "corgi", "yorkshire", "maltés", "bichon", "dogo", "wolfdog",
+        # Adopción y rescate
+        "adopcion", "adopcioncanina", "rescate", "rescateanimal", "adoptame", "noalas", "apadrinar",
+        "fundacioncanina", "protectoraanimal", "colombiaanimal", "venezuelaanimal",
+        # Comportamiento y salud
+        "adiestramiento", "entrenamiento", "obediencia", "socializacion", "saludcanina", "nutricioncanina",
+        "veterinaria", "veterinarios", "petfriendly", "petfriendlyve", "petfriendlyvzla",
+        # Anexos VE
+        "mascotasvzla", "dogs_of_vzla", "perrosvzla", "mascotasdivertidas", "viralpets",
+    ],
     "mascotas_viral": ["mascotasdivertidas", "viralpets", "mascotasvzla", "dogs_of_vzla", "perrosvzla", "mascotas_col", "petcol", "perros_colombia"],
     "hogar": ["hogar", "home", "casa", "decoracion", "decoration", "interior", "interiorismo", "hogarvzla"],
 }
@@ -121,7 +136,7 @@ class ResultRanker:
         if candidate_country and candidate_country in target_countries:
             country_score = 1.0
         elif not candidate_country:
-            country_score = 0.15
+            country_score = 0.5
         else:
             country_score = 0.0
 

@@ -297,7 +297,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
     failed_count = 0
     total_cost = 0.0
 
-    batch_size = 5
+    batch_size = 10
     for i in range(0, len(handles), batch_size):
         batch = handles[i:i + batch_size]
         usernames = [h["handle"] for h in batch]

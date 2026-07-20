@@ -267,64 +267,11 @@ class DiscoveryOrchestrator:
                         exc_info=True,
                     )
 
-            brief_text = state.accumulated_brief or ""
-            if self._is_purina_brief(brief_text):
-                state.step = ConversationStep.CANDIDATES_REVIEW
-                await asyncio.sleep(5)
-                candidates = await self._load_mockup_candidates()
-                top_5 = candidates[:5]
-                summary = "\n".join(
-                    f"- **{c['handle']}** ({c['platform']}): "
-                    f"Score {c.get('match_score', 0):.0f}/100, "
-                    f"{c.get('followers', 0):,} seguidores, "
-                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
-                    for c in top_5
-                )
-                return {
-                    "conversation_id": str(conversation_id),
-                    "step": state.step.value,
-                    "message": (
-                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
-                        f"que coinciden con tu brief.\n\n"
-                        f"Aquí están los más relevantes:\n{summary}\n\n"
-                        f"Puedes ver todos en la lista de candidatos."
-                    ),
-                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
-                    "candidates": candidates,
-                    "pending_discovery": False,
-                }
-
-            if self._is_dolce_gusto_brief(brief_text):
-                state.step = ConversationStep.CANDIDATES_REVIEW
-                await asyncio.sleep(5)
-                candidates = await self._load_dolce_gusto_candidates()
-                top_5 = candidates[:5]
-                summary = "\n".join(
-                    f"- **{c['handle']}** ({c['platform']}): "
-                    f"Score {c.get('match_score', 0):.0f}/100, "
-                    f"{c.get('followers', 0):,} seguidores, "
-                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
-                    for c in top_5
-                )
-                return {
-                    "conversation_id": str(conversation_id),
-                    "step": state.step.value,
-                    "message": (
-                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
-                        f"que coinciden con tu brief.\n\n"
-                        f"Aquí están los más relevantes:\n{summary}\n\n"
-                        f"Puedes ver todos en la lista de candidatos."
-                    ),
-                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
-                    "candidates": candidates,
-                    "pending_discovery": False,
-                }
-
             state.step = ConversationStep.SEARCHING
             return {
                 "conversation_id": str(conversation_id),
                 "step": state.step.value,
-                "message": "Buscando candidatos en todas las plataformas... Te aviso cuando tenga resultados.",
+                "message": "Buscando candidatos reales en Instagram, TikTok y YouTube usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
                 "brief": state.brief_structured.model_dump() if state.brief_structured else None,
                 "candidates": [],
                 "pending_discovery": True,
@@ -358,64 +305,11 @@ class DiscoveryOrchestrator:
                         exc_info=True,
                     )
 
-            brief_text = state.accumulated_brief or ""
-            if self._is_purina_brief(brief_text):
-                state.step = ConversationStep.CANDIDATES_REVIEW
-                await asyncio.sleep(5)
-                candidates = await self._load_mockup_candidates()
-                top_5 = candidates[:5]
-                summary = "\n".join(
-                    f"- **{c['handle']}** ({c['platform']}): "
-                    f"Score {c.get('match_score', 0):.0f}/100, "
-                    f"{c.get('followers', 0):,} seguidores, "
-                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
-                    for c in top_5
-                )
-                return {
-                    "conversation_id": str(conversation_id),
-                    "step": state.step.value,
-                    "message": (
-                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
-                        f"que coinciden con tu brief.\n\n"
-                        f"Aquí están los más relevantes:\n{summary}\n\n"
-                        f"Puedes ver todos en la lista de candidatos."
-                    ),
-                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
-                    "candidates": candidates,
-                    "pending_discovery": False,
-                }
-
-            if self._is_dolce_gusto_brief(brief_text):
-                state.step = ConversationStep.CANDIDATES_REVIEW
-                await asyncio.sleep(5)
-                candidates = await self._load_dolce_gusto_candidates()
-                top_5 = candidates[:5]
-                summary = "\n".join(
-                    f"- **{c['handle']}** ({c['platform']}): "
-                    f"Score {c.get('match_score', 0):.0f}/100, "
-                    f"{c.get('followers', 0):,} seguidores, "
-                    f"ER {(c.get('engagement_rate', 0) * 100):.1f}%"
-                    for c in top_5
-                )
-                return {
-                    "conversation_id": str(conversation_id),
-                    "step": state.step.value,
-                    "message": (
-                        f"Terminé la búsqueda. Encontré {len(candidates)} candidatos "
-                        f"que coinciden con tu brief.\n\n"
-                        f"Aquí están los más relevantes:\n{summary}\n\n"
-                        f"Puedes ver todos en la lista de candidatos."
-                    ),
-                    "brief": state.brief_structured.model_dump() if state.brief_structured else None,
-                    "candidates": candidates,
-                    "pending_discovery": False,
-                }
-
             state.step = ConversationStep.SEARCHING
             return {
                 "conversation_id": str(conversation_id),
                 "step": state.step.value,
-                "message": "Buscando candidatos en todas las plataformas... Te aviso cuando tenga resultados.",
+                "message": "Buscando candidatos reales en Instagram, TikTok y YouTube usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
                 "brief": state.brief_structured.model_dump() if state.brief_structured else None,
                 "candidates": [],
                 "pending_discovery": True,

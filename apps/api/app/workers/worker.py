@@ -34,8 +34,8 @@ logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(3)
 MAX_QUERIES_PER_PLATFORM = 3
-MAX_HANDLES_TO_ENRICH = 10
-MAX_POSTS_PER_HASHTAG = 25
+MAX_HANDLES_TO_ENRICH = 30
+MAX_POSTS_PER_HASHTAG = 50
 
 
 async def startup(ctx):

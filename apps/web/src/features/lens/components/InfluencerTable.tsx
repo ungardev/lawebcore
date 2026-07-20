@@ -18,6 +18,7 @@ function formatFollowers(n: number | null): string {
 
 function formatER(r: number | null): string {
   if (r === null) return '—';
+  if (r > 1) return `${r.toFixed(1)}%`;
   return `${(r * 100).toFixed(1)}%`;
 }
 

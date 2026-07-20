@@ -5,6 +5,18 @@ from typing import Any
 from discovery.schemas import BriefStructured, Platform
 
 
+PURINA_DOG_CHOW_HASHTAGS = [
+    "#DogChowVenezuela", "#AmorPerruno", "#PurinaVE", "#PurinaDogChow",
+    "#mascotasvzla", "#perrosdevzla", "#petloversvzla", "#mascotasdivertidas",
+    "#rescateanimalvzla", "#adopcionvzla", "#petfriendlyvzla",
+]
+
+DOLCE_GUSTO_HASHTAGS = [
+    "#DolceGustoVE", "#DolceGustoVenezuela", "#NescafeDolceGusto", "#CaféDolceGusto",
+    "#CaféEnCasaVE", "#MomentosDolceGusto", "#CafésDeVenezuela",
+]
+
+
 class SearchQuery:
     def __init__(
         self,
@@ -21,12 +33,15 @@ class SearchQuery:
 
 
 class QueryBuilder:
+    PURINA_BRAND_ID = "f0000000-0000-0000-0000-000000000002"
+
     def build(self, brief: BriefStructured) -> dict[Platform, list[SearchQuery]]:
         queries: dict[Platform, list[SearchQuery]] = {}
+        brand_hashtags = self._get_brand_hashtags(brief)
 
         for platform in brief.platforms:
             if platform == Platform.INSTAGRAM:
-                queries[platform] = self._build_instagram_queries(brief)
+                queries[platform] = self._build_instagram_queries(brief, brand_hashtags)
             elif platform == Platform.TIKTOK:
                 queries[platform] = self._build_tiktok_queries(brief)
             elif platform == Platform.YOUTUBE:
@@ -36,11 +51,21 @@ class QueryBuilder:
 
         return queries
 
-    def _build_instagram_queries(self, brief: BriefStructured) -> list[SearchQuery]:
+    def _get_brand_hashtags(self, brief: BriefStructured) -> list[str]:
+        brand_id = str(brief.brand_id) if brief.brand_id else ""
+        if brand_id == self.PURINA_BRAND_ID or "purina" in (brief.product_name or "").lower() or "dog chow" in (brief.product_name or "").lower():
+            return PURINA_DOG_CHOW_HASHTAGS
+        if "dolce gusto" in (brief.product_name or "").lower() or "nescafe" in (brief.product_name or "").lower():
+            return DOLCE_GUSTO_HASHTAGS
+        return []
+
+    def _build_instagram_queries(self, brief: BriefStructured, brand_hashtags: list[str] | None = None) -> list[SearchQuery]:
         queries = []
 
         hashtags = self._niches_to_hashtags(brief.niches, brief.audience_countries)
-        for hashtag in hashtags[:10]:
+        if brand_hashtags:
+            hashtags = list(brand_hashtags) + hashtags
+        for hashtag in hashtags[:12]:
             queries.append(
                 SearchQuery(
                     platform=Platform.INSTAGRAM,

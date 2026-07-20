@@ -50,7 +50,11 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
                 : candidate.followers} seguidores</span>
             )}
             {candidate.engagement_rate != null && (
-              <span>{(candidate.engagement_rate * 100).toFixed(2)}% engagement</span>
+              <span>
+                {candidate.engagement_rate > 1
+                  ? `${candidate.engagement_rate.toFixed(2)}%`
+                  : `${(candidate.engagement_rate * 100).toFixed(2)}%`} engagement
+              </span>
             )}
             {candidate.country && <span>{candidate.country}</span>}
           </div>
