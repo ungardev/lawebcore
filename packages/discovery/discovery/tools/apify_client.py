@@ -193,6 +193,7 @@ class ApifyClient:
         valid_results = []
         for item in items:
             if isinstance(item, dict) and "error" not in item:
+                self._enrich_profile_with_er(item)
                 valid_results.append(item)
             elif isinstance(item, dict) and item.get("error"):
                 username = item.get("input", {}).get("username", "unknown")
@@ -226,6 +227,32 @@ class ApifyClient:
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
         return await self._poll_run(client, actor_id, run_id, default_dataset_id)
+
+    def _enrich_profile_with_er(self, profile: dict[str, Any]) -> None:
+        """Calcula engagement_rate desde latestPosts y lo inyecta en el profile."""
+        if profile.get("engagement_rate") is not None:
+            return
+
+        followers = profile.get("followersCount", 0) or 0
+        if followers == 0:
+            profile["engagement_rate"] = None
+            return
+
+        posts = profile.get("latestPosts") or []
+        if not posts:
+            profile["engagement_rate"] = None
+            return
+
+        n = len(posts)
+        total_likes = sum(p.get("likesCount", 0) or 0 for p in posts)
+        total_comments = sum(p.get("commentsCount", 0) or 0 for p in posts)
+
+        if n == 0 or (total_likes == 0 and total_comments == 0):
+            profile["engagement_rate"] = None
+            return
+
+        er = (total_likes + total_comments) / (followers * n)
+        profile["engagement_rate"] = round(er, 6)
 
     async def _poll_run(
         self,
