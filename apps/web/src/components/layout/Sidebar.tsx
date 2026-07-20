@@ -1,4 +1,7 @@
 import { NavLink } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/features/auth/AuthProvider';
+import { authApi } from '@/lib/api';
 import {
   Home,
   Megaphone,
@@ -30,6 +33,22 @@ interface SidebarProps {
 }
 
 export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
+  const { user } = useAuth();
+  const { data: profile } = useQuery({
+    queryKey: ['auth-me'],
+    queryFn: () => authApi.me(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const displayName =
+    profile?.full_name?.trim() ||
+    (user?.user_metadata as Record<string, string> | null)?.full_name?.trim() ||
+    null;
+
+  const initials = displayName
+    ? ((displayName.trim().split(/\s+/)[0]?.[0] ?? '') + (displayName.trim().split(/\s+/)[1]?.[0] ?? '')).toUpperCase()
+    : '?';
+
   const renderItem = (item: (typeof NAV_MAIN)[number] & { badge?: string; end?: boolean }) => {
     const Icon = item.icon;
     return (
@@ -132,17 +151,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
           <div className="mt-3 rounded-xl border border-sidebar-border bg-sidebar-accent/40 p-3">
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-brand text-xs font-semibold text-white">
-                UV
+                {initials}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-semibold text-sidebar-foreground">Ungar Villamizar</p>
+                <p className="truncate text-xs font-semibold text-sidebar-foreground">
+                  {displayName || (user?.email ? user.email.split('@')[0] : 'Usuario')}
+                </p>
                 <p className="truncate text-[10px] text-sidebar-foreground/50">Agency Owner</p>
               </div>
             </div>
           </div>
         ) : (
           <div className="mt-3 mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-gradient-brand text-xs font-semibold text-white">
-            UV
+            {initials}
           </div>
         )}
       </div>
