@@ -31,12 +31,31 @@ export function DashboardPage() {
     queryFn: () => lensApi.conversations.list({ limit: 5 }),
   });
 
+  const { data: statusCounts } = useQuery({
+    queryKey: ['dashboard-by-status'],
+    queryFn: () => dashboardApi.byStatus(),
+  });
+
   const activeCount = summary?.active_campaigns ?? 0;
   const totalCampaigns = summary?.total_campaigns ?? 0;
   const totalInfluencers = summary?.total_influencers ?? 0;
   const totalReach = Number(summary?.total_reach ?? 0);
   const totalBudget = Number(summary?.total_budget_usd ?? 0);
   const totalClients = summary?.total_clients ?? 0;
+
+  const STATUS_DB_MAP: Record<string, string> = {
+    'PLAN DE CUENTAS': 'PLAN_DE_CUENTAS',
+    'BRIEF': 'BRIEF',
+    'CONTACTANDO': 'CONTACTANDO',
+    'PULL': 'PULL',
+    'CAMPAÑA INTERNA': 'CAMPAÑA INTERNA',
+    'REPORTE': 'REPORTE',
+  };
+
+  const getStatusCount = (label: string) => {
+    const dbStatus = STATUS_DB_MAP[label] ?? label;
+    return statusCounts?.find((s: { status: string; count: number }) => s.status === dbStatus)?.count ?? 0;
+  };
 
   return (
     <div className="mx-auto max-w-[1400px] px-6 py-8">
@@ -275,7 +294,7 @@ export function DashboardPage() {
               <span className="inline-block rounded-md border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                 {s}
               </span>
-              <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">0</p>
+              <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">{getStatusCount(s)}</p>
               <p className="text-[11px] text-muted-foreground">campañas</p>
             </div>
           ))}
