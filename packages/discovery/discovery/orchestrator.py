@@ -179,6 +179,30 @@ class DiscoveryOrchestrator:
     ) -> dict[str, Any]:
         state = self.state[conversation_id]
 
+        if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
+            if not state.brief_structured or not state.brief_structured.niches:
+                try:
+                    state.brief_structured = await brief_parser_agent.parse(
+                        state.accumulated_brief
+                    )
+                except Exception as e:
+                    logger.error(
+                        "brief_reparse_failed",
+                        conversation_id=str(conversation_id),
+                        error=str(e),
+                        exc_info=True,
+                    )
+
+            state.step = ConversationStep.SEARCHING
+            return {
+                "conversation_id": str(conversation_id),
+                "step": state.step.value,
+                "message": "Buscando candidatos en todas las plataformas... Te aviso cuando tenga resultados.",
+                "brief": state.brief_structured.model_dump() if state.brief_structured else None,
+                "candidates": [],
+                "pending_discovery": True,
+            }
+
         try:
             new_brief = await brief_parser_agent.parse(
                 state.accumulated_brief + "\n\nUsuario refina: " + content
