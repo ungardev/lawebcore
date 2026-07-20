@@ -29,12 +29,7 @@ KNOWN_REAL_HANDLES = {
 
 
 async def cleanup_discovery_candidates() -> dict:
-    """Delete discovery_candidates that came from mockup seeds."""
-    result = await supabase_rest.delete(
-        table="discovery_candidates",
-        filters=[],
-    )
-
+    """Delete discovery_candidates that are not from known real handles."""
     all_candidates = await supabase_rest.select(
         table="discovery_candidates",
         select="id,handle,run_id",
