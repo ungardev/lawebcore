@@ -246,7 +246,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 for c in top_candidates
             ]
             content = (
-                f"Terminé la búsqueda. Encontré {len(qualified)} candidatos "
+                f"Terminé la búsqueda. Encontré {total} candidatos "
                 f"que coinciden con tu brief.\n\n"
                 + ("Aquí están los más relevantes:\n" + "\n".join(summary_lines) + "\n\n"
                 if summary_lines else "")
