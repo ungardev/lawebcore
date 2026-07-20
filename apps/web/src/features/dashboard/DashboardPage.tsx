@@ -39,8 +39,6 @@ export function DashboardPage() {
 
   return (
     <div className="relative min-h-screen">
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-aurora" />
-
       <div className="mx-auto max-w-[1400px] px-6 py-8">
         <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-8 shadow-soft md:p-10">
           <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-brand opacity-20 blur-3xl" />
