@@ -5,9 +5,9 @@ services:
     image: pgvector/pgvector:pg16
     container_name: lawebcore_pg
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: lawebcore
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-lawebcore}
     ports:
       - "54322:5432"
     volumes:

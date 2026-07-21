@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     METRICOOL_CLIENT_SECRET: str = ""
     METRICOOL_ACCESS_TOKEN: str = ""
 
-    ADMIN_TOKEN: str = "laweb-admin-token-2026"
+    ADMIN_TOKEN: str = ""
 
     MAX_UPLOAD_SIZE_MB: int = 50
     RATE_LIMIT_PER_MINUTE: int = 300
