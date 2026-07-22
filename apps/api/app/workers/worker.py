@@ -241,7 +241,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             analytics = analytics_by_handle.get(handle, {})
 
-            ica = analytics.get("comment_rate_pct", 0.0)
             geo_foco = calculate_geo_foco_real(
                 geotags=analytics.get("top_geotags", []),
                 captions=analytics.get("captions_sample", []),
@@ -252,6 +251,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             consistency = analytics.get("engagement_consistency_score", 0.5)
             clips_pct = analytics.get("content_mix_clips_pct", 0.0)
 
+            comment_rate = analytics.get("comment_rate_pct", 0.0)
+            total_views = analytics.get("total_views", 0) or 0
+            sample_comments = analytics.get("latest_comments", [])
+            ica_score = calculate_ica(sample_comments, total_views) if sample_comments else comment_rate
+
             er = metrics.get("engagement_rate") or 0.0
             lwfa_composite = calculate_lwfa_composite(
                 engagement_rate=er,
@@ -260,6 +264,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 geo_foco=geo_foco,
                 consistency_score=consistency,
                 clips_pct=clips_pct,
+                ica_score=ica_score,
             )
 
             all_candidates.append({
@@ -295,7 +300,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "status": "new",
                 "raw_payload": {
                     **raw,
-                    "ica_score": ica,
+                    "ica_score": ica_score,
                     "geo_foco_score": geo_foco,
                     "velocity_score": velocity,
                     "business_intent_score": business_intent,
@@ -488,9 +493,9 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
             comments = raw.get("commentsCount", 0) or 0
             engagement_rate = 0.0
             if likes > 0 and followers > 0:
-                engagement_rate = round((likes + comments) / max(followers, 1) * 100, 4)
-            elif likes > 0:
-                engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+                engagement_rate = round((likes + comments) / max(followers, 1), 6)
+            elif posts_count > 0:
+                engagement_rate = round((likes + comments) / max(posts_count, 1), 6)
 
             country = ""
             about = raw.get("about", {})
@@ -524,9 +529,10 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
         else:
             likes = raw.get("likesCount", 0) or 0
             comments = raw.get("commentsCount", 0) or 0
+            posts_count_raw = raw.get("postsCount", 0) or 0
             engagement_rate = 0.0
-            if likes > 0:
-                engagement_rate = round((likes + comments) / max(likes, 1) * 100, 2)
+            if likes > 0 and posts_count_raw > 0:
+                engagement_rate = round((likes + comments) / max(posts_count_raw, 1), 6)
 
             return {
                 "platform": platform.value,

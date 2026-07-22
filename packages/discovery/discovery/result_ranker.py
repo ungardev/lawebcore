@@ -156,21 +156,25 @@ def calculate_lwfa_composite(
     geo_foco: float,
     consistency_score: float = 0.5,
     clips_pct: float = 0.0,
+    ica_score: float = 0.0,
 ) -> float:
-    """LWFA Composite Score — 0-100."""
+    """LWFA Composite Score — 0-100 (genuinely on 0-100 scale)."""
     velocity_normalized = min(velocity_score / 100, 1.0)
     er_normalized = min(engagement_rate / 0.15, 1.0) if engagement_rate else 0.0
     clips_normalized = clips_pct / 100.0
+    ica_normalized = min(ica_score / 100.0, 1.0) if ica_score else 0.0
 
-    return round(
-        0.30 * er_normalized
-        + 0.20 * business_intent
-        + 0.15 * velocity_normalized
-        + 0.15 * geo_foco
-        + 0.10 * consistency_score
-        + 0.10 * clips_normalized,
-        2,
+    raw_score = (
+        0.25 * er_normalized
+        + 0.18 * business_intent
+        + 0.12 * velocity_normalized
+        + 0.12 * geo_foco
+        + 0.08 * consistency_score
+        + 0.10 * clips_normalized
+        + 0.15 * ica_normalized
     )
+
+    return round(raw_score * 100, 2)
 
 
 class ResultRanker:

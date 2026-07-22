@@ -98,6 +98,12 @@ secrets/
 *.dump
 *.sql.gz
 
+# Sensitive data exports
+*.png
+dataset_*.json
+*.xlsx
+apify_token.png
+
 # Generated types (will be committed selectively)
 packages/shared-types/src/api-generated.ts.bak
 .vercel
