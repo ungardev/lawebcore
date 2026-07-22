@@ -1,10 +1,19 @@
 """Apify client — scraping de Instagram, TikTok, YouTube vía Apify actors."""
 
 import asyncio
+import hashlib
+import json
 import structlog
 from typing import Any
 
 import httpx
+import redis.asyncio as redis
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from shared_core.config import settings
 
@@ -16,6 +25,9 @@ INSTAGRAM_SEARCH_SCRAPER = "apify/instagram-search-scraper"
 ENGAGEMENT_ANALYTICS_SCRAPER = "easy_scraper/instagram-profile-engagement-analytics"
 TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
 
+CACHE_TTL_PROFILES = 86400
+CACHE_TTL_SEARCH = 604800
+
 
 class ApifyClient:
     """Cliente para Apify API v2."""
@@ -26,6 +38,9 @@ class ApifyClient:
     def __init__(self, token: str | None = None):
         self.token = token or settings.APIFY_API_KEY
         self._client: httpx.AsyncClient | None = None
+        self._redis: redis.Redis | None = None
+        self._costs: dict[str, float] = {}
+        self.discovery_run_id: str | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -36,10 +51,71 @@ class ApifyClient:
             )
         return self._client
 
+    async def _get_redis(self) -> redis.Redis:
+        if self._redis is None:
+            self._redis = redis.from_url(settings.ARQ_REDIS_URL, decode_responses=False)
+        return self._redis
+
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
             self._client = None
+        if self._redis:
+            await self._redis.aclose()
+            self._redis = None
+
+    def _build_cache_key(self, actor_id: str, run_input: dict) -> str:
+        stable = json.dumps(run_input, sort_keys=True, default=str)
+        h = hashlib.sha1(f"{actor_id}:{stable}".encode()).hexdigest()
+        return f"apify:cache:{actor_id}:{h}"
+
+    async def _get_cached(self, cache_key: str) -> list[dict[str, Any]] | None:
+        try:
+            r = await self._get_redis()
+            data = await r.get(cache_key)
+            if data:
+                logger.info("apify_cache_hit", key=cache_key)
+                return json.loads(data)
+            logger.info("apify_cache_miss", key=cache_key)
+            return None
+        except Exception as e:
+            logger.warning("apify_cache_error", key=cache_key, error=str(e))
+            return None
+
+    async def _set_cached(self, cache_key: str, items: list[dict[str, Any]], ttl: int) -> None:
+        try:
+            r = await self._get_redis()
+            await r.setex(cache_key, ttl, json.dumps(items, default=str))
+            logger.info("apify_cache_set", key=cache_key, ttl=ttl, items=len(items))
+        except Exception as e:
+            logger.warning("apify_cache_set_error", key=cache_key, error=str(e))
+
+    def record_cost(self, discovery_run_id: str, cost_usd: float) -> None:
+        self._costs[discovery_run_id] = self._costs.get(discovery_run_id, 0.0) + cost_usd
+
+    def get_total_cost(self, discovery_run_id: str) -> float:
+        return self._costs.get(discovery_run_id, 0.0)
+
+    def get_and_clear_cost(self, discovery_run_id: str) -> float:
+        cost = self._costs.pop(discovery_run_id, 0.0)
+        return cost
+
+    @staticmethod
+    def _is_retryable_error(exc: Exception) -> bool:
+        if isinstance(exc, httpx.HTTPStatusError):
+            return exc.response.status_code in (429, 500, 502, 503, 504)
+        return isinstance(exc, (TimeoutError, asyncio.TimeoutError))
+
+    @retry(
+        retry=retry_if_exception_type(httpx.HTTPStatusError),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=2, min=4, max=30),
+        reraise=True,
+    )
+    async def _post_run(self, client: httpx.AsyncClient, actor_id: str, run_input: dict) -> dict:
+        response = await client.post(f"/acts/{actor_id}/runs", json=run_input)
+        response.raise_for_status()
+        return response.json()
 
     def _build_client_headers(self) -> dict[str, str]:
         return {
@@ -78,12 +154,12 @@ class ApifyClient:
             "searchType": "hashtag",
         }
 
-        response = await client.post(
-            f"/acts/{actor_id}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(actor_id, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        run_data = await self._post_run(client, actor_id, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
@@ -95,7 +171,8 @@ class ApifyClient:
             hashtag=clean_hashtag,
         )
 
-        return await self._poll_run(client, actor_id, run_id, default_dataset_id)
+        items = await self._poll_run(client, actor_id, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
+        return items
 
     async def search_instagram_profile(
         self,
@@ -110,16 +187,16 @@ class ApifyClient:
             "includeAboutSection": True,
         }
 
-        response = await client.post(
-            f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(INSTAGRAM_PROFILE_SCRAPER, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            return cached[0] if cached else None
+
+        run_data = await self._post_run(client, INSTAGRAM_PROFILE_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
+        results = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
         return results[0] if results else None
 
     async def search_instagram_profiles_batch(
@@ -184,16 +261,20 @@ class ApifyClient:
             "includeAboutSection": True,
         }
 
-        response = await client.post(
-            f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(INSTAGRAM_PROFILE_SCRAPER, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            logger.info("apify_batch_cache_hit", usernames=usernames, cached_count=len(cached))
+            for item in cached:
+                if isinstance(item, dict) and "error" not in item:
+                    await self._enrich_profile_with_er(item)
+            return [item for item in cached if isinstance(item, dict) and "error" not in item]
+
+        run_data = await self._post_run(client, INSTAGRAM_PROFILE_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
+        items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
 
         valid_results = []
         for item in items:
@@ -220,12 +301,7 @@ class ApifyClient:
             "quantity": 100,
         }
 
-        response = await client.post(
-            f"/acts/{TIKTOK_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        run_data = await self._post_run(client, TIKTOK_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
@@ -253,16 +329,16 @@ class ApifyClient:
             "enhanceUserSearchWithFacebookPage": True,
         }
 
-        response = await client.post(
-            f"/acts/{INSTAGRAM_SEARCH_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(INSTAGRAM_SEARCH_SCRAPER, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        run_data = await self._post_run(client, INSTAGRAM_SEARCH_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id)
+        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_SEARCH)
         logger.info(
             "apify_keyword_search_done",
             keyword=keyword,
@@ -290,16 +366,11 @@ class ApifyClient:
             "resultsLimit": limit,
         }
 
-        response = await client.post(
-            f"/acts/{INSTAGRAM_SEARCH_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        run_data = await self._post_run(client, INSTAGRAM_SEARCH_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id)
+        results = await self._poll_run(client, INSTAGRAM_SEARCH_SCRAPER, run_id, default_dataset_id, cache_key=None)
         logger.info(
             "apify_hashtag_search_done",
             keyword=keyword,
@@ -374,22 +445,22 @@ class ApifyClient:
             "locationName": "Venezuela",
         }
 
-        response = await client.post(
-            f"/acts/{INSTAGRAM_HASHTAG_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(INSTAGRAM_HASHTAG_SCRAPER, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        run_data = await self._post_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_id, default_dataset_id)
+        items = await self._poll_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
         logger.info(
             "apify_hashtag_posts_done",
             hashtag=clean_hashtag,
-            results_count=len(results),
+            results_count=len(items),
         )
-        return results
+        return items
 
     async def scrape_hashtags_batch(
         self,
@@ -455,16 +526,16 @@ class ApifyClient:
             "postsToAnalyze": posts_to_analyze,
         }
 
-        response = await client.post(
-            f"/acts/{ENGAGEMENT_ANALYTICS_SCRAPER}/runs",
-            json=run_input,
-        )
-        response.raise_for_status()
-        run_data = response.json()
+        cache_key = self._build_cache_key(ENGAGEMENT_ANALYTICS_SCRAPER, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        run_data = await self._post_run(client, ENGAGEMENT_ANALYTICS_SCRAPER, run_input)
         run_id = run_data["data"]["id"]
         default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-        results = await self._poll_run(client, ENGAGEMENT_ANALYTICS_SCRAPER, run_id, default_dataset_id)
+        results = await self._poll_run(client, ENGAGEMENT_ANALYTICS_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
         logger.info(
             "apify_engagement_analytics_done",
             usernames_count=len(usernames),
@@ -514,13 +585,11 @@ class ApifyClient:
         }
 
         try:
-            response = await client.post(f"/acts/{INSTAGRAM_PROFILE_SCRAPER}/runs", json=run_input)
-            response.raise_for_status()
-            run_data = response.json()
+            run_data = await self._post_run(client, INSTAGRAM_PROFILE_SCRAPER, run_input)
             run_id = run_data["data"]["id"]
             default_dataset_id = run_data["data"].get("defaultDatasetId")
 
-            items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id)
+            items = await self._poll_run(client, INSTAGRAM_PROFILE_SCRAPER, run_id, default_dataset_id, cache_key=None)
             return items[:12] if items else []
         except Exception as e:
             logger.warning("apify_er_posts_fallback_failed", username=username, error=str(e))
@@ -533,16 +602,35 @@ class ApifyClient:
         run_id: str,
         default_dataset_id: str | None,
         max_wait: int = 300,
+        cache_key: str | None = None,
+        cache_ttl: int = CACHE_TTL_PROFILES,
     ) -> list[dict[str, Any]]:
-        """Poll hasta que el run complete (max 5 minutos)."""
+        """Poll hasta que el run complete (max 5 minutos) con backoff exponencial."""
         import asyncio
 
+        status_codes = (200, 429, 500, 502, 503, 504)
+        base_delay = 5
+
         for i in range(max_wait // 5):
-            status_resp = await client.get(f"/acts/{actor_id}/runs/{run_id}")
-            status_data = status_resp.json()
+            try:
+                status_resp = await client.get(f"/acts/{actor_id}/runs/{run_id}")
+                status_resp.raise_for_status()
+                status_data = status_resp.json()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and i < (max_wait // 5) - 1:
+                    delay = base_delay * (2 ** min(i, 5))
+                    logger.warning("apify_rate_limited", run_id=run_id, attempt=i+1, backoff_secs=delay)
+                    await asyncio.sleep(delay)
+                    continue
+                raise
+
             status = status_data.get("data", {}).get("status")
 
-            logger.info("apify_poll", run_id=run_id, actor_id=actor_id, status=status, attempt=i + 1)
+            cost_usd = status_data.get("data", {}).get("usageTotalUsd", 0.0) or 0.0
+            if cost_usd > 0 and discovery_run_id:
+                self.record_cost(discovery_run_id, cost_usd)
+
+            logger.info("apify_poll", run_id=run_id, actor_id=actor_id, status=status, attempt=i + 1, cost_usd=cost_usd)
 
             if status == "RUNNING":
                 await asyncio.sleep(5)
@@ -560,8 +648,13 @@ class ApifyClient:
                     actor_id=actor_id,
                     dataset_id=ds_id,
                     items_count=len(items),
+                    cost_usd=cost_usd,
                     first_item_keys=list(items[0].keys()) if items else [],
                 )
+
+                if cache_key and items:
+                    await self._set_cached(cache_key, items, cache_ttl)
+
                 return items
             elif status == "FAILED":
                 status_message = status_data.get("data", {}).get("statusMessage", "unknown")

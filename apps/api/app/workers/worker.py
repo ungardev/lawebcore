@@ -82,6 +82,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] START run_id={run_id}", flush=True)
 
+        apify_client.discovery_run_id = run_id
+
         run = await supabase_rest.select_one(
             table="discovery_runs",
             select="*",
@@ -219,6 +221,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             await _run_set_status(run_id, "failed", error=f"Pipeline steps 1-4 failed: {str(e)}")
             raise
 
+        total_cost = apify_client.get_and_clear_cost(run_id)
         await _run_update_metadata(run_id, {
             "completed_steps": [
                 "step1_keyword_discovery",
@@ -228,6 +231,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             ],
             "current_step": "step5_lwfa_scoring",
             "candidates_found": len(all_profiles),
+            "actual_cost_usd": round(total_cost, 4),
         })
 
         for raw in all_profiles:
@@ -624,18 +628,19 @@ async def _run_update(run_id: str, values: dict) -> None:
 
 
 async def _run_update_metadata(run_id: str, metadata: dict) -> None:
-    existing = await supabase_rest.select_one(
-        table="discovery_runs",
-        select="metadata",
-        filters=[f"id=eq.{run_id}"],
-    )
-    current = existing.get("metadata", {}) if existing else {}
-    merged = {**current, **metadata, "updated_at": datetime.utcnow().isoformat()}
-    await supabase_rest.update(
-        table="discovery_runs",
-        filters=[f"id=eq.{run_id}"],
-        values={"metadata": merged},
-    )
+    """Atomic metadata update using PostgreSQL JSONB merge operator."""
+    try:
+        await supabase_rest.rpc(
+            "discovery_runs_merge_metadata",
+            {"p_run_id": run_id, "p_metadata": metadata},
+        )
+    except Exception:
+        merged = {**metadata, "updated_at": datetime.utcnow().isoformat()}
+        await supabase_rest.update(
+            table="discovery_runs",
+            filters=[f"id=eq.{run_id}"],
+            values={"metadata": merged},
+        )
 
 
 # ---- Existing tasks ----
