@@ -1,167 +1,207 @@
-# Prompt para Claude Code Opus 5 — Análisis y Ejecución de Apify
+# Prompt para Claude Code Opus 5 — Análisis y Ejecución de Apify Real para Purina Dog Chow
 
 ## Contexto
 
-Este es el repositorio privado `lawebcore` (https://github.com/ungardev/lawebcore) — una aplicación de influencer marketing para La Web Figital Agency (Venezuela). Tiene un frontend React + Vite + Tailwind v3, un backend FastAPI, y un paquete Python `packages/discovery` que usa DeepSeek y Apify para descubrir influencers.
+Este es el repositorio `lawebcore` (https://github.com/ungardev/lawebcore) — una aplicación de influencer marketing para La Web Figital Agency (Venezuela). Tiene un frontend React + Vite + Tailwind v3, un backend FastAPI, y un paquete Python `packages/discovery` que usa DeepSeek y Apify para descubrir influencers.
 
-El sistema ya tiene un discovery flow funcional (mockup) con Purina Dog Chow y Nescafe Dolce Gusto, pero el **flujo real con Apify no está configurado**. La API Key de Apify existe en algún lado de `.env` (no confirmado) y necesitamos hacerla funcionar para **extraer 15-20 perfiles reales de Instagram** que coincidan con la estrategia de campaña.
+**Estado actual del proyecto**: El orchestrator ya usa la vía real de Apify — no hay mockups. El flujo `pending_discovery: True` encola un job en Redis/ARQ para ejecutar el pipeline completo de 4 capas (keyword discovery → hashtag deep dive → profile enrichment → engagement analytics → LWFA scoring).
+
+El proyecto tiene un caso demo funcionando con **Purina Dog Chow** y se quiere usar este flow real para extraer 15-20 perfiles reales de Instagram Venezuela.
+
+**Todas las environment variables están cargadas en Railway**, incluyendo:
+- `APIFY_API_KEY` — disponible
+- `DATABASE_URL` — disponible (Supabase)
+- `ARQ_REDIS_URL` — **hay que verificar si está disponible** (crítico para el flow)
 
 ## Objetivo
 
-1. **Explorar todo el proyecto** en modo "alto" — leer los archivos clave, entender la estructura
-2. **Localizar la API Key de Apify** — buscar en `.env`, `.env.example`, configs, código
-3. **Hacer funcionar el flujo de Apify** — ejecutar el discovery run real, no el mockup
-4. **Extraer 15-20 perfiles reales** de Instagram para:
-   - Primer caso: **Busco influencers para Purina Dog Chow en Instagram Venezuela. Perfiles nano, micro y mid. Presupuesto 10K USD.**
-   - Segundo caso: **Busco influencers para Nescafe Dolce Gusto en Instagram Venezuela. Perfiles nano, micro y mid.**
+1. **Explorar todo el proyecto** en modo "alto" — leer los archivos clave, entender la estructura completa
+2. **Diagnosticar Redis/ARQ en Railway** — esto es PRIORIDAD #1. Sin Redis, el flow `pending_discovery` se cuelga 120s.
+3. **Ejecutar el pipeline real de Apify** para extraer 15-20 perfiles reales de Instagram Venezuela para Purina Dog Chow
+4. **Verificar el flujo end-to-end** — desde el prompt en la UI hasta los candidatos visibles en pantalla
 
 ## Estado actual relevante
 
 ### Estructura clave
-- `packages/discovery/discovery/orchestrator.py` — state machine con detección especial para Purina (mockup) y Dolce Gusto (carga desde DB).
-- `packages/discovery/discovery/query_builder.py` — construye queries por plataforma (IG, TikTok, YouTube).
-- `packages/discovery/discovery/tools/` — clients de Apify, Meta, Metricool, TikTok, YouTube.
-- `packages/discovery/discovery/worker.py` — background job que ejecuta queries.
-- `packages/shared-core/shared_core/supabase_rest.py` — HTTP client para Supabase REST API.
-- `packages/shared-core/shared_core/config.py` — settings (probablemente tiene API keys).
+- `packages/discovery/discovery/orchestrator.py` — State machine LangGraph. Cuando el usuario confirma un brief, pone `pending_discovery: True` y el API encola un job en Redis.
+- `packages/discovery/discovery/query_builder.py` — Construye `DiscoveryPlan` con keywords y hashtags basados en el brief. Tiene `DISCOVERY_KEYWORDS` pre-configurados para Purina Dog Chow.
+- `packages/discovery/discovery/tools/apify_client.py` — Cliente Apify API v2 con cache Redis y retry.
+- `packages/discovery/discovery/worker.py` — Worker ARQ con pipeline de 4 capas:
+  - Step 1: keyword discovery (`instagram-search-scraper`)
+  - Step 2: hashtag deep dive (`instagram-hashtag-scraper`)
+  - Step 3: profile enrichment (`instagram-profile-scraper`)
+  - Step 4: engagement analytics (actor de engagement)
+- `apps/api/app/api/v1/discovery.py` — Endpoint `POST /conversations/{id}/messages`. Si `pending_discovery: True`, encola job con `enqueue_discovery_run()`.
+- `apps/api/app/workers/worker_enqueuer.py` — Encola jobs en Redis. Retorna `False` si Redis no está disponible pero el caller ignora el retorno.
+- `scripts/extract_purina_real_apify.py` — Script standalone que ejecuta Apify directamente y persiste candidatos. Ya existe, usar como referencia.
+- `packages/discovery/discovery/brief_parser.py` — System prompt con contexto de Purina Dog Chow. Tono: emocional, dueños responsables, comunidad de amantes de mascotas.
 
-### Bugs conocidos a ignorar (fuera de scope)
-- Redis/ARQ no disponible — el orchestrator puede colgarse en "Pensando..." si Redis no está, pero los flujos Purina y Dolce Gusto ya están arreglados con mockup.
-- Polling timeout sin UI update — bug del frontend, fuera de scope.
+### Scripts existentes
+- `scripts/seed_purina.py` — Seed con 20 influencers demo (NICRO/MID) + publicaciones. Uso: seed inicial de datos demo.
+- `scripts/extract_purina_real_apify.py` — Script de extracción Apify real ya creado. Ejecutar este o replicar su lógica en el worker.
+
+### Database (Supabase)
+- `discovery_runs` — Guarda el brief parseado + estado del run
+- `discovery_candidates` — Candidatos con scores LWFA
+- `influencers` + `influencer_social_accounts` + `influencer_metrics_snapshot` — Base de datos de influencers
+
+## PRIORIDAD #1 — Diagnosticar Redis/ARQ en Railway
+
+**Esto es crítico antes de hacer cualquier otra cosa.**
+
+El flow actual depende de que Redis esté corriendo para encolar jobs de ARQ. Si Redis no está disponible:
+1. El API llama `enqueue_discovery_run()` → retorna `False` silenciosamente
+2. El API retorna `discovery_run_id` al frontend de todas formas
+3. El frontend pollpea por 120 segundos sin que el worker nunca se ejecute
+4. UI queda en "Pensando..." para siempre
+
+**Pasos a ejecutar primero**:
+
+1. Verificar si Redis/ARQ está configurado en Railway:
+   - Buscar en Railway dashboard:是否有 Redis addon configurado?
+   - O ejecutar desde la Railway web console (o locally con las vars):
+     ```bash
+     python -c "import redis; r = redis.from_url('redis://...'); print(r.ping())"
+     ```
+
+2. Si Redis NO está disponible, hay dos caminos:
+   - **Opción A (recomendada)**: Hacer que el orchestrator detecte si un `discovery_run` ya tiene candidatos en `discovery_candidates` y los retorne directamente, sin depender de Redis. Crear un path "sync" que inserte candidatos directamente.
+   - **Opción B**: Agregar Redis al stack de Railway (más complejo, más costo)
+
+3. Si Redis SÍ está disponible: verificar que el worker de ARQ esté corriendo y procesando jobs.
+
+**Reporte esperado**: ¿Redis está disponible? ¿El worker de ARQ está corriendo? Si no, ¿cuál es el plan?
 
 ## Tareas específicas
 
 ### 1. Análisis del proyecto (HIGH)
 
-Lee y entiende:
-- `apps/api/app/api/v1/discovery.py` — endpoints REST
-- `apps/api/app/workers/worker.py` — background worker
-- `packages/discovery/discovery/orchestrator.py` — orchestrator completo
-- `packages/discovery/discovery/tools/apify_client.py` — client de Apify (probablemente ya existe)
-- `packages/discovery/discovery/query_builder.py` — cómo construye queries
-- `packages/discovery/discovery/result_ranker.py` — scoring
-- `supabase/migrations/00000000000021_discovery_recovery.sql` — schema
-- `supabase/migrations/00000000000025_import_nescafe_dolce_gusto_influencers.sql` — ejemplo de import
+Leer y entender todos estos archivos:
+- `apps/api/app/api/v1/discovery.py`
+- `apps/api/app/workers/worker.py`
+- `apps/api/app/workers/worker_enqueuer.py`
+- `packages/discovery/discovery/orchestrator.py`
+- `packages/discovery/discovery/tools/apify_client.py`
+- `packages/discovery/discovery/query_builder.py`
+- `packages/discovery/discovery/result_ranker.py`
+- `packages/discovery/discovery/memory.py`
+- `scripts/extract_purina_real_apify.py`
+- `supabase/migrations/00000000000021_discovery_recovery.sql`
 
-### 2. Localizar API Key de Apify
+### 2. Diagnosticar Redis/ARQ (PRIORIDAD #1)
 
-Busca en:
-- `apps/api/.env` — si existe
-- `packages/discovery/.env` — si existe
-- `.env` en root
-- `packages/shared-core/shared_core/config.py` — settings
-- `docker-compose.yml` / `docker-compose.yaml`
-- Cualquier archivo de config
+1. Buscar en Railway dashboard si hay Redis addon
+2. Verificar `ARQ_REDIS_URL` en las env vars de Railway
+3. Probar conexión Redis
+4. Verificar si el worker de ARQ está corriendo
+5. Reportar estado y proponer opción A o B
 
-Si NO encuentras la API Key, pregunta al usuario cómo obtenerla o si debe configurarla en `.env`.
+### 3. Hacer funcionar el flujo Apify real
 
-### 3. Hacer funcionar el flujo de Apify
+Una vez diagnosticado Redis:
 
-Deberías poder:
+**Si Redis está disponible**:
+- El flow ya debería funcionar end-to-end con el worker existente
+- Ejecutar el script `scripts/extract_purina_real_apify.py` para poblar la DB con candidatos reales
+- O hacer una búsqueda real desde la UI y verificar que el polling traiga candidatos
 
-a) **Verificar la API Key de Apify** con un test call (ej: `GET https://api.apify.com/v2/users/me`).
+**Si Redis NO está disponible (Opción A)**:
+- Modificar el orchestrator o el endpoint API para que, cuando `pending_discovery: True`:
+  1. Cree el `discovery_run` en la DB
+  2. Ejecute el pipeline de Apify SINCRONICAMENTE (sin Redis, en el mismo request o con un thread pool)
+  3. Inserte los candidatos en `discovery_candidates`
+  4. Retorne los candidatos inmediatamente al frontend
+  5. No depender de Redis para nada
+- O usar el script `extract_purina_real_apify.py` directamente para poblar la DB primero, y luego el flow de la UI puede leerlos con polling normal contra la DB
 
-b) **Ejecutar un hashtag search** en Instagram Venezuela con hashtags relevantes para Purina Dog Chow:
-   - `#purina`
-   - `#dogchow`
-   - `#mascotasVE`
-   - `#perrosVE`
-   - `#mascotasvenezuela`
-   - `#petlovers`
-   - `#doglover`
+**Verificar API Key de Apify**:
+```bash
+curl -H "Authorization: Bearer $APIFY_API_KEY" https://api.apify.com/v2/users/me
+```
 
-c) **Para Dolce Gusto**:
-   - `#dolcegusto`
-   - `#nescafe`
-   - `#caféVE`
-   - `#caféencasa`
-   - `#momentodepausa`
-   - `#cocinaVE`
+### 4. Extraer 15-20 perfiles reales de Purina Dog Chow
 
-d) **Filtrar** los resultados por:
-   - País: Venezuela
-   - Followers: 1K - 500K (cubrir nano, micro, mid)
-   - Engagement rate: > 2%
+Hashtags relevantes:
+- `#purinaVE`, `#dogchowVE`, `#amorporruno`, `#mascotasVE`, `#perrosVE`
+- `#dogChow`, `#purina`, `#petlovers`, `#doglover`
 
-e) **Rankear** con `result_ranker.rank()` aplicando el brief de la campaña.
+Keywords relevantes:
+- `PurinaVE`, `DogChowVE`, `mascotasVE`, `perrosVenezuela`
 
-### 4. Extraer 15-20 perfiles
+Filtros:
+- País: Venezuela (geotags, bio, username)
+- Followers: 1K - 500K (NANO + MICRO + MID)
+- Engagement rate: > 2% (de posts recientes)
 
-Para cada uno de los dos casos (Purina y Dolce Gusto), extraer **15-20 influencers reales** de Instagram Venezuela. Los resultados deben:
-
-- Estar en `discovery_candidates` con su `run_id` correspondiente
-- Tener `match_score`, `niche_relevance`, `geo_relevance`, `audience_relevance`, `content_quality`
-- Tener `rationale` generado
-- Tener `avatar_url` real (URL de Instagram)
-- Tener `engagement_rate` calculado
+Scoring:
+- LWFA composite score ya existe en `result_ranker.py`
+- Calcular engagement rate de `latestPosts` en profile enrichment
 
 ### 5. Persistir en la DB
 
-Insertar los resultados en `discovery_candidates` con un `run_id` real (crear un `discovery_run` primero con `brief_parsed` poblado).
+Crear un `discovery_run` con:
+- `brief_parsed`: `{product_name: "Purina Dog Chow", niches: ["mascotas", "perros"], audience_countries: ["VE"], platforms: ["instagram"], ...}`
+- `status`: `completed`
 
-Si la DB no está accesible, al menos guardar los resultados en un JSON local en `tmp/apify_results.json` para que sean importables después.
+Insertar `discovery_candidates` con:
+- `run_id` del nuevo run
+- `handle`, `avatar_url`, `followers`, `engagement_rate`, `match_score`
+- `rationale` generado
+- `status`: `new`
 
-### 6. Verificar el flujo end-to-end
+### 6. Verificar flujo end-to-end
 
-Una vez extraídos los 15-20 perfiles:
+1. Ir a la UI: `/influencer-lens`
+2. Enviar: `"Busco influencers para Purina Dog Chow en Instagram Venezuela. Perfiles nano, micro y mid. Presupuesto 10K USD."`
+3. Confirmar brief
+4. Esperar candidatos (debe completar en < 2 minutos, NO 120s de polling)
+5. Verificar que las tarjetas muestren:
+   - Avatar real (de Instagram)
+   - Handle
+   - Followers
+   - Engagement rate
+   - Score
+   - Botones Guardar / Descartar
 
-- El usuario podrá invocar el flow desde la UI:
-  ```
-  "Busco influencers para Purina Dog Chow en Instagram Venezuela. Perfiles nano, micro y mid. Presupuesto 10K USD."
-  ```
-- Pero **bypaseando** el mockup de Purina para que use los datos reales de Apify (no los mockup de `MOCKUP_RUN_ID`).
+### 7. Iterar hasta que funcione
 
-**OJO**: los mockups de Purina y Dolce Gusto siguen siendo útiles para demos. NO los elimines. En lugar de eso, crea un **modo "real"** distinto para cuando la API Key de Apify esté configurada.
-
-### 7. Estrategia de testing
-
-Si no puedes conectar a Apify directamente (por falta de API Key o por falta de red en sandbox), documenta bien los pasos exactos que el usuario debe ejecutar localmente con su `.env` configurado.
-
-## Plan de implementación sugerido
-
-1. `git clone` (si aplica) o leer el repo público
-2. Leer todos los archivos clave
-3. Buscar API Key de Apify
-4. Test de conexión a Apify
-5. Identificar el actor de Apify para Instagram hashtag search (sugerir: `apify/instagram-hashtag-scraper`)
-6. Escribir un script standalone `packages/discovery/scripts/extract_purina_apify.py` que:
-   - Hace el hashtag search
-   - Filtra VE
-   - Calcula engagement
-   - Inserta en `discovery_candidates`
-7. Ejecutar el script
-8. Verificar resultados
-9. Commit + push
+Si algo falla:
+1. Diagnostica el punto exacto de falla
+2. Arregla o reporta
+3. Vuelve a ejecutar
+4. Repite hasta que el flow completo funcione
 
 ## Entregables
 
-Al final del trabajo, el reporte debe incluir:
+Al final del trabajo:
 
-- ✅ Estado de la API Key de Apify (encontrada o no)
-- ✅ Resultado de la extracción: cuántos perfiles se encontraron para Purina, cuántos para Dolce Gusto
-- ✅ Archivos modificados para hacer funcionar el flujo real
-- ✅ Un `discovery_runs` creado para cada caso con `run_id` real
-- ✅ `discovery_candidates` poblados con 15-20 perfiles por caso
-- ✅ Cualquier fix necesario en el orchestrator para que el flujo real funcione
+- ✅ Estado de Redis/ARQ (disponible o no, y plan)
+- ✅ 15-20 candidatos reales de Instagram Venezuela para Purina Dog Chow en `discovery_candidates`
+- ✅ Un `discovery_run` creado y poblado en la DB
+- ✅ Flujo end-to-end funcionando desde la UI
+- ✅ Archivos modificados
+- ✅ Commits con mensajes descriptivos
 
 ## Consideraciones importantes
 
-- **NO elimines** los mockups de Purina ni Dolce Gusto — son útiles para demos
-- **NO commitees** la API Key de Apify al repo
-- **USA** `.env` para la API Key, y crea un `.env.example` documentando las variables necesarias
-- **DOCUMENTA** cualquier paso manual que el usuario deba ejecutar (ej: configurar Supabase URL, run migrations, etc.)
-- **SEPACOMO** los scripts de extracción deben ser idempotentes (re-ejecutables sin duplicar datos)
+- **USA** el script `scripts/extract_purina_real_apify.py` como referencia para el pipeline Apify
+- **EJECUTA** el script o replica su lógica directamente — el objetivo es tener candidatos reales en la DB
+- **NO commitees** API keys al repo
+- **El flow debe funcionar sin hanging de 120 segundos** — si Redis no está, implementar la Opción A (sync execution)
+- **Los candidatos deben tener avatar_url real** — los mockups no tienen avatar (muestran iniciales)
+- **El frontend muestra "Pensando..."** cuando `pending_discovery: True` y polling no recibe respuesta — si el run se completa en < 30s con sync execution, el polling recibe los candidatos y la UI responde correctamente
 
 ## Output esperado
 
 Al finalizar, reporta:
 
 1. Resumen ejecutivo (10 líneas)
-2. Resultado de la extracción Purina Dog Chow (lista de handles encontrados)
-3. Resultado de la extracción Nescafe Dolce Gusto (lista de handles encontrados)
-4. Commits realizados con mensajes
-5. Próximos pasos / TODOs para el usuario
+2. Estado de Redis/ARQ + decisión (Opción A o B)
+3. Lista de handles encontrados para Purina Dog Chow (15-20)
+4. Flujo end-to-end: ¿funciona desde la UI?
+5. Archivos modificados + commits
+6. Próximos pasos para dejar el proyecto funcionando en producción
 
 ---
 
-**IMPORTANTE**: El repositorio es privado normalmente pero el usuario lo hará público SOLO durante este análisis. No asumas que va a seguir público.
+**IMPORTANTE**: El repositorio es privado pero el usuario lo hará público SOLO durante este análisis. No asumas que va a seguir público.
