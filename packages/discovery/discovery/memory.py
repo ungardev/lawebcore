@@ -1,11 +1,40 @@
 """Persistence of conversational state for the Discovery module."""
 
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
 from shared_core.supabase_rest import supabase_rest
 from discovery.schemas import ConversationStep, DiscoverySearchRequest
+
+logger = logging.getLogger(__name__)
+
+_COLUMNS = {
+    "accumulated_brief": "TEXT",
+    "parsed_brief_json": "JSONB",
+    "pending_refinements": "JSONB",
+}
+
+
+async def migrate_discovery_conversations_schema() -> None:
+    """Add missing columns to discovery_conversations if they don't exist."""
+    from shared_core.supabase_rest import supabase_rest
+
+    pool = await supabase_rest._ensure_pool()
+    async with pool.acquire() as conn:
+        for col_name, col_type in _COLUMNS.items():
+            try:
+                await conn.execute(
+                    f'ALTER TABLE discovery_conversations ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
+                )
+                logger.info(f"[migration] Added column {col_name} to discovery_conversations")
+            except Exception as e:
+                if "already exists" in str(e).lower():
+                    logger.info(f"[migration] Column {col_name} already exists, skipping")
+                else:
+                    logger.warning(f"[migration] Could not add column {col_name}: {e}")
 
 
 async def save_conversation(

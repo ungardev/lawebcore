@@ -56,13 +56,64 @@ class DiscoveryOrchestrator:
     def __init__(self):
         self.state: dict[UUID, ConversationState] = {}
 
+    async def _load_state(self, conversation_id: UUID) -> ConversationState | None:
+        import json as _json
+        from discovery.memory import conversation_memory
+
+        conv = await conversation_memory.get_conversation(conversation_id)
+        if not conv:
+            return None
+
+        state = ConversationState()
+        state.step = ConversationStep(conv.get("current_step", "start"))
+        state.accumulated_brief = conv.get("accumulated_brief", "") or ""
+        state.discovery_run_id = UUID(conv["discovery_run_id"]) if conv.get("discovery_run_id") else None
+
+        if conv.get("parsed_brief_json"):
+            try:
+                state.brief_structured = BriefStructured(**conv["parsed_brief_json"])
+            except Exception:
+                state.brief_structured = None
+
+        pr = conv.get("pending_refinements")
+        if pr is None:
+            state.pending_refinements = []
+        elif isinstance(pr, str):
+            state.pending_refinements = _json.loads(pr)
+        else:
+            state.pending_refinements = list(pr)
+        return state
+
+    async def _save_state(self, conversation_id: UUID, state: ConversationState) -> None:
+        import json as _json
+        from discovery.memory import conversation_memory
+
+        await conversation_memory.update_conversation(
+            conversation_id=conversation_id,
+            updates={
+                "current_step": state.step.value,
+                "accumulated_brief": state.accumulated_brief,
+                "discovery_run_id": str(state.discovery_run_id) if state.discovery_run_id else None,
+                "parsed_brief_json": (
+                    state.brief_structured.model_dump()
+                    if state.brief_structured else None
+                ),
+                "pending_refinements": (
+                    _json.dumps(state.pending_refinements)
+                    if state.pending_refinements else None
+                ),
+            },
+        )
+
     async def create_conversation(self, conversation_id: UUID, initial_brief: str | None = None) -> dict[str, Any]:
         state = ConversationState()
         self.state[conversation_id] = state
 
         if initial_brief:
             state.accumulated_brief = initial_brief
-            return await self._process_message(conversation_id, initial_brief)
+            result = await self._process_message(conversation_id, initial_brief)
+            await self._save_state(conversation_id, state)
+            return result
 
         state.step = ConversationStep.START
         return {
@@ -76,12 +127,17 @@ class DiscoveryOrchestrator:
         self, conversation_id: UUID, message: MessageCreate
     ) -> dict[str, Any]:
         if conversation_id not in self.state:
-            raise ValueError(f"Conversation {conversation_id} not found")
+            state = await self._load_state(conversation_id)
+            if not state:
+                raise ValueError(f"Conversation {conversation_id} not found")
+            self.state[conversation_id] = state
 
         state = self.state[conversation_id]
         state.accumulated_brief += f"\n\nUsuario: {message.content}"
 
-        return await self._process_message(conversation_id, message.content)
+        result = await self._process_message(conversation_id, message.content)
+        await self._save_state(conversation_id, state)
+        return result
 
     async def _process_message(
         self, conversation_id: UUID, content: str
