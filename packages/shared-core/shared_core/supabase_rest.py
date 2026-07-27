@@ -44,6 +44,20 @@ class RailwayPg:
         if self._dsn and self._dsn.startswith("postgresql+asyncpg://"):
             self._dsn = self._dsn.replace("postgresql+asyncpg://", "postgresql://")
 
+    async def _init_connection(self, conn: asyncpg.Connection) -> None:
+        await conn.set_type_codec(
+            "jsonb",
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema="pg_catalog",
+        )
+        await conn.set_type_codec(
+            "json",
+            encoder=json.dumps,
+            decoder=json.loads,
+            schema="pg_catalog",
+        )
+
     async def _ensure_pool(self) -> asyncpg.Pool:
         if self._pool is None:
             self._pool = await asyncpg.create_pool(
@@ -51,6 +65,7 @@ class RailwayPg:
                 min_size=2,
                 max_size=20,
                 command_timeout=30,
+                init=self._init_connection,
             )
         return self._pool
 
