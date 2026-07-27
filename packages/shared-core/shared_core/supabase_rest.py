@@ -1,9 +1,38 @@
 """Database client using asyncpg — connects directly to Railway Postgres."""
 
 import json
+from datetime import datetime, date
+from decimal import Decimal
 from typing import Any
 import asyncpg
+from asyncpg import pgproto
 from shared_core.config import settings
+
+
+def _pg_to_json(val: Any) -> Any:
+    """Convert asyncpg types to JSON-serializable Python types."""
+    if val is None:
+        return None
+    if isinstance(val, (str, int, float, bool)):
+        return val
+    if isinstance(val, (datetime, date)):
+        return val.isoformat()
+    if isinstance(val, Decimal):
+        return float(val)
+    if isinstance(val, (pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
+        return str(val)
+    if isinstance(val, bytes):
+        return val.decode("utf-8", errors="replace")
+    if isinstance(val, list):
+        return [_pg_to_json(v) for v in val]
+    if isinstance(val, dict):
+        return {k: _pg_to_json(v) for k, v in val.items()}
+    return val
+
+
+def _row_to_dict(row: asyncpg.Record) -> dict:
+    """Convert asyncpg Record to dict with proper type serialization."""
+    return {k: _pg_to_json(v) for k, v in row.items()}
 
 
 class RailwayPg:
@@ -103,7 +132,7 @@ class RailwayPg:
             query += f" OFFSET {offset}"
         async with pool.acquire() as conn:
             rows = await conn.fetch(query, *params)
-            return [dict(r) for r in rows]
+            return [_row_to_dict(r) for r in rows]
 
     async def select_one(
         self,
@@ -133,6 +162,8 @@ class RailwayPg:
                 vals.append(v)
             elif v is None:
                 vals.append(None)
+            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
+                vals.append(str(v))
             else:
                 vals.append(v)
         sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)})'
@@ -142,7 +173,7 @@ class RailwayPg:
             sql += " RETURNING *"
         async with pool.acquire() as conn:
             row = await conn.fetchrow(sql, *vals)
-            return dict(row) if row else None
+            return _row_to_dict(row) if row else None
 
     async def upsert(
         self,
@@ -162,6 +193,8 @@ class RailwayPg:
                 vals.append(v)
             elif v is None:
                 vals.append(None)
+            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
+                vals.append(str(v))
             else:
                 vals.append(v)
         conflict_cols = ",".join(on_conflict)
@@ -171,7 +204,7 @@ class RailwayPg:
             sql += " RETURNING *"
         async with pool.acquire() as conn:
             rows = await conn.fetch(sql, *vals)
-            return [dict(r) for r in rows] if rows else None
+            return [_row_to_dict(r) for r in rows] if rows else None
 
     async def update(
         self,
@@ -191,6 +224,8 @@ class RailwayPg:
                 vals.append(v)
             elif v is None:
                 vals.append(None)
+            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
+                vals.append(str(v))
             else:
                 vals.append(v)
         sql = f"UPDATE {table} SET {','.join(set_cols)}{where}"
@@ -198,7 +233,7 @@ class RailwayPg:
             sql += " RETURNING *"
         async with pool.acquire() as conn:
             rows = await conn.fetch(sql, *vals, *wparams)
-            return [dict(r) for r in rows] if rows else None
+            return [_row_to_dict(r) for r in rows] if rows else None
 
     async def delete(
         self,
@@ -218,14 +253,14 @@ class RailwayPg:
             sql = f"SELECT * FROM {function_name}()"
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(sql)
-                return dict(row) if row else None
+                return _row_to_dict(row) if row else None
         arg_keys = list(args.keys())
         arg_vals = [args[k] for k in arg_keys]
         placeholders = [f"${i+1}" for i in range(len(arg_keys))]
         sql = f"SELECT * FROM {function_name}({','.join(placeholders)})"
         async with pool.acquire() as conn:
             row = await conn.fetchrow(sql, *arg_vals)
-            return dict(row) if row else None
+            return _row_to_dict(row) if row else None
 
     async def table(
         self,
@@ -247,6 +282,8 @@ class RailwayPg:
                 filters.append(f"{col}.is.null")
         return await self.select(name, select, filters, order, limit, offset)
 
+
+import uuid
 
 _railway_pg: RailwayPg | None = None
 

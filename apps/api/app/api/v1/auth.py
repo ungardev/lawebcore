@@ -71,19 +71,20 @@ async def login(body: LoginRequest):
             detail=f"User account is {user_status}",
         )
 
+    user_id_str = str(user["id"])
     token = create_access_token(
-        user_id=UUID(user["id"]),
-        email=user["email"],
-        role=user.get("role", "authenticated"),
-        full_name=user.get("full_name"),
+        user_id=UUID(user_id_str),
+        email=str(user["email"]),
+        role=str(user.get("role", "authenticated")),
+        full_name=str(user.get("full_name")) if user.get("full_name") else None,
     )
 
     return LoginResponse(
         access_token=token,
-        user_id=str(user["id"]),
-        email=user["email"],
-        role=user.get("role", "authenticated"),
-        full_name=user.get("full_name"),
+        user_id=user_id_str,
+        email=str(user["email"]),
+        role=str(user.get("role", "authenticated")),
+        full_name=str(user.get("full_name")) if user.get("full_name") else None,
     )
 
 
