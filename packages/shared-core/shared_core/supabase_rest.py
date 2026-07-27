@@ -18,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 _ORDER_DIR_PATTERN = re.compile(r"\b(\w+)\.(\w+)\b", re.IGNORECASE)
 
+_POSTGREST_PREFIXES = (
+    "eq.", "neq.", "gt.", "gte.", "lt.", "lte.",
+    "like.", "ilike.", "in.", "is.", "match.",
+    "fts.", "plfts.", "phfts.", "wfts.",
+    "cs.", "cd.", "ov.", "sl.", "sr.",
+    "nxr.", "nxl.", "adj.", "not.",
+)
+
+
+def _strip_postgrest_op(val: str) -> str:
+    for prefix in _POSTGREST_PREFIXES:
+        if val.startswith(prefix):
+            return val[len(prefix):]
+    return val
+
 
 def _normalize_order(order: str) -> str:
     """Convert 'col.desc' or 'col.asc' to 'col DESC' or 'col ASC'.
@@ -115,6 +130,7 @@ class RailwayPg:
         for f in filters:
             if "=" in f:
                 col, val = f.split("=", 1)
+                val = _strip_postgrest_op(val)
                 conds.append(f"{col} = ${len(params) + 1}")
                 params.append(val)
             elif f.startswith("!"):
