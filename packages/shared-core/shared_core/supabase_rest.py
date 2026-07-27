@@ -1,11 +1,13 @@
 """Database client using asyncpg — connects directly to Railway Postgres."""
 
 import json
+import uuid
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Any
+
 import asyncpg
-from asyncpg import pgproto
+
 from shared_core.config import settings
 
 
@@ -19,7 +21,7 @@ def _pg_to_json(val: Any) -> Any:
         return val.isoformat()
     if isinstance(val, Decimal):
         return float(val)
-    if isinstance(val, (pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
+    if isinstance(val, uuid.UUID):
         return str(val)
     if isinstance(val, bytes):
         return val.decode("utf-8", errors="replace")
@@ -143,6 +145,18 @@ class RailwayPg:
         rows = await self.select(table, select, filters, limit=1)
         return rows[0] if rows else None
 
+    def _val_to_pg(self, v: Any) -> Any:
+        if isinstance(v, (dict, list)):
+            return json.dumps(v)
+        elif isinstance(v, bool):
+            return v
+        elif v is None:
+            return None
+        elif isinstance(v, uuid.UUID):
+            return str(v)
+        else:
+            return v
+
     async def insert(
         self,
         table: str,
@@ -154,18 +168,7 @@ class RailwayPg:
         pool = await self._ensure_pool()
         cols = list(values.keys())
         placeholders = [f"${i+1}" for i in range(len(cols))]
-        vals: list[Any] = []
-        for v in values.values():
-            if isinstance(v, (dict, list)):
-                vals.append(json.dumps(v))
-            elif isinstance(v, bool):
-                vals.append(v)
-            elif v is None:
-                vals.append(None)
-            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
-                vals.append(str(v))
-            else:
-                vals.append(v)
+        vals = [self._val_to_pg(v) for v in values.values()]
         sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)})'
         if returning == "minimal" or return_repr is False:
             sql += " RETURNING id"
@@ -185,18 +188,7 @@ class RailwayPg:
         pool = await self._ensure_pool()
         cols = list(values.keys())
         placeholders = [f"${i+1}" for i in range(len(cols))]
-        vals: list[Any] = []
-        for v in values.values():
-            if isinstance(v, (dict, list)):
-                vals.append(json.dumps(v))
-            elif isinstance(v, bool):
-                vals.append(v)
-            elif v is None:
-                vals.append(None)
-            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
-                vals.append(str(v))
-            else:
-                vals.append(v)
+        vals = [self._val_to_pg(v) for v in values.values()]
         conflict_cols = ",".join(on_conflict)
         set_parts = [f"{c}=EXCLUDED.{c}" for c in cols if c not in on_conflict]
         sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)}) ON CONFLICT ({conflict_cols}) DO UPDATE SET {",".join(set_parts)}'
@@ -216,18 +208,7 @@ class RailwayPg:
         pool = await self._ensure_pool()
         where, wparams = self._parse_filters(filters)
         set_cols = [f"{k}=${i+1}" for i, k in enumerate(values.keys())]
-        vals: list[Any] = []
-        for v in values.values():
-            if isinstance(v, (dict, list)):
-                vals.append(json.dumps(v))
-            elif isinstance(v, bool):
-                vals.append(v)
-            elif v is None:
-                vals.append(None)
-            elif isinstance(v, (uuid.UUID, pgproto.UUID, asyncpg.pgproto.pgproto.UUID)):
-                vals.append(str(v))
-            else:
-                vals.append(v)
+        vals = [self._val_to_pg(v) for v in values.values()]
         sql = f"UPDATE {table} SET {','.join(set_cols)}{where}"
         if returning != "minimal":
             sql += " RETURNING *"
@@ -282,8 +263,6 @@ class RailwayPg:
                 filters.append(f"{col}.is.null")
         return await self.select(name, select, filters, order, limit, offset)
 
-
-import uuid
 
 _railway_pg: RailwayPg | None = None
 
