@@ -17,7 +17,6 @@ Contexto clave del mercado:
 - Engagement rate promedio VE: 4-7% es bueno, >8% es excelente
 - Tiers: MACRO (>500K), MID (100K-500K), MICRO (10K-100K), NANO (<10K)
 - Purina Dog Chow: tono emocional, dueños responsables, comunidad de amantes de mascotas
-- Nescafe Dolce Gusto: tono hogareño y cercano, café en cápsulas, momento de pausa y productividad en casa, comunidad de amantes del buen café, cocina y recetas con café
 - Mercado colombiano: 12M usuarios IG, tendencia coffee/lifestyle en auge
 
 Tu trabajo: cuando el usuario describe una campaña en lenguaje natural, extrae TODA la información útil y estructúrala en JSON. No improvises datos — si algo falta, pregunta antes de asumir.
