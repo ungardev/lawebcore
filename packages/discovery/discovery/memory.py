@@ -115,7 +115,10 @@ async def launch_discovery_run(
     created_by: UUID,
     bu_id: UUID | None = None,
 ) -> dict[str, Any]:
+    import uuid as _uuid
+
     run_values = {
+        "id": str(_uuid.uuid4()),
         "brief_text": f"Search: {brief.product_name or brief.industry or 'Influencers'}",
         "brief_parsed": brief.model_dump(),
         "product_name": brief.product_name,
