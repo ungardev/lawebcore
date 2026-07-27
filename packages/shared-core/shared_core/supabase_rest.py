@@ -122,7 +122,7 @@ class RailwayPg:
         except Exception:
             return False
 
-    def _parse_filters(self, filters: list[str] | None) -> tuple[str, list[Any]]:
+    def _parse_filters(self, filters: list[str] | None, param_offset: int = 0) -> tuple[str, list[Any]]:
         if not filters:
             return "", []
         conds = []
@@ -131,7 +131,7 @@ class RailwayPg:
             if "=" in f:
                 col, val = f.split("=", 1)
                 val = _strip_postgrest_op(val)
-                conds.append(f"{col} = ${len(params) + 1}")
+                conds.append(f"{col} = ${len(params) + 1 + param_offset}")
                 params.append(val)
             elif f.startswith("!"):
                 continue
@@ -140,29 +140,30 @@ class RailwayPg:
                 conds.append(f"{col} IS NULL")
             elif ".gte." in f:
                 col, val = f.split(".gte.", 1)
-                conds.append(f"{col} >= ${len(params) + 1}")
+                conds.append(f"{col} >= ${len(params) + 1 + param_offset}")
                 params.append(val)
             elif ".lte." in f:
                 col, val = f.split(".lte.", 1)
-                conds.append(f"{col} <= ${len(params) + 1}")
+                conds.append(f"{col} <= ${len(params) + 1 + param_offset}")
                 params.append(val)
             elif ".gt." in f:
                 col, val = f.split(".gt.", 1)
-                conds.append(f"{col} > ${len(params) + 1}")
+                conds.append(f"{col} > ${len(params) + 1 + param_offset}")
                 params.append(val)
             elif ".lt." in f:
                 col, val = f.split(".lt.", 1)
-                conds.append(f"{col} < ${len(params) + 1}")
+                conds.append(f"{col} < ${len(params) + 1 + param_offset}")
                 params.append(val)
             elif ".in." in f:
                 col, rest = f.split(".in.", 1)
                 vals = rest.strip("()").split(",")
-                placeholders = [f"${params.index(v) + 1}" if v in params else f"${len(params) + 1}" for v in vals]
+                base = len(params) + 1 + param_offset
+                placeholders = [f"${base + i}" for i in range(len(vals))]
                 conds.append(f"{col} IN ({','.join(placeholders)})")
                 params.extend(vals)
             elif ".ilike." in f:
                 col, val = f.split(".ilike.", 1)
-                conds.append(f"{col} ILIKE ${len(params) + 1}")
+                conds.append(f"{col} ILIKE ${len(params) + 1 + param_offset}")
                 params.append(f"%{val}%")
             else:
                 conds.append(f"{f} = true")
@@ -290,9 +291,9 @@ class RailwayPg:
         returning: str = "representation",
     ) -> dict | None:
         pool = await self._ensure_pool()
-        where, wparams = self._parse_filters(filters)
         set_cols = [f"{k}=${i+1}" for i, k in enumerate(values.keys())]
         vals = [self._val_to_pg(v) for v in values.values()]
+        where, wparams = self._parse_filters(filters, param_offset=len(vals))
         sql = f"UPDATE {table} SET {','.join(set_cols)}{where}"
         if returning != "minimal":
             sql += " RETURNING *"
