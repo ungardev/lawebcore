@@ -21,9 +21,25 @@ from discovery.schemas import (
     DiscoveryPlan,
     MessageCreate,
     MessageResponse,
+    Platform,
 )
 from discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
 from shared_core.supabase_rest import supabase_rest
+
+_AFFIRMATIVE_KEYWORDS = {
+    "si", "sí", "sii", "siii", "siiii", "confirmo", "confirmar", "confirmado",
+    "perfecto", "perfecta", "correcto", "correcta", "dale", "adelante", "vamos",
+    "venga", "go", "launch", "ejecuta", "ejecutar", "lanzar", "lanza",
+    "arranca", "arrancalo", "arráncalo", "manos a la obra",
+    "todo bien", "todo ok", "todo correcto", "esta bien", "está bien",
+    "estoy de acuerdo", "de acuerdo", "ok", "okay", "k",
+    "si por favor", "si dale", "genial", "excelente", "buenisimo",
+    "buenísimo", "bueno", "vamos a ello", "manos a la obra",
+    "yes", "yeah", "yep", "yup", "sure", "correct", "perfect",
+    "great", "let's do it", "do it", "run it", "launch", "execute",
+    "proceed", "ready", "let's go", "lets go",
+}
+
 
 class ConversationState:
     def __init__(self):
@@ -107,7 +123,7 @@ class DiscoveryOrchestrator:
                 conversation_id=str(conversation_id),
                 content_preview=content[:200],
             )
-            brief = BriefStructured(additional_context=content[:500])
+            brief = self._build_fallback_brief(content)
 
         state.brief_structured = brief
         state.step = ConversationStep.BRIEF
@@ -131,7 +147,7 @@ class DiscoveryOrchestrator:
     ) -> dict[str, Any]:
         state = self.state[conversation_id]
 
-        if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
+        if any(kw in content.lower() for kw in _AFFIRMATIVE_KEYWORDS):
             if not state.brief_structured or not state.brief_structured.niches:
                 logger.warning(
                     "brief_structured_empty_reparsing",
@@ -150,11 +166,12 @@ class DiscoveryOrchestrator:
                     )
                 except Exception as e:
                     logger.error(
-                        "brief_reparse_failed",
+                        "brief_reparse_failed_using_fallback",
                         conversation_id=str(conversation_id),
                         error=str(e),
                         exc_info=True,
                     )
+                    state.brief_structured = self._build_fallback_brief(state.accumulated_brief)
 
             state.step = ConversationStep.SEARCHING
             return {
@@ -180,7 +197,7 @@ class DiscoveryOrchestrator:
     ) -> dict[str, Any]:
         state = self.state[conversation_id]
 
-        if any(kw in content.lower() for kw in ["sí", "si", "correcto", "perfecto", "adelante", "sí está"]):
+        if any(kw in content.lower() for kw in _AFFIRMATIVE_KEYWORDS):
             if not state.brief_structured or not state.brief_structured.niches:
                 try:
                     state.brief_structured = await brief_parser_agent.parse(
@@ -188,11 +205,12 @@ class DiscoveryOrchestrator:
                     )
                 except Exception as e:
                     logger.error(
-                        "brief_reparse_failed",
+                        "brief_reparse_failed_using_fallback",
                         conversation_id=str(conversation_id),
                         error=str(e),
                         exc_info=True,
                     )
+                    state.brief_structured = self._build_fallback_brief(state.accumulated_brief)
 
             state.step = ConversationStep.SEARCHING
             return {
@@ -366,6 +384,61 @@ class DiscoveryOrchestrator:
             parts.append(f"**Contexto adicional:** {brief.additional_context[:100]}")
 
         return "\n".join(parts)
+
+    def _build_fallback_brief(self, accumulated_text: str) -> BriefStructured:
+        text_lower = accumulated_text.lower()
+        niches = []
+        if any(w in text_lower for w in ["perro", "perros", "mascota", "mascotas", "dog", "cat", "gato", "pet"]):
+            niches.extend(["mascotas", "perros", "pet_care"])
+        if any(w in text_lower for w in ["cafe", "coffee"]):
+            niches.extend(["cafe", "coffee", "foodie"])
+        if any(w in text_lower for w in ["moda", "fashion", "ropa"]):
+            niches.extend(["moda", "fashion", "lifestyle"])
+        if any(w in text_lower for w in ["belleza", "beauty", "skincare", "cosmético"]):
+            niches.extend(["belleza", "beauty", "skincare"])
+        if not niches:
+            niches = ["lifestyle", "general"]
+        platforms = [Platform.INSTAGRAM]
+        if "tiktok" in text_lower or "tik tok" in text_lower:
+            platforms.append(Platform.TIKTOK)
+        if "youtube" in text_lower or "yt" in text_lower:
+            platforms.append(Platform.YOUTUBE)
+        countries = ["VE"]
+        if "colombia" in text_lower:
+            countries.append("CO")
+        if "méxico" in text_lower or "mexico" in text_lower:
+            countries.append("MX")
+        cities = []
+        for c, kws in [
+            ("Caracas", ["caracas"]),
+            ("Valencia", ["valencia"]),
+            ("Maracaibo", ["maracaibo"]),
+            ("Bogotá", ["bogota", "bogotá"]),
+        ]:
+            if any(k in text_lower for k in kws):
+                cities.append(c)
+        budget = None
+        import re
+        budget_match = re.search(r"\$?\s*(\d{1,3}(?:[.,]\d{3})*)\s*(?:usd|dólares|dolares)?", text_lower)
+        if budget_match:
+            try:
+                budget = float(budget_match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        return BriefStructured(
+            product_name=None,
+            industry="pet_food" if any(w in text_lower for w in ["perro", "perros", "mascota", "pet"]) else "general",
+            niches=niches,
+            audience_gender="female" if any(w in text_lower for w in ["mujer", "mama", "mamá", "dueña", "female"]) else "all",
+            audience_age_min=25,
+            audience_age_max=45,
+            audience_countries=countries,
+            audience_cities=cities if cities else None,
+            budget_usd=budget,
+            tone=["emocional"],
+            platforms=platforms,
+            additional_context=accumulated_text[:500],
+        )
 
     def _candidates_to_text(self, candidates: list[CandidateWithScore]) -> str:
         lines = []

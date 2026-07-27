@@ -138,8 +138,8 @@ export function useDiscoveryConversation() {
   }, [conversation]);
 
   async function pollRunStatus(runId: string, conversationId: string) {
-    const maxAttempts = 40;
-    const interval = 3000;
+    const maxAttempts = 120;
+    const interval = 5000;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await new Promise((r) => setTimeout(r, interval));

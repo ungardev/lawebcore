@@ -1,6 +1,6 @@
 """Persistence of conversational state for the Discovery module."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -21,6 +21,8 @@ async def save_conversation(
         "current_step": step,
         "state": state or {},
         "status": "active",
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "last_message_at": datetime.now(timezone.utc).isoformat(),
     }
     if bu_id:
         values["bu_id"] = str(bu_id)
@@ -70,6 +72,7 @@ async def save_message(
         "reasoning": reasoning,
         "cost_usd": cost_usd,
         "latency_ms": latency_ms,
+        "created_at": datetime.now(timezone.utc).isoformat(),
     }
     return await supabase_rest.insert(
         table="discovery_messages",

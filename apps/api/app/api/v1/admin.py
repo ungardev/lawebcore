@@ -4,7 +4,7 @@ import asyncio
 import json
 import random
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -466,7 +466,7 @@ async def enrich_influencers(
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
-            updates["enriched_at"] = "now()"
+            updates["enriched_at"] = datetime.now(timezone.utc).isoformat()
             try:
                 await supabase_rest.update(
                     table="influencers",
