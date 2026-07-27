@@ -19,7 +19,7 @@ export function Topbar({ collapsed = false, onToggleCollapse }: TopbarProps) {
 
   const displayName =
     profile?.full_name?.trim() ||
-    (user?.user_metadata as Record<string, string> | null)?.full_name?.trim() ||
+    user?.full_name?.trim() ||
     null;
 
   return (

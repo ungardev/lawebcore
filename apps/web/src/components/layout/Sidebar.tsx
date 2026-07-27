@@ -42,7 +42,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   const displayName =
     profile?.full_name?.trim() ||
-    (user?.user_metadata as Record<string, string> | null)?.full_name?.trim() ||
+    user?.full_name?.trim() ||
     null;
 
   const initials = displayName

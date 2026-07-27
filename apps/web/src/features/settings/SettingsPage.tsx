@@ -25,7 +25,7 @@ export function SettingsPage() {
             </div>
             <div>
               <p className="text-muted-foreground">Creado</p>
-              <p className="font-medium">{user?.created_at && new Date(user.created_at).toLocaleDateString()}</p>
+              <p className="font-medium">{user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
             </div>
           </div>
         </CardContent>
@@ -42,7 +42,7 @@ export function SettingsPage() {
         <CardHeader><CardTitle>Acerca de La Web Core</CardTitle></CardHeader>
         <CardContent className="text-sm space-y-2 text-muted-foreground">
           <p>Version: 0.1.0 (MVP)</p>
-          <p>Stack: FastAPI + Supabase + React + Vite + shadcn/ui</p>
+          <p>Stack: FastAPI + Railway Postgres + React + Vite + shadcn/ui</p>
           <p>La Web Figital Agency - Venezuela</p>
           <p className="pt-2 border-t mt-3">
             Producto interno para gestion integral de campanas de marketing, KPIs, operaciones e IA.

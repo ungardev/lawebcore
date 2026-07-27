@@ -8,6 +8,7 @@ interface User {
   full_name: string | null;
   role: string;
   status: string;
+  created_at: string | null;
 }
 
 interface AuthContextType {
@@ -79,6 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       full_name: data.full_name,
       role: data.role,
       status: 'active',
+      created_at: data.created_at || null,
     });
   };
 

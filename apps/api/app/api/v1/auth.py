@@ -33,6 +33,7 @@ class UserRead(BaseModel):
     full_name: str | None
     role: str
     status: str
+    created_at: str | None
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -91,12 +92,22 @@ async def login(body: LoginRequest):
 @router.get("/me", response_model=UserRead)
 async def get_me(user: CurrentUserDep):
     """Returns the profile of the authenticated user."""
+    rows = await supabase_rest.select(
+        table="users",
+        select="id,email,full_name,role,status,created_at",
+        filters=[f"id={user.id}"],
+        limit=1,
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="User not found")
+    u = rows[0]
     return UserRead(
-        id=str(user.id),
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        status="active",
+        id=str(u["id"]),
+        email=str(u["email"]),
+        full_name=u.get("full_name"),
+        role=str(u.get("role", "authenticated")),
+        status=str(u.get("status", "active")),
+        created_at=u.get("created_at"),
     )
 
 
