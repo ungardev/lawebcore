@@ -20,9 +20,9 @@ from shared_core.config import settings
 logger = structlog.get_logger(__name__)
 
 INSTAGRAM_PROFILE_SCRAPER = "apify~instagram-profile-scraper"
-INSTAGRAM_HASHTAG_SCRAPER = "apify/instagram-hashtag-scraper"
-INSTAGRAM_SEARCH_SCRAPER = "apify/instagram-search-scraper"
-ENGAGEMENT_ANALYTICS_SCRAPER = "easy_scraper/instagram-profile-engagement-analytics"
+INSTAGRAM_HASHTAG_SCRAPER = "apify~instagram-hashtag-scraper"
+INSTAGRAM_SEARCH_SCRAPER = "apify~instagram-search-scraper"
+ENGAGEMENT_ANALYTICS_SCRAPER = "easyapi~instagram-profile-engagement-analytics"
 TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
 
 CACHE_TTL_PROFILES = 86400
@@ -627,8 +627,8 @@ class ApifyClient:
             status = status_data.get("data", {}).get("status")
 
             cost_usd = status_data.get("data", {}).get("usageTotalUsd", 0.0) or 0.0
-            if cost_usd > 0 and discovery_run_id:
-                self.record_cost(discovery_run_id, cost_usd)
+            if cost_usd > 0 and self.discovery_run_id:
+                self.record_cost(self.discovery_run_id, cost_usd)
 
             logger.info("apify_poll", run_id=run_id, actor_id=actor_id, status=status, attempt=i + 1, cost_usd=cost_usd)
 

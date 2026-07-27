@@ -100,16 +100,16 @@ async def _start_apify_actor(actor_id: str, run_input: dict, timeout_s: int = 60
 async def fetch_purina_profiles() -> list[dict]:
     """Run combined Apify extraction: hashtag + keyword discovery."""
 
-    print("\n[1/4] Hashtag search via instagram-hashtag-scraper...")
+    print("\n[1/4] Hashtag search via apify~instagram-hashtag-scraper...")
     hashtag_items = await _start_apify_actor(
-        "apify/instagram-hashtag-scraper",
+        "apify~instagram-hashtag-scraper",
         {"hashtags": PURINA_HASHTAGS, "resultsLimit": 30},
     )
     print(f"  -> {len(hashtag_items)} posts")
 
-    print("\n[2/4] Keyword search via instagram-search-scraper...")
+    print("\n[2/4] Keyword search via apify~instagram-search-scraper...")
     keyword_items = await _start_apify_actor(
-        "apify/instagram-search-scraper",
+        "apify~instagram-search-scraper",
         {"searchQueries": PURINA_KEYWORDS, "searchType": "user", "resultsLimit": 30},
     )
     print(f"  -> {len(keyword_items)} users")
@@ -143,7 +143,7 @@ async def fetch_purina_profiles() -> list[dict]:
     handles = list(profiles.keys())[:50]
     if handles:
         enriched = await _start_apify_actor(
-            "apify/instagram-profile-scraper",
+            "apify~instagram-profile-scraper",
             {"usernames": handles, "profileScrape": ["followersCount", "followsCount", "postsCount", "latestPosts", "biography", "fullName", "profilePicUrl"]},
         )
         for e in enriched:

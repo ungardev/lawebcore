@@ -203,18 +203,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             if top_handles_for_analytics:
                 await _run_update_metadata(run_id, {"current_step": "step4_engagement_analytics"})
-                analytics_results = await apify_client.analyze_profile_engagement(
-                    top_handles_for_analytics,
-                    posts_to_analyze=30,
-                )
-                for a in analytics_results:
-                    handle = a.get("profile_username", a.get("username", ""))
-                    if handle:
-                        analytics_by_handle[handle] = a
-                logger.info(
-                    "step4_analytics_done",
-                    profiles_analyzed=len(analytics_by_handle),
-                )
+                try:
+                    analytics_results = await apify_client.analyze_profile_engagement(
+                        top_handles_for_analytics,
+                        posts_to_analyze=30,
+                    )
+                    for a in analytics_results:
+                        handle = a.get("profile_username", a.get("username", ""))
+                        if handle:
+                            analytics_by_handle[handle] = a
+                    logger.info(
+                        "step4_analytics_done",
+                        profiles_analyzed=len(analytics_by_handle),
+                    )
+                except Exception as analytics_err:
+                    logger.warning(
+                        "step4_analytics_skipped",
+                        reason=str(analytics_err),
+                        fallback="profile_enrichment_data_used",
+                    )
+                    analytics_by_handle = {}
 
         except Exception as e:
             logger.error("discovery_pipeline_steps_1_4_failed", run_id=run_id, error=str(e), exc_info=True)
