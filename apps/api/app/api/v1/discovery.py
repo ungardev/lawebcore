@@ -215,7 +215,7 @@ async def send_message(
         table="discovery_conversations",
         filters=[f"id=eq.{conversation_id}"],
         values={
-            "last_message_at": datetime.now(timezone.utc).isoformat(),
+            "last_message_at": datetime.now(timezone.utc),
             "current_step": ai_response.get("step", "brief"),
             "discovery_run_id": discovery_run_id,
         },
@@ -362,7 +362,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
-            updates["enriched_at"] = datetime.now(timezone.utc).isoformat()
+            updates["enriched_at"] = datetime.now(timezone.utc)
             try:
                 await supabase_rest.update(
                     table="influencers",
@@ -495,7 +495,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
             "avatar_url": candidate.get("avatar_url", ""),
             "bio": candidate.get("bio", ""),
             "is_discoverable": True,
-            "discovered_at": datetime.now(timezone.utc).isoformat(),
+            "discovered_at": datetime.now(timezone.utc),
             "discovery_query": "",
             "discovery_confidence": candidate.get("match_score", 0),
             "metadata": {"discovery_candidate_id": str(candidate_id)},

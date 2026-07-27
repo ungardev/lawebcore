@@ -21,8 +21,8 @@ async def save_conversation(
         "current_step": step,
         "state": state or {},
         "status": "active",
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "last_message_at": datetime.now(timezone.utc).isoformat(),
+        "started_at": datetime.now(timezone.utc),
+        "last_message_at": datetime.now(timezone.utc),
     }
     if bu_id:
         values["bu_id"] = str(bu_id)
@@ -72,7 +72,7 @@ async def save_message(
         "reasoning": reasoning,
         "cost_usd": cost_usd,
         "latency_ms": latency_ms,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
     }
     return await supabase_rest.insert(
         table="discovery_messages",

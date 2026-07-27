@@ -179,6 +179,10 @@ class RailwayPg:
             return None
         elif isinstance(v, uuid.UUID):
             return str(v)
+        elif isinstance(v, datetime):
+            return v
+        elif isinstance(v, date) and not isinstance(v, datetime):
+            return v
         else:
             return v
 

@@ -203,7 +203,7 @@ async def _seed_purina() -> dict:
             "currency": "USD",
             "deliverables": [{"type": "reel", "qty": random.randint(1, 3)}],
             "status": random.choice(["CONFIRMADO", "CONTRATADO", "CONTENIDO_ENTREGADO"]),
-            "contracted_at": (datetime.utcnow() - timedelta(days=random.randint(2, 10))).isoformat(),
+            "contracted_at": (datetime.utcnow() - timedelta(days=random.randint(2, 10))),
         })
 
     n_infs = await _upsert_batch("influencers", inf_rows, on_conflict_col="id")
@@ -466,7 +466,7 @@ async def enrich_influencers(
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
-            updates["enriched_at"] = datetime.now(timezone.utc).isoformat()
+            updates["enriched_at"] = datetime.now(timezone.utc)
             try:
                 await supabase_rest.update(
                     table="influencers",
@@ -635,8 +635,8 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                     "accumulated_brief": demo.get("accumulated_brief", ""),
                     "message_count": len(messages),
                     "status": "active",
-                    "started_at": datetime.utcnow().isoformat(),
-                    "last_message_at": datetime.utcnow().isoformat(),
+                    "started_at": datetime.now(timezone.utc),
+                    "last_message_at": datetime.now(timezone.utc),
                 },
             )
         except Exception as e:
@@ -657,7 +657,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                         "tool_results": json.dumps(msg.get("tool_results")) if msg.get("tool_results") else None,
                         "cost_usd": msg.get("cost_usd", 0),
                         "latency_ms": msg.get("latency_ms", 0),
-                        "created_at": datetime.utcnow().isoformat(),
+                        "created_at": datetime.now(timezone.utc),
                     },
                 )
             except Exception as e:
