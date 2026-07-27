@@ -10,7 +10,7 @@ Handles:
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import structlog
 from arq import cron
@@ -321,7 +321,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "lwfa_composite": lwfa_composite,
                     "analytics": analytics,
                 },
-                "fetched_at": datetime.utcnow().isoformat(),
+                "fetched_at": datetime.now(timezone.utc),
             })
 
         await _run_update_metadata(run_id, {
@@ -360,12 +360,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _run_update(run_id, {
             "status": "completed",
             "total_candidates": total,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc),
         })
         await _run_update_metadata(run_id, {
             "current_step": "completed",
             "candidates_found": total,
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc),
         })
 
         conv = await supabase_rest.select_one(
@@ -617,7 +617,7 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
 
 
 async def _run_set_status(run_id: str, status: str, error: str | None = None) -> None:
-    values = {"status": status, "started_at": datetime.utcnow().isoformat()}
+    values = {"status": status, "started_at": datetime.now(timezone.utc)}
     if error:
         values["error"] = error
     await supabase_rest.update(
@@ -643,7 +643,7 @@ async def _run_update_metadata(run_id: str, metadata: dict) -> None:
             {"p_run_id": run_id, "p_metadata": metadata},
         )
     except Exception:
-        merged = {**metadata, "updated_at": datetime.utcnow().isoformat()}
+        merged = {**metadata, "updated_at": datetime.now(timezone.utc)}
         await supabase_rest.update(
             table="discovery_runs",
             filters=[f"id=eq.{run_id}"],
@@ -686,7 +686,7 @@ async def embed_document_task(ctx, document_id: str) -> dict:
         values={
             "status": "indexed",
             "chunk_count": len(chunks),
-            "indexed_at": datetime.utcnow().isoformat(),
+            "indexed_at": datetime.now(timezone.utc),
         },
     )
 
