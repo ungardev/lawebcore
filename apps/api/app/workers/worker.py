@@ -642,12 +642,9 @@ async def _run_update_metadata(run_id: str, metadata: dict) -> None:
             "discovery_runs_merge_metadata",
             {"p_run_id": run_id, "p_metadata": metadata},
         )
-    except Exception:
-        merged = {**metadata, "updated_at": datetime.now(timezone.utc)}
-        await supabase_rest.update(
-            table="discovery_runs",
-            filters=[f"id=eq.{run_id}"],
-            values={"metadata": merged},
+    except Exception as e:
+        logger.warning(
+            f"[run {run_id}] metadata update skipped: {e}"
         )
 
 

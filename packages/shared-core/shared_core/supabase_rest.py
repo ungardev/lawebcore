@@ -173,7 +173,7 @@ class RailwayPg:
 
     def _val_to_pg(self, v: Any) -> Any:
         if isinstance(v, dict):
-            return json.dumps(v)
+            return json.dumps(v, default=str)
         elif isinstance(v, list):
             return v
         elif isinstance(v, bool):
