@@ -94,6 +94,13 @@ class RailwayPg:
             decoder=json.loads,
             schema="pg_catalog",
         )
+        await conn.set_type_codec(
+            "text[]",
+            encoder=lambda arr: arr,
+            decoder=lambda arr: list(arr) if arr is not None else None,
+            schema="pg_catalog",
+            format="array",
+        )
 
     async def _ensure_pool(self) -> asyncpg.Pool:
         if self._pool is None:
@@ -172,8 +179,10 @@ class RailwayPg:
         return where, params
 
     def _val_to_pg(self, v: Any) -> Any:
-        if isinstance(v, (dict, list)):
+        if isinstance(v, dict):
             return json.dumps(v)
+        elif isinstance(v, list):
+            return v
         elif isinstance(v, bool):
             return v
         elif v is None:
