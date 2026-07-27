@@ -90,7 +90,7 @@ async def _start_apify_actor(actor_id: str, run_input: dict, timeout_s: int = 60
     """Run an Apify actor synchronously and return dataset items."""
     headers = {"Authorization": f"Bearer {APIFY_API_KEY}"}
     async with httpx.AsyncClient(base_url=APIFY_BASE, headers=headers, timeout=timeout_s) as client:
-        sync_url = f"/acts/{actor_id.replace('~', '/')}/run-sync-get-dataset-items"
+        sync_url = f"/acts/{actor_id}/run-sync-get-dataset-items"
         print(f"  [APIFY] {actor_id} -> {sync_url}")
         resp = await client.post(sync_url, json=run_input)
         resp.raise_for_status()
@@ -144,7 +144,7 @@ async def fetch_purina_profiles() -> list[dict]:
     if handles:
         enriched = await _start_apify_actor(
             "apify~instagram-profile-scraper",
-            {"usernames": handles, "profileScrape": ["followersCount", "followsCount", "postsCount", "latestPosts", "biography", "fullName", "profilePicUrl"]},
+            {"usernames": handles, "resultsType": "details"},
         )
         for e in enriched:
             handle = e.get("username")
