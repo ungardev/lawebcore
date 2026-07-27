@@ -1,10 +1,18 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Session, User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://lawebcore-production.up.railway.app';
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  status: string;
+}
 
 interface AuthContextType {
-  session: Session | null;
-  user: SupabaseUser | null;
+  user: User | null;
+  token: string | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -15,70 +23,82 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setUser(data.session?.user ?? null);
+    const stored = localStorage.getItem('laweb_token');
+    if (stored) {
+      setToken(stored);
+      validateToken(stored);
+    } else {
       setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
-      setSession(sess);
-      setUser(sess?.user ?? null);
-    });
-
-    return () => subscription.unsubscribe();
+    }
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+  const validateToken = async (t: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${t}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        setToken(t);
+      } else {
+        localStorage.removeItem('laweb_token');
+        setToken(null);
+        setUser(null);
+      }
+    } catch {
+      localStorage.removeItem('laweb_token');
+      setToken(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: fullName } },
+  const signIn = async (email: string, password: string) => {
+    const res = await fetch(`${API_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
     });
-    if (error) throw error;
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(err.detail || 'Login failed');
+    }
+    const data = await res.json();
+    localStorage.setItem('laweb_token', data.access_token);
+    setToken(data.access_token);
+    setUser({
+      id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      role: data.role,
+      status: 'active',
+    });
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    localStorage.removeItem('laweb_token');
+    setToken(null);
+    setUser(null);
     window.location.href = '/login';
   };
 
-  const updatePassword = async (currentPassword: string, newPassword: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user?.email) {
-      throw new Error('No hay sesion activa');
-    }
+  const signUp = async (_email: string, _password: string, _fullName: string) => {
+    throw new Error('Sign up is not available. Contact your administrator.');
+  };
 
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: session.user.email,
-      password: currentPassword,
-    });
-    if (verifyError) {
-      throw new Error('La contrasena actual es incorrecta');
-    }
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    if (updateError) {
-      throw updateError;
-    }
+  const updatePassword = async (_currentPassword: string, _newPassword: string) => {
+    throw new Error('Password update is not available. Contact your administrator.');
   };
 
   return (
-      <AuthContext.Provider value={{ session, user, loading, signIn, signOut, signUp, updatePassword }}>
+    <AuthContext.Provider value={{ user, token, loading, signIn, signOut, signUp, updatePassword }}>
       {children}
     </AuthContext.Provider>
   );
@@ -86,6 +106,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
   return ctx;
 }

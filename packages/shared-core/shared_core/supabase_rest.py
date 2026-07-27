@@ -1,88 +1,148 @@
-"""HTTP client for Supabase REST API (PostgREST)."""
-import httpx
+"""Database client using asyncpg — connects directly to Railway Postgres."""
+
+import json
+from typing import Any
+import asyncpg
 from shared_core.config import settings
 
 
-class SupabaseRest:
-    def __init__(self):
-        self.base_url = f"{settings.SUPABASE_URL}/rest/v1"
-        self.headers = {
-            "apikey": settings.SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {settings.SUPABASE_SERVICE_ROLE_KEY}",
-            "Content-Type": "application/json",
-        }
-        self.client = httpx.AsyncClient(
-            base_url=self.base_url,
-            headers=self.headers,
-            timeout=30.0,
-        )
+class RailwayPg:
+    def __init__(self, dsn: str | None = None):
+        self._pool: asyncpg.Pool | None = None
+        self._dsn = dsn or settings.DATABASE_URL
+        if self._dsn and self._dsn.startswith("postgresql+asyncpg://"):
+            self._dsn = self._dsn.replace("postgresql+asyncpg://", "postgresql://")
+
+    async def _ensure_pool(self) -> asyncpg.Pool:
+        if self._pool is None:
+            self._pool = await asyncpg.create_pool(
+                self._dsn,
+                min_size=2,
+                max_size=20,
+                command_timeout=30,
+            )
+        return self._pool
 
     async def close(self):
-        await self.client.aclose()
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+
+    async def healthcheck(self) -> bool:
+        try:
+            pool = await self._ensure_pool()
+            async with pool.acquire() as conn:
+                await conn.fetchval("SELECT 1")
+            return True
+        except Exception:
+            return False
+
+    def _parse_filters(self, filters: list[str] | None) -> tuple[str, list[Any]]:
+        if not filters:
+            return "", []
+        conds = []
+        params: list[Any] = []
+        for f in filters:
+            if "=" in f:
+                col, val = f.split("=", 1)
+                conds.append(f"{col} = ${len(params) + 1}")
+                params.append(val)
+            elif f.startswith("!"):
+                continue
+            elif f.lower().endswith(".is.null"):
+                col = f[:-8]
+                conds.append(f"{col} IS NULL")
+            elif ".gte." in f:
+                col, val = f.split(".gte.", 1)
+                conds.append(f"{col} >= ${len(params) + 1}")
+                params.append(val)
+            elif ".lte." in f:
+                col, val = f.split(".lte.", 1)
+                conds.append(f"{col} <= ${len(params) + 1}")
+                params.append(val)
+            elif ".gt." in f:
+                col, val = f.split(".gt.", 1)
+                conds.append(f"{col} > ${len(params) + 1}")
+                params.append(val)
+            elif ".lt." in f:
+                col, val = f.split(".lt.", 1)
+                conds.append(f"{col} < ${len(params) + 1}")
+                params.append(val)
+            elif ".in." in f:
+                col, rest = f.split(".in.", 1)
+                vals = rest.strip("()").split(",")
+                placeholders = [f"${params.index(v) + 1}" if v in params else f"${len(params) + 1}" for v in vals]
+                conds.append(f"{col} IN ({','.join(placeholders)})")
+                params.extend(vals)
+            elif ".ilike." in f:
+                col, val = f.split(".ilike.", 1)
+                conds.append(f"{col} ILIKE ${len(params) + 1}")
+                params.append(f"%{val}%")
+            else:
+                conds.append(f"{f} = true")
+        where = " WHERE " + " AND ".join(conds) if conds else ""
+        return where, params
 
     async def select(
         self,
         table: str,
         select: str = "*",
-        filters: list[str] = None,
-        order: str = None,
-        limit: int = None,
-        offset: int = None,
+        filters: list[str] | None = None,
+        order: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict]:
-        params = {"select": select}
-        if filters:
-            for f in filters:
-                if "=" in f:
-                    col, val = f.split("=", 1)
-                    params[col] = val
-                else:
-                    params[f] = "eq.true"
+        pool = await self._ensure_pool()
+        where, params = self._parse_filters(filters)
+        query = f"SELECT {select} FROM {table}{where}"
         if order:
-            params["order"] = order
+            query += f" ORDER BY {order}"
         if limit is not None:
-            params["limit"] = limit
+            query += f" LIMIT {limit}"
         if offset is not None:
-            params["offset"] = offset
-        resp = await self.client.get(f"/{table}", params=params)
-        resp.raise_for_status()
-        result = resp.json()
-        return result if isinstance(result, list) else [result] if result else []
+            query += f" OFFSET {offset}"
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(query, *params)
+            return [dict(r) for r in rows]
 
     async def select_one(
         self,
         table: str,
         select: str = "*",
-        filters: list[str] = None,
+        filters: list[str] | None = None,
     ) -> dict | None:
-        results = await self.select(table=table, select=select, filters=filters, limit=1)
-        return results[0] if results else None
+        rows = await self.select(table, select, filters, limit=1)
+        return rows[0] if rows else None
 
     async def insert(
         self,
         table: str,
         values: dict,
         returning: str = "representation",
-        on_conflict: list[str] = None,
-        return_repr: bool = None,
+        on_conflict: list[str] | None = None,
+        return_repr: bool | None = None,
     ) -> dict | None:
-        if return_repr is False:
-            returning = "minimal"
-        elif return_repr is True:
-            returning = "representation"
-        headers = dict(self.headers)
-        prefs = [f"return={returning}"]
-        if on_conflict:
-            prefs.append(f"resolution=merge-duplicates")
-            headers["Prefer"] = ",".join(prefs)
-            headers["On-Conflict"] = f"({','.join(on_conflict)})"
+        pool = await self._ensure_pool()
+        cols = list(values.keys())
+        placeholders = [f"${i+1}" for i in range(len(cols))]
+        vals: list[Any] = []
+        for v in values.values():
+            if isinstance(v, (dict, list)):
+                vals.append(json.dumps(v))
+            elif isinstance(v, bool):
+                vals.append(v)
+            elif v is None:
+                vals.append(None)
+            else:
+                vals.append(v)
+        sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)})'
+        if returning == "minimal" or return_repr is False:
+            sql += " RETURNING id"
         else:
-            headers["Prefer"] = ",".join(prefs)
-        resp = await self.client.post(f"/{table}", json=values, headers=headers)
-        resp.raise_for_status()
-        if returning == "minimal":
-            return None
-        result = resp.json()
-        return result if isinstance(result, list) else result
+            sql += " RETURNING *"
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(sql, *vals)
+            return dict(row) if row else None
 
     async def upsert(
         self,
@@ -91,7 +151,27 @@ class SupabaseRest:
         on_conflict: list[str],
         returning: str = "representation",
     ) -> dict | None:
-        return await self.insert(table=table, values=values, returning=returning, on_conflict=on_conflict)
+        pool = await self._ensure_pool()
+        cols = list(values.keys())
+        placeholders = [f"${i+1}" for i in range(len(cols))]
+        vals: list[Any] = []
+        for v in values.values():
+            if isinstance(v, (dict, list)):
+                vals.append(json.dumps(v))
+            elif isinstance(v, bool):
+                vals.append(v)
+            elif v is None:
+                vals.append(None)
+            else:
+                vals.append(v)
+        conflict_cols = ",".join(on_conflict)
+        set_parts = [f"{c}=EXCLUDED.{c}" for c in cols if c not in on_conflict]
+        sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)}) ON CONFLICT ({conflict_cols}) DO UPDATE SET {",".join(set_parts)}'
+        if returning != "minimal":
+            sql += " RETURNING *"
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(sql, *vals)
+            return [dict(r) for r in rows] if rows else None
 
     async def update(
         self,
@@ -100,69 +180,90 @@ class SupabaseRest:
         values: dict,
         returning: str = "representation",
     ) -> dict | None:
-        params = {}
-        for f in filters:
-            if "=" in f:
-                col, val = f.split("=", 1)
-                params[col] = val
+        pool = await self._ensure_pool()
+        where, wparams = self._parse_filters(filters)
+        set_cols = [f"{k}=${i+1}" for i, k in enumerate(values.keys())]
+        vals: list[Any] = []
+        for v in values.values():
+            if isinstance(v, (dict, list)):
+                vals.append(json.dumps(v))
+            elif isinstance(v, bool):
+                vals.append(v)
+            elif v is None:
+                vals.append(None)
             else:
-                params[f] = "eq.true"
-        headers = dict(self.headers)
-        headers["Prefer"] = f"return={returning}"
-        resp = await self.client.patch(f"/{table}", params=params, json=values, headers=headers)
-        resp.raise_for_status()
-        if returning == "minimal":
-            return None
-        result = resp.json()
-        return result if isinstance(result, list) else result
+                vals.append(v)
+        sql = f"UPDATE {table} SET {','.join(set_cols)}{where}"
+        if returning != "minimal":
+            sql += " RETURNING *"
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(sql, *vals, *wparams)
+            return [dict(r) for r in rows] if rows else None
 
     async def delete(
         self,
         table: str,
-        filters: list[str] = None,
+        filters: list[str] | None = None,
     ) -> None:
-        params = {}
-        if filters:
-            for f in filters:
-                if "=" in f:
-                    col, val = f.split("=", 1)
-                    params[col] = val
-                else:
-                    params[f] = "eq.true"
-        resp = await self.client.delete(f"/{table}", params=params)
-        resp.raise_for_status()
+        pool = await self._ensure_pool()
+        where, params = self._parse_filters(filters)
+        sql = f"DELETE FROM {table}{where}"
+        async with pool.acquire() as conn:
+            await conn.execute(sql, *params)
 
-    async def rpc(self, function_name: str, params: dict = None):
-        resp = await self.client.post(f"/rpc/{function_name}", json=params or {})
-        resp.raise_for_status()
-        return resp.json()
+    async def rpc(self, function_name: str, params: dict | None = None) -> Any:
+        pool = await self._ensure_pool()
+        args = params or {}
+        if not args:
+            sql = f"SELECT * FROM {function_name}()"
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(sql)
+                return dict(row) if row else None
+        arg_keys = list(args.keys())
+        arg_vals = [args[k] for k in arg_keys]
+        placeholders = [f"${i+1}" for i in range(len(arg_keys))]
+        sql = f"SELECT * FROM {function_name}({','.join(placeholders)})"
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(sql, *arg_vals)
+            return dict(row) if row else None
 
     async def table(
         self,
         name: str,
         select: str = "*",
-        eq_filters: dict = None,
-        is_null_filters: list = None,
-        order: str = None,
-        limit: int = None,
-        offset: int = None,
+        eq_filters: dict | None = None,
+        is_null_filters: list[str] | None = None,
+        order: str | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> list[dict]:
         filters: list[str] = []
         if eq_filters:
             for col, val in eq_filters.items():
                 if val is not None and val != "":
-                    filters.append(f"{col}=eq.{val}")
+                    filters.append(f"{col}={val}")
         if is_null_filters:
             for col in is_null_filters:
-                filters.append(f"{col}=is.null")
-        return await self.select(
-            table=name,
-            select=select,
-            filters=filters,
-            order=order,
-            limit=limit,
-            offset=offset,
-        )
+                filters.append(f"{col}.is.null")
+        return await self.select(name, select, filters, order, limit, offset)
 
 
-supabase_rest = SupabaseRest()
+_railway_pg: RailwayPg | None = None
+
+
+def get_railway_pg() -> RailwayPg:
+    global _railway_pg
+    if _railway_pg is None:
+        _railway_pg = RailwayPg()
+    return _railway_pg
+
+
+class SupabaseRest(RailwayPg):
+    pass
+
+
+def supabase_rest_factory() -> RailwayPg:
+    return get_railway_pg()
+
+
+supabase_rest: RailwayPg = get_railway_pg()

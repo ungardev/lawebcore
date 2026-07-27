@@ -1,36 +1,105 @@
-"""Auth endpoints - sync user profile from Supabase REST API."""
-from fastapi import APIRouter, HTTPException
+"""Auth endpoints - local user authentication via Railway Postgres."""
+
+from uuid import UUID
+
+import bcrypt
+from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
+
+from app.core.security import CurrentUserDep, create_access_token, get_current_user
 from shared_core import supabase_rest
-from app.core.security import CurrentUserDep, get_current_user
-from app.schemas import UserRead
+
 
 router = APIRouter()
 
 
-@router.get("/me", response_model=UserRead, summary="Current user profile")
-async def get_me(user: CurrentUserDep):
-    """Returns the profile of the authenticated user; auto-creates if missing."""
-    rows = await supabase_rest.table("users", select="*", eq_filters={"id": str(user.id)})
-    if rows:
-        return UserRead.model_validate(rows[0])
+class LoginRequest(BaseModel):
+    email: str
+    password: str
 
-    raw_name = (
-        (user.user_metadata or {}).get("full_name")
-        or user.email.split("@")[0].replace(".", " ").title()
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user_id: str
+    email: str
+    role: str
+    full_name: str | None
+
+
+class UserRead(BaseModel):
+    id: str
+    email: str
+    full_name: str | None
+    role: str
+    status: str
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login(body: LoginRequest):
+    """Authenticate user with email + password. Returns HS256 JWT."""
+    rows = await supabase_rest.select(
+        table="users",
+        select="id,email,full_name,role,status,password_hash",
+        filters=[f"email={body.email}"],
+        limit=1,
     )
-    data = {
-        "id": str(user.id),
-        "email": user.email,
-        "full_name": raw_name,
-        "status": "active",
-    }
-    await supabase_rest.insert("users", data, return_repr=False)
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
 
-    rows = await supabase_rest.table("users", select="*", eq_filters={"id": str(user.id)})
-    return UserRead.model_validate(rows[0])
+    user = rows[0]
+    password_hash = user.get("password_hash")
+    if not password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    if not bcrypt.checkpw(body.password.encode(), password_hash.encode()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+        )
+
+    user_status = user.get("status", "active")
+    if user_status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User account is {user_status}",
+        )
+
+    token = create_access_token(
+        user_id=UUID(user["id"]),
+        email=user["email"],
+        role=user.get("role", "authenticated"),
+        full_name=user.get("full_name"),
+    )
+
+    return LoginResponse(
+        access_token=token,
+        user_id=str(user["id"]),
+        email=user["email"],
+        role=user.get("role", "authenticated"),
+        full_name=user.get("full_name"),
+    )
 
 
-@router.post("/logout", summary="Logout (client-side token discard)")
+@router.get("/me", response_model=UserRead)
+async def get_me(user: CurrentUserDep):
+    """Returns the profile of the authenticated user."""
+    return UserRead(
+        id=str(user.id),
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        status="active",
+    )
+
+
+@router.post("/logout")
 async def logout(user: CurrentUserDep):
-    """Logout is handled client-side by discarding the JWT. Endpoint exists for audit hooks."""
+    """Logout is handled client-side by discarding the JWT."""
     return {"status": "logged_out", "user_id": str(user.id)}

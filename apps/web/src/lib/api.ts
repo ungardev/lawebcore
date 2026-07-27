@@ -1,7 +1,6 @@
 import axios, { type AxiosInstance } from 'axios';
-import { supabase } from './supabase';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = import.meta.env.VITE_API_URL || 'https://lawebcore-production.up.railway.app';
 
 export const api: AxiosInstance = axios.create({
   baseURL: `${API_URL}/api/v1`,
@@ -11,8 +10,7 @@ export const api: AxiosInstance = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = localStorage.getItem('laweb_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -26,8 +24,8 @@ api.interceptors.response.use(
   (r) => r,
   async (error) => {
     if (error.response?.status === 401) {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
+      const token = localStorage.getItem('laweb_token');
+      if (!token) {
         window.location.href = '/login';
       }
     }
