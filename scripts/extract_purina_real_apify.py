@@ -260,7 +260,7 @@ async def write_to_db_via_rest(candidates: list[dict]) -> str:
             "total_candidates": len(candidates),
             "started_at": datetime.utcnow().isoformat(),
             "completed_at": datetime.utcnow().isoformat(),
-            "created_by": uuid.UUID(USER_ID),
+            "created_by": USER_ID,
             "metadata": json.dumps({"source": "extract_v3_rest", "script": "extract_purina_real_apify.py"}),
         }
 
