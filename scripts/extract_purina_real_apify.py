@@ -8,21 +8,14 @@ from typing import Any
 
 import httpx
 
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 APIFY_API_KEY = os.environ.get("APIFY_API_KEY")
 
 if not APIFY_API_KEY:
     print("ERROR: APIFY_API_KEY env var not set")
     sys.exit(1)
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    print("ERROR: SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY not set")
-    sys.exit(1)
-
 APIFY_BASE = "https://api.apify.com/v2"
 
-BUSINESS_UNIT_ID = "00000000-0000-0000-0000-000000000003"
 USER_ID = "1e7ffbaf-8ab6-4baa-b507-9250d894a4d1"
 TARGET_CANDIDATES = 18
 
@@ -39,7 +32,7 @@ PURINA_KEYWORDS = [
 ]
 
 
-def _country_boost(profile: dict) -> float:
+def _country_boost(profile):
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
     country = (profile.get("country") or "").lower()
     username = (profile.get("username") or profile.get("handle") or "").lower()
@@ -67,17 +60,17 @@ def _country_boost(profile: dict) -> float:
     return 0.0
 
 
-def _classify_tier(followers: int) -> str:
-    if followers < 10_000:
+def _classify_tier(followers):
+    if followers < 10000:
         return "NANO"
-    if followers < 100_000:
+    if followers < 100000:
         return "MICRO"
-    if followers < 500_000:
+    if followers < 500000:
         return "MID"
     return "MACRO"
 
 
-async def _start_apify_actor(actor_id: str, run_input: dict, timeout_s: int = 300) -> list[dict]:
+async def _start_apify_actor(actor_id, run_input, timeout_s=300):
     headers = {"Authorization": f"Bearer {APIFY_API_KEY}"}
     async with httpx.AsyncClient(base_url=APIFY_BASE, headers=headers, timeout=timeout_s) as client:
         sync_url = f"/acts/{actor_id}/run-sync-get-dataset-items"
@@ -87,7 +80,7 @@ async def _start_apify_actor(actor_id: str, run_input: dict, timeout_s: int = 30
         return resp.json()
 
 
-async def fetch_purina_profiles() -> list[dict]:
+async def fetch_purina_profiles():
     print("\n[1/4] Hashtag search via apify~instagram-hashtag-scraper...")
     hashtag_items = await _start_apify_actor(
         "apify~instagram-hashtag-scraper",
@@ -102,7 +95,7 @@ async def fetch_purina_profiles() -> list[dict]:
     )
     print(f"  -> {len(keyword_items)} users")
 
-    profiles: dict[str, dict] = {}
+    profiles = {}
 
     for item in hashtag_items:
         handle = item.get("ownerUsername") or item.get("username")
@@ -200,7 +193,7 @@ async def fetch_purina_profiles() -> list[dict]:
     return scored[:TARGET_CANDIDATES]
 
 
-def _build_rationale(p: dict) -> str:
+def _build_rationale(p):
     tier = p.get("tier", "NANO")
     followers = p.get("follower_count") or 0
     er = (p.get("engagement_rate") or 0) * 100
@@ -218,130 +211,121 @@ def _build_rationale(p: dict) -> str:
     return f"Perfil {tier} de {', '.join(niches[:2])} en {geo}. ER {er:.1f}%, {followers:,} seguidores. Coincide con audiencia Purina Dog Chow."
 
 
-async def write_to_db_via_rest(candidates: list[dict]) -> str:
+def write_dump_json_and_sql(candidates):
+    """Plan B: dump candidates to /tmp/purina_dump.json and /tmp/purina_insert.sql for manual import."""
     run_id = str(uuid.uuid4())
 
-    headers = {
-        "apikey": SUPABASE_SERVICE_ROLE_KEY,
-        "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal",
+    dump = {
+        "extraction_timestamp": datetime.utcnow().isoformat(),
+        "run_id": run_id,
+        "total_candidates": len(candidates),
+        "source": "extract_purina_real_apify.py v4 (Plan B - JSON dump, no DB insert)",
+        "candidates": candidates,
     }
 
-    async with httpx.AsyncClient(base_url=f"{SUPABASE_URL}/rest/v1", headers=headers, timeout=60) as client:
-        run_payload = {
-            "id": run_id,
-            "brief_text": "Purina Dog Chow Venezuela perros 5000 USD Instagram",
-            "brief_parsed": json.dumps({
-                "product_name": "Purina Dog Chow",
-                "brand_id": "f0000000-0000-0000-0000-000000000002",
-                "industry": "mascotas",
-                "niches": ["mascotas", "perros"],
-                "audience_gender": "female",
-                "audience_age_min": 25,
-                "audience_age_max": 44,
-                "audience_countries": ["VE"],
-                "platforms": ["instagram"],
-                "budget_usd": 10000,
-                "tone": ["emocional"],
-            }),
-            "product_name": "Purina Dog Chow",
-            "brand_id": "f0000000-0000-0000-0000-000000000002",
-            "industry": "mascotas",
-            "niches": ["mascotas", "perros"],
-            "audience_gender": "female",
-            "audience_age_min": 25,
-            "audience_age_max": 44,
-            "audience_countries": ["VE"],
-            "platforms": ["instagram"],
-            "budget_usd": 10000.0,
-            "tone": ["emocional"],
-            "status": "completed",
-            "total_candidates": len(candidates),
-            "started_at": datetime.utcnow().isoformat(),
-            "completed_at": datetime.utcnow().isoformat(),
-            "created_by": USER_ID,
-            "metadata": json.dumps({"source": "extract_v3_rest", "script": "extract_purina_real_apify.py"}),
-        }
+    with open("/tmp/purina_dump.json", "w") as f:
+        json.dump(dump, f, indent=2, default=str, ensure_ascii=False)
 
-        print(f"\n[4/4] Persisting to discovery_runs + discovery_candidates via REST...")
-        resp = await client.post("/discovery_runs", json=run_payload)
-        if resp.status_code >= 300:
-            print(f"  ! discovery_runs insert failed: {resp.status_code} {resp.text[:300]}")
-            return run_id
-        print(f"  -> discovery_run {run_id} created")
+    sql_lines = [
+        "-- Purina Dog Chow candidates - paste in Supabase SQL Editor",
+        "-- Generated: " + datetime.utcnow().isoformat() + " | Total: " + str(len(candidates)) + " candidates",
+        "",
+        "-- 1. Insert discovery_runs row",
+        "INSERT INTO discovery_runs (id, brief_text, brief_parsed, product_name, brand_id, industry, niches, audience_gender, audience_age_min, audience_age_max, audience_countries, platforms, budget_usd, tone, status, total_candidates, started_at, completed_at, created_by, metadata) VALUES (",
+        "    '" + run_id + "',",
+        "    'Purina Dog Chow Venezuela perros 5000 USD Instagram',",
+        "    '{\"product_name\": \"Purina Dog Chow\", \"industry\": \"mascotas\", \"niches\": [\"mascotas\", \"perros\"], \"audience_countries\": [\"VE\"], \"platforms\": [\"instagram\"], \"budget_usd\": 10000}'::jsonb,",
+        "    'Purina Dog Chow',",
+        "    'f0000000-0000-0000-0000-000000000002',",
+        "    'mascotas',",
+        "    ARRAY['mascotas','perros']::text[],",
+        "    'female',",
+        "    25, 44,",
+        "    ARRAY['VE']::text[],",
+        "    ARRAY['instagram']::text[],",
+        "    10000.0,",
+        "    ARRAY['emocional']::text[],",
+        "    'completed',",
+        "    " + str(len(candidates)) + ",",
+        "    NOW(), NOW(),",
+        "    '1e7ffbaf-8ab6-4baa-b507-9250d894a4d1',",
+        "    '{\"source\": \"extract_v4_dump\", \"script\": \"extract_purina_real_apify.py\"}'::jsonb",
+        ");",
+        "",
+        "-- 2. Insert " + str(len(candidates)) + " discovery_candidates rows",
+        "",
+    ]
 
-        inserted = 0
-        for c in candidates:
-            handle = c.get("username", "").lstrip("@")
-            if not handle:
-                continue
+    def esc(s):
+        if s is None:
+            return ""
+        return str(s).replace("'", "''")
 
-            followers = c.get("follower_count") or 0
-            er = c.get("engagement_rate") or 0
-            tier = c.get("tier", "NANO")
-            composite = c.get("composite_score") or 0
-            geo_score = c.get("geo_score", 0)
+    for c in candidates:
+        handle = (c.get("username") or "").lstrip("@")
+        if not handle:
+            continue
+        followers = int(c.get("follower_count") or 0)
+        er = float(c.get("engagement_rate") or 0)
+        tier = c.get("tier", "NANO")
+        composite = float(c.get("composite_score") or 0)
+        geo_score = float(c.get("geo_score", 0))
+        country = "VE" if geo_score >= 1.0 else ("LATAM" if geo_score >= 0.5 else "OTHER")
+        niche_rel = 0.9 if tier in ("MICRO", "MID") else 0.7
+        geo_rel = 1.0 if geo_score >= 1.0 else (0.5 if geo_score >= 0.5 else 0.2)
 
-            payload = {
-                "id": str(uuid.uuid4()),
-                "run_id": run_id,
-                "platform": "instagram",
-                "handle": handle,
-                "url": f"https://instagram.com/{handle}",
-                "full_name": c.get("full_name") or "",
-                "bio": c.get("bio") or "",
-                "avatar_url": c.get("avatar_url") or "",
-                "country": "VE" if geo_score >= 1.0 else ("LATAM" if geo_score >= 0.5 else "OTHER"),
-                "city": None,
-                "followers": followers,
-                "following": c.get("following_count") or 0,
-                "posts_count": c.get("posts_count") or 0,
-                "engagement_rate": er,
-                "match_score": composite,
-                "niche_relevance": 0.9 if tier in ("MICRO", "MID") else 0.7,
-                "geo_relevance": 1.0 if geo_score >= 1.0 else (0.5 if geo_score >= 0.5 else 0.2),
-                "audience_relevance": 0.8,
-                "content_quality": 0.8,
-                "rationale": _build_rationale(c),
-                "status": "new",
-                "raw_payload": json.dumps({
-                    "apify_extraction": True,
-                    "tier": tier,
-                    "has_full_profile": True,
-                    "geo_score": geo_score,
-                }),
-                "fetched_at": datetime.utcnow().isoformat(),
-            }
+        rationale = esc(_build_rationale(c))
+        bio = esc(c.get("bio", ""))
+        full_name = esc(c.get("full_name", ""))
+        avatar = esc(c.get("avatar_url", ""))
+        raw_json = esc(json.dumps({
+            "apify_extraction": True,
+            "tier": tier,
+            "has_full_profile": True,
+            "geo_score": geo_score,
+        }, ensure_ascii=False))
 
-            resp = await client.post("/discovery_candidates", json=payload)
-            if resp.status_code < 300:
-                inserted += 1
-            else:
-                print(f"  ! candidate failed {handle}: {resp.status_code} {resp.text[:150]}")
+        sql_lines.append("INSERT INTO discovery_candidates (id, run_id, platform, handle, url, full_name, bio, avatar_url, country, city, followers, following, posts_count, engagement_rate, match_score, niche_relevance, geo_relevance, audience_relevance, content_quality, rationale, status, raw_payload, fetched_at, created_at, updated_at) VALUES (")
+        sql_lines.append("    '" + str(uuid.uuid4()) + "', '" + run_id + "', 'instagram',")
+        sql_lines.append("    '" + handle + "', 'https://instagram.com/" + handle + "',")
+        sql_lines.append("    '" + full_name + "', '" + bio + "', '" + avatar + "',")
+        sql_lines.append("    '" + country + "', NULL,")
+        sql_lines.append("    " + str(followers) + ", " + str(int(c.get("following_count") or 0)) + ", " + str(int(c.get("posts_count") or 0)) + ",")
+        sql_lines.append("    " + str(er) + ", " + str(composite) + ", " + str(niche_rel) + ", " + str(geo_rel) + ", 0.8, 0.8,")
+        sql_lines.append("    '" + rationale + "', 'new',")
+        sql_lines.append("    '" + raw_json + "'::jsonb,")
+        sql_lines.append("    NOW(), NOW(), NOW()")
+        sql_lines.append(");")
+        sql_lines.append("")
 
-        print(f"  -> {inserted}/{len(candidates)} candidates inserted")
-        return run_id
+    with open("/tmp/purina_insert.sql", "w") as f:
+        f.write("\n".join(sql_lines))
+
+    json_size = os.path.getsize("/tmp/purina_dump.json")
+    sql_size = os.path.getsize("/tmp/purina_insert.sql")
+    print("  -> /tmp/purina_dump.json written (" + str(json_size) + " bytes)")
+    print("  -> /tmp/purina_insert.sql written (" + str(sql_size) + " bytes)")
+    print("  -> Run ID for this dump: " + run_id)
+    return run_id
 
 
 async def main():
-    print("=== Purina Dog Chow — Real Apify Extraction (v3 REST) ===")
-    print(f"APIFY_API_KEY: {APIFY_API_KEY[:12]}...")
-    print(f"SUPABASE_URL: {SUPABASE_URL}")
-    print(f"SUPABASE_SERVICE_ROLE_KEY: {'SET' if SUPABASE_SERVICE_ROLE_KEY else 'MISSING'}")
+    print("=== Purina Dog Chow - Real Apify Extraction (v4 Plan B - JSON dump) ===")
+    print("APIFY_API_KEY: " + APIFY_API_KEY[:12] + "...")
 
     candidates = await fetch_purina_profiles()
-    print(f"\n>>> {len(candidates)} candidates ranked")
+    print("\n>>> " + str(len(candidates)) + " candidates ranked")
     for c in candidates[:10]:
-        print(f"  @{c.get('username', ''):<22} {c.get('follower_count', 0):>9,} followers  "
-              f"ER {c.get('engagement_rate', 0) * 100:.2f}%  geo={c.get('geo_score')}  "
-              f"tier={c.get('tier'):<5}  score={c.get('composite_score', 0):.1f}")
+        print("  @" + str(c.get("username", ""))[:22].ljust(22) + " " + str(c.get("follower_count", 0))[:9].rjust(9) + " followers  ER " + str(round(c.get("engagement_rate", 0) * 100, 2)) + "%  geo=" + str(c.get("geo_score")) + "  tier=" + str(c.get("tier", ""))[:5].ljust(5) + "  score=" + str(round(c.get("composite_score", 0), 1)))
 
     if candidates:
-        run_id = await write_to_db_via_rest(candidates)
-        print(f"\n✅ DONE. Run ID: {run_id}")
+        run_id = write_dump_json_and_sql(candidates)
+        print("\nDONE. Dump ready at /tmp/purina_dump.json")
+        print("Run ID for this dump: " + run_id)
+        print("")
+        print("To insert into DB: paste /tmp/purina_insert.sql in Supabase SQL Editor")
     else:
-        print("\n❌ No candidates passed geo-filter. Check _country_boost() thresholds.")
+        print("\nNo candidates passed geo-filter.")
 
 
 if __name__ == "__main__":
