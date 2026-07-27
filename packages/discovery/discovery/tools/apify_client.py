@@ -114,6 +114,14 @@ class ApifyClient:
     )
     async def _post_run(self, client: httpx.AsyncClient, actor_id: str, run_input: dict) -> dict:
         response = await client.post(f"/acts/{actor_id}/runs", json=run_input)
+        if response.status_code >= 400:
+            logger.error(
+                "apify_api_error",
+                actor_id=actor_id,
+                status_code=response.status_code,
+                request_body=run_input,
+                response_body=response.text[:500],
+            )
         response.raise_for_status()
         return response.json()
 
@@ -323,10 +331,9 @@ class ApifyClient:
         )
 
         run_input = {
-            "searchType": "users",
+            "searchType": "user",
             "searchQueries": [keyword],
             "resultsLimit": limit,
-            "enhanceUserSearchWithFacebookPage": True,
         }
 
         cache_key = self._build_cache_key(INSTAGRAM_SEARCH_SCRAPER, run_input)

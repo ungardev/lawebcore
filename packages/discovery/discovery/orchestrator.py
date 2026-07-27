@@ -233,7 +233,7 @@ class DiscoveryOrchestrator:
             return {
                 "conversation_id": str(conversation_id),
                 "step": state.step.value,
-                "message": "Buscando candidatos reales en Instagram, TikTok y YouTube usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
+                "message": "Buscando candidatos reales en Instagram usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
                 "brief": state.brief_structured.model_dump() if state.brief_structured else None,
                 "candidates": [],
                 "pending_discovery": True,
@@ -272,7 +272,7 @@ class DiscoveryOrchestrator:
             return {
                 "conversation_id": str(conversation_id),
                 "step": state.step.value,
-                "message": "Buscando candidatos reales en Instagram, TikTok y YouTube usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
+                "message": "Buscando candidatos reales en Instagram usando Apify... Te aviso cuando tenga resultados. Esto puede tomar entre 30 segundos y 2 minutos.",
                 "brief": state.brief_structured.model_dump() if state.brief_structured else None,
                 "candidates": [],
                 "pending_discovery": True,
