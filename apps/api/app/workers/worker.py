@@ -353,9 +353,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             min_followers=MIN_FOLLOWERS,
         )
 
-        await _deduplicate_and_insert_candidates(qualified, run_id)
+        inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
 
-        total = len(all_candidates)
+        total = inserted_count
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
         await _run_update(run_id, {
             "status": "completed",
@@ -597,8 +597,17 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
     return {"handle": "unknown"}
 
 
-async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str) -> None:
-    """Inserta candidatos. Datos ya vienen deduplicados por (platform, handle) upstream."""
+async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str) -> int:
+    """Inserta candidatos. Datos ya vienen deduplicados por (platform, handle) upstream.
+    Returns the number of successfully inserted candidates."""
+    import uuid as _uuid
+
+    for c in candidates:
+        if "id" not in c or c.get("id") is None:
+            c["id"] = str(_uuid.uuid4())
+
+    inserted = 0
+    failed = 0
     for c in candidates:
         try:
             await supabase_rest.insert(
@@ -606,14 +615,26 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
                 values=c,
                 returning="minimal",
             )
+            inserted += 1
         except Exception as exc:
-            logger.warning(
+            failed += 1
+            logger.error(
                 "candidate_insert_failed",
                 run_id=run_id,
                 handle=c.get("handle"),
                 platform=c.get("platform"),
                 error=str(exc),
+                exc_info=True,
             )
+
+    logger.info(
+        "candidates_insert_summary",
+        run_id=run_id,
+        attempted=len(candidates),
+        inserted=inserted,
+        failed=failed,
+    )
+    return inserted
 
 
 async def _run_set_status(run_id: str, status: str, error: str | None = None) -> None:
