@@ -94,13 +94,6 @@ class RailwayPg:
             decoder=json.loads,
             schema="pg_catalog",
         )
-        await conn.set_type_codec(
-            "text[]",
-            encoder=lambda arr: arr,
-            decoder=lambda arr: list(arr) if arr is not None else None,
-            schema="pg_catalog",
-            format="array",
-        )
 
     async def _ensure_pool(self) -> asyncpg.Pool:
         if self._pool is None:
