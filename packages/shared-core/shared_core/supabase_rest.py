@@ -1,6 +1,9 @@
 """Database client using asyncpg — connects directly to Railway Postgres."""
 
 import json
+import logging
+import re
+import time
 import uuid
 from datetime import datetime, date
 from decimal import Decimal
@@ -9,6 +12,25 @@ from typing import Any
 import asyncpg
 
 from shared_core.config import settings
+
+
+logger = logging.getLogger(__name__)
+
+_ORDER_DIR_PATTERN = re.compile(r"\b(\w+)\.(\w+)\b", re.IGNORECASE)
+
+
+def _normalize_order(order: str) -> str:
+    """Convert 'col.desc' or 'col.asc' to 'col DESC' or 'col ASC'.
+
+    asyncpg's PostgreSQL parser is strict and treats 'col.desc' as
+    a table.column reference. Adding explicit space fixes it.
+    """
+    def _replace_dir(m: re.Match) -> str:
+        col, direction = m.group(1), m.group(2).lower()
+        if direction in ("asc", "desc"):
+            return f"{col} {direction.upper()}"
+        return m.group(0)
+    return _ORDER_DIR_PATTERN.sub(_replace_dir, order)
 
 
 def _pg_to_json(val: Any) -> Any:
@@ -60,6 +82,7 @@ class RailwayPg:
 
     async def _ensure_pool(self) -> asyncpg.Pool:
         if self._pool is None:
+            logger.info("[supabase_rest] Creating new asyncpg pool for %s", self._dsn.split("@")[-1])
             self._pool = await asyncpg.create_pool(
                 self._dsn,
                 min_size=2,
@@ -67,6 +90,7 @@ class RailwayPg:
                 command_timeout=30,
                 init=self._init_connection,
             )
+            logger.info("[supabase_rest] Pool created successfully")
         return self._pool
 
     async def close(self):
@@ -127,7 +151,20 @@ class RailwayPg:
             else:
                 conds.append(f"{f} = true")
         where = " WHERE " + " AND ".join(conds) if conds else ""
+        logger.debug("[supabase_rest._parse_filters] filters=%s -> where=%s params=%s", filters, where, params)
         return where, params
+
+    def _val_to_pg(self, v: Any) -> Any:
+        if isinstance(v, (dict, list)):
+            return json.dumps(v)
+        elif isinstance(v, bool):
+            return v
+        elif v is None:
+            return None
+        elif isinstance(v, uuid.UUID):
+            return str(v)
+        else:
+            return v
 
     async def select(
         self,
@@ -142,14 +179,26 @@ class RailwayPg:
         where, params = self._parse_filters(filters)
         query = f"SELECT {select} FROM {table}{where}"
         if order:
-            query += f" ORDER BY {order}"
+            normalized_order = _normalize_order(order)
+            logger.info("[supabase_rest.select] order normalized: %r -> %r", order, normalized_order)
+            query += f" ORDER BY {normalized_order}"
         if limit is not None:
             query += f" LIMIT {limit}"
         if offset is not None:
             query += f" OFFSET {offset}"
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(query, *params)
+
+        logger.info("[supabase_rest.select] EXEC: %s", query)
+        logger.info("[supabase_rest.select] PARAMS: %s", params)
+        t0 = time.time()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(query, *params)
+            elapsed_ms = (time.time() - t0) * 1000
+            logger.info("[supabase_rest.select] OK: %d rows in %.2fms", len(rows), elapsed_ms)
             return [_row_to_dict(r) for r in rows]
+        except Exception as e:
+            logger.error("[supabase_rest.select] FAILED: %s | query=%s params=%s", e, query, params, exc_info=True)
+            raise
 
     async def select_one(
         self,
@@ -159,18 +208,6 @@ class RailwayPg:
     ) -> dict | None:
         rows = await self.select(table, select, filters, limit=1)
         return rows[0] if rows else None
-
-    def _val_to_pg(self, v: Any) -> Any:
-        if isinstance(v, (dict, list)):
-            return json.dumps(v)
-        elif isinstance(v, bool):
-            return v
-        elif v is None:
-            return None
-        elif isinstance(v, uuid.UUID):
-            return str(v)
-        else:
-            return v
 
     async def insert(
         self,
@@ -189,9 +226,15 @@ class RailwayPg:
             sql += " RETURNING id"
         else:
             sql += " RETURNING *"
-        async with pool.acquire() as conn:
-            row = await conn.fetchrow(sql, *vals)
+        logger.info("[supabase_rest.insert] EXEC: %s vals=%s", sql, vals)
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(sql, *vals)
+            logger.info("[supabase_rest.insert] OK: %s", dict(row) if row else None)
             return _row_to_dict(row) if row else None
+        except Exception as e:
+            logger.error("[supabase_rest.insert] FAILED: %s | sql=%s vals=%s", e, sql, vals, exc_info=True)
+            raise
 
     async def upsert(
         self,
@@ -209,9 +252,15 @@ class RailwayPg:
         sql = f'INSERT INTO {table} ({",".join(cols)}) VALUES ({",".join(placeholders)}) ON CONFLICT ({conflict_cols}) DO UPDATE SET {",".join(set_parts)}'
         if returning != "minimal":
             sql += " RETURNING *"
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, *vals)
+        logger.info("[supabase_rest.upsert] EXEC: %s", sql)
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(sql, *vals)
+            logger.info("[supabase_rest.upsert] OK: %d rows", len(rows))
             return [_row_to_dict(r) for r in rows] if rows else None
+        except Exception as e:
+            logger.error("[supabase_rest.upsert] FAILED: %s | sql=%s", e, sql, exc_info=True)
+            raise
 
     async def update(
         self,
@@ -227,9 +276,15 @@ class RailwayPg:
         sql = f"UPDATE {table} SET {','.join(set_cols)}{where}"
         if returning != "minimal":
             sql += " RETURNING *"
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(sql, *vals, *wparams)
+        logger.info("[supabase_rest.update] EXEC: %s vals=%s wparams=%s", sql, vals, wparams)
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(sql, *vals, *wparams)
+            logger.info("[supabase_rest.update] OK: %d rows", len(rows))
             return [_row_to_dict(r) for r in rows] if rows else None
+        except Exception as e:
+            logger.error("[supabase_rest.update] FAILED: %s | sql=%s vals=%s wparams=%s", e, sql, vals, wparams, exc_info=True)
+            raise
 
     async def delete(
         self,
@@ -239,24 +294,34 @@ class RailwayPg:
         pool = await self._ensure_pool()
         where, params = self._parse_filters(filters)
         sql = f"DELETE FROM {table}{where}"
-        async with pool.acquire() as conn:
-            await conn.execute(sql, *params)
+        logger.info("[supabase_rest.delete] EXEC: %s params=%s", sql, params)
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(sql, *params)
+            logger.info("[supabase_rest.delete] OK")
+        except Exception as e:
+            logger.error("[supabase_rest.delete] FAILED: %s | sql=%s params=%s", e, sql, params, exc_info=True)
+            raise
 
     async def rpc(self, function_name: str, params: dict | None = None) -> Any:
         pool = await self._ensure_pool()
         args = params or {}
         if not args:
             sql = f"SELECT * FROM {function_name}()"
+            logger.info("[supabase_rest.rpc] EXEC: %s", sql)
             async with pool.acquire() as conn:
                 row = await conn.fetchrow(sql)
-                return _row_to_dict(row) if row else None
+            logger.info("[supabase_rest.rpc] OK: %s", dict(row) if row else None)
+            return _row_to_dict(row) if row else None
         arg_keys = list(args.keys())
         arg_vals = [args[k] for k in arg_keys]
         placeholders = [f"${i+1}" for i in range(len(arg_keys))]
         sql = f"SELECT * FROM {function_name}({','.join(placeholders)})"
+        logger.info("[supabase_rest.rpc] EXEC: %s args=%s", sql, args)
         async with pool.acquire() as conn:
             row = await conn.fetchrow(sql, *arg_vals)
-            return _row_to_dict(row) if row else None
+        logger.info("[supabase_rest.rpc] OK: %s", dict(row) if row else None)
+        return _row_to_dict(row) if row else None
 
     async def table(
         self,
