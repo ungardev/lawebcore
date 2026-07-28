@@ -9,6 +9,7 @@ export interface BriefStructured {
   brand_id: string | null;
   industry: string | null;
   niches: string[];
+  hashtags: string[];
   audience_gender: AudienceGender;
   audience_age_min: number;
   audience_age_max: number;

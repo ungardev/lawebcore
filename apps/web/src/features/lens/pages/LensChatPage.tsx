@@ -1,18 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Sparkles, Plus, MessageSquare, DollarSign, TrendingUp } from 'lucide-react';
+import { Send, Sparkles, Plus, MessageSquare, DollarSign, TrendingUp, Wand2 } from 'lucide-react';
 import { useDiscoveryConversation } from '../hooks/useDiscoveryConversation';
 import { ChatMessage } from '../components/ChatMessage';
 import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { LensEmptyState } from '../components/LensEmptyState';
 import { ActionChips } from '../components/ActionChips';
 import { CostBadge } from '../components/CostBadge';
+import { BriefWizard } from '../components/BriefWizard';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { lensApi } from '../api/lensApi';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import type { DiscoveryConversation } from '../types/discovery';
+import type { BriefStructured, DiscoveryConversation } from '../types/discovery';
 
 const WELCOME = `Soy Influencer Lens, el cerebro AI de La Web Core — la plataforma de gestión de campañas de La Web Figital Agency.
 
@@ -34,6 +37,9 @@ export function LensChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [conversations, setConversations] = useState<DiscoveryConversation[]>([]);
   const [totalCost, setTotalCost] = useState(0);
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardBrief, setWizardBrief] = useState<Partial<BriefStructured> | undefined>(undefined);
+  const [wizardLoading, setWizardLoading] = useState(false);
 
   const {
     conversation,
@@ -91,6 +97,38 @@ export function LensChatPage() {
     navigate(`/influencer-lens/${conv.id}`);
   };
 
+  const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
+    setWizardLoading(true);
+    setShowWizard(false);
+    try {
+      const run = await lensApi.search.createRun({
+        product_name: brief.product_name ?? undefined,
+        industry: brief.industry ?? undefined,
+        niches: brief.niches ?? [],
+        hashtags: brief.hashtags ?? [],
+        audience_gender: brief.audience_gender ?? 'all',
+        audience_age_min: brief.audience_age_min ?? 25,
+        audience_age_max: brief.audience_age_max ?? 45,
+        audience_countries: brief.audience_countries ?? ['VE'],
+        audience_cities: brief.audience_cities ?? [],
+        platforms: brief.platforms ?? ['instagram'],
+        budget_usd: brief.budget_usd ?? undefined,
+        tone: brief.tone ?? [],
+      });
+      toast.success('Búsqueda iniciada con wizard');
+      navigate(`/influencer-lens/search?runId=${run.id}`);
+    } catch {
+      toast.error('Error al iniciar la búsqueda');
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleOpenWizard = (brief?: Partial<BriefStructured>) => {
+    setWizardBrief(brief);
+    setShowWizard(true);
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] px-6 py-4">
       <div className="mb-4 flex-shrink-0 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -119,8 +157,8 @@ export function LensChatPage() {
             )}
           </div>
         </div>
-        <Button onClick={handleNewConversation} className="gap-2 rounded-xl bg-gradient-brand text-white shadow-glow hover:-translate-y-0.5 transition-transform">
-          <Plus className="w-4 h-4" />
+        <Button onClick={() => handleOpenWizard()} className="gap-2 rounded-xl bg-gradient-brand text-white shadow-glow hover:-translate-y-0.5 transition-transform">
+          <Wand2 className="w-4 h-4" />
           Nueva búsqueda
         </Button>
       </div>
@@ -224,7 +262,7 @@ export function LensChatPage() {
                   <BriefConfirmCard
                     brief={pendingBrief}
                     onConfirm={confirmBrief}
-                    onEdit={() => {}}
+                    onEdit={() => handleOpenWizard(pendingBrief)}
                     isLoading={isLoading}
                   />
                 </div>
@@ -263,6 +301,16 @@ export function LensChatPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={showWizard} onOpenChange={setShowWizard}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <BriefWizard
+            onSubmit={handleWizardSubmit}
+            onCancel={() => setShowWizard(false)}
+            initialBrief={wizardBrief}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

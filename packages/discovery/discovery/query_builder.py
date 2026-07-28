@@ -120,6 +120,8 @@ class QueryBuilder:
         return list(set(keywords))[:40]
 
     def _build_hashtags(self, brief: BriefStructured) -> list[str]:
+        if brief.hashtags:
+            return [f"#{tag.lstrip('#')}" for tag in brief.hashtags]
         if self._is_vertical_mascota(brief):
             return [f"#{tag}" for tag in DEFAULT_VE_HASHTAGS]
 

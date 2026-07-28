@@ -232,13 +232,17 @@ export function useDiscoveryConversation() {
     );
   }, []);
 
+  const updatePendingBrief = useCallback((brief: BriefStructured | null) => {
+    setPendingBrief(brief);
+  }, []);
+
   return {
     conversation,
     turns,
     isLoading,
     error,
     pendingBrief,
-    setPendingBrief,
+    setPendingBrief: updatePendingBrief,
     startConversation,
     loadConversation,
     sendMessage,

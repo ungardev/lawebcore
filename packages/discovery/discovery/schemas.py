@@ -55,6 +55,7 @@ class BriefStructured(BaseModel):
     brand_id: UUID | None = None
     industry: str | None = None
     niches: list[str] = Field(default_factory=list)
+    hashtags: list[str] = Field(default_factory=list, description="Custom hashtags for discovery search")
     audience_gender: AudienceGender = AudienceGender.ALL
     audience_age_min: int = 18
     audience_age_max: int = 65
@@ -165,6 +166,7 @@ class DiscoverySearchRequest(BaseModel):
     brand_id: UUID | None = None
     industry: str | None = None
     niches: list[str] = Field(default_factory=list)
+    hashtags: list[str] = Field(default_factory=list)
     audience_gender: AudienceGender = AudienceGender.ALL
     audience_age_min: int = 18
     audience_age_max: int = 65

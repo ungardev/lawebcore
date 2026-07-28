@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Sparkles, Play } from 'lucide-react';
 import { useDiscoveryRun } from '../hooks/useDiscoveryRun';
 import { CandidateList } from '../components/CandidateList';
@@ -15,7 +15,8 @@ const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'youtube', 'x', 'facebook'
 
 export function LensSearchPage() {
   const navigate = useNavigate();
-  const { run, candidates, isLoading, error, createRun, pollRun, saveCandidate, dismissCandidate } = useDiscoveryRun();
+  const [searchParams] = useSearchParams();
+  const { run, candidates, isLoading, error, createRun, pollRun, loadRun, saveCandidate, dismissCandidate } = useDiscoveryRun();
 
   const [form, setForm] = useState({
     product_name: '',
@@ -28,6 +29,13 @@ export function LensSearchPage() {
     budget_usd: '',
     platforms: [] as Platform[],
   });
+
+  useEffect(() => {
+    const runId = searchParams.get('runId');
+    if (runId) {
+      loadRun(runId).catch(() => toast.error('No se pudo cargar la búsqueda'));
+    }
+  }, [searchParams]);
 
   const setPlatform = (p: Platform) => {
     setForm((f) => ({

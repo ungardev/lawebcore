@@ -1,3 +1,4 @@
+import { Hash } from 'lucide-react';
 import type { BriefStructured } from '../types/discovery';
 
 interface BriefConfirmCardProps {
@@ -44,6 +45,21 @@ export function BriefConfirmCard({ brief, onConfirm, onEdit, isLoading }: BriefC
         )}
         {brief.tone.length > 0 && (
           <div><span className="text-muted-foreground">Tono:</span> <span className="font-medium">{brief.tone.join(', ')}</span></div>
+        )}
+        {brief.hashtags && brief.hashtags.length > 0 && (
+          <div className="col-span-1 sm:col-span-2">
+            <span className="text-muted-foreground">Hashtags:</span>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {brief.hashtags.slice(0, 15).map((h) => (
+                <span key={h} className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple text-xs border border-brand-purple/20">
+                  <Hash className="w-2.5 h-2.5" />{h}
+                </span>
+              ))}
+              {brief.hashtags.length > 15 && (
+                <span className="text-xs text-muted-foreground">+{brief.hashtags.length - 15} más</span>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
