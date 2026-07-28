@@ -1,76 +1,51 @@
 # Railway PostgreSQL Bootstrap — Execution Guide
 
-## The Problem
+## How it works
 
-The original `0000_railway_bootstrap.sql` (1515 lines) failed on Railway Query Editor
-because it was executed as a **single batch**, causing PostgreSQL to fail at `BEGIN`
-when parsing mixed `DO $$` procedural blocks with regular DDL statements.
+Railway applies migrations automatically on every deploy via `apply_migrations()` in `main.py:56`.
+This script fetches `.sql` files from GitHub and executes them **one by one** in version order.
 
-## The Solution
+The `apply_migrations()` regex extracts version from filename: `^0*(\d+)_.*\.sql$`
+So `00000000000001_extensions.sql` → version "1", `00000000000091_railway_p1.sql` → version "91".
 
-Split into **5 sequential files + 1 patches file + 1 remaining migrations file**.
-Execute them one by one in Railway Query Editor.
-
----
-
-## Execution Order (Railway Query Editor)
-
-### Step 0: PATCHES (repair broken tables from partial bootstrap run)
-Run **FIRST** if the original bootstrap partially failed:
-```
-supabase/migrations/0000_01_railway_patches.sql
-```
-
-### Steps 1–5: BOOTSTRAP (in order)
-Run in strict sequence — each step builds on the previous:
-
-1. `supabase/migrations/0000_02_railway_bootstrap_p1.sql`
-   → Extensions + Auth stub + All Enums
-
-2. `supabase/migrations/0000_03_railway_bootstrap_p2.sql`
-   → Identity tables (users, roles, teams) + Commercial (clients, brands)
-
-3. `supabase/migrations/0000_04_railway_bootstrap_p4.sql`
-   → Influencers + Campaigns + KPIs + Operations
-
-4. `supabase/migrations/0000_05_railway_bootstrap_p4.sql`
-   → AI/RAG + Dashboards + Audit + Data Quality + PIAR + Benchmarks + Sentiment
-
-5. `supabase/migrations/0000_06_railway_bootstrap_p5.sql`
-   → Discovery tables + Migration tracking + Mark all applied (FINAL)
-
-### Step 6: REMAINING MIGRATIONS
-After all bootstrap parts succeed:
-```
-supabase/migrations/0000_07_railway_remaining_migrations.sql
-```
-Adds: `date_trunc_month_immutable`, `idx_api_costs_month`, vector(384) embeddings, influencer enrichment columns.
+**Existing migrations 1-28** run first (from the original Supabase migrations).
+**New bootstrap files 91-97** run AFTER, applying the full Railway schema idempotently.
 
 ---
 
-## How apply_migrations.py Works
+## Execution Order
 
-The API's `apply_migrations.py` fetches migrations from GitHub and applies them **one file at a time** via asyncpg. The new sequential files (p1–p5, patches, remaining) are named with numeric prefixes so they are applied in the correct order automatically.
+### Via `apply_migrations()` (automatic on every deploy)
 
-Key behavior:
-- **Each file = one transaction** (wrapped in `async with conn.transaction()`)
-- Files with lower numeric prefix execute first
-- `ON CONFLICT DO NOTHING` makes everything idempotent — safe to re-run
-- The schema_migrations table tracks what's been applied and prevents re-runs
+`apply_migrations()` runs these automatically in version order:
+
+| # | File | Creates |
+|---|------|---------|
+| 1-28 | `00000000000001-28_*.sql` | Original Supabase migrations (existing) |
+| 91 | `00000000000091_railway_p1.sql` | Extensions + auth stub + all enums |
+| 92 | `00000000000092_railway_p2.sql` | Identity + commercial tables |
+| 93 | `00000000000093_railway_p3.sql` | Influencers + campaigns + KPIs + operations |
+| 94 | `00000000000094_railway_p4.sql` | AI/RAG + dashboards + audit + PIAR + benchmarks |
+| 95 | `00000000000095_railway_p5.sql` | Discovery tables + schema_migrations + mark applied |
+| 96 | `00000000000096_railway_remaining.sql` | date_trunc_month_immutable + idx_api_costs_month |
+| 97 | `00000000000097_railway_patches.sql` | Repair discovery tables (updated_at, estimated_cost_usd, triggers) |
+
+All files are **idempotent** — `CREATE TABLE IF NOT EXISTS` + `ON CONFLICT DO NOTHING`.
+They can be re-run safely.
 
 ---
 
-## What Each File Creates
+## Manual Execution (Railway Query Editor)
 
-| File | Creates |
-|------|---------|
-| p1.sql | Extensions, auth stub, all 13 enum types |
-| p2.sql | business_units, users, roles, permissions, teams, clients, brands, brand_contacts, contracts |
-| p3.sql | influencers, campaigns, kpis, budgets, tasks, forms, automations |
-| p4.sql | AI/RAG tables, dashboards, audit_logs, integrations, webhooks, data_quality, publicaciones, comentarios, tier_benchmarks |
-| p5.sql | discovery_runs, discovery_candidates, discovery_conversations, discovery_messages, api_costs, integration_credentials |
-| patches.sql | Adds missing columns to broken discovery tables, recreates broken triggers/functions |
-| remaining.sql | date_trunc_month_immutable, idx_api_costs_month, vector(384), influencer enrichment columns |
+If you need to run manually (bypassing `apply_migrations()`):
+
+1. `00000000000091_railway_p1.sql` — extensions + auth + enums
+2. `00000000000092_railway_p2.sql` — identity + commercial
+3. `00000000000093_railway_p3.sql` — influencers + campaigns + KPIs
+4. `00000000000094_railway_p4.sql` — AI + dashboards + PIAR + benchmarks
+5. `00000000000095_railway_p5.sql` — discovery + mark applied
+6. `00000000000096_railway_remaining.sql` — remaining index fixes
+7. `00000000000097_railway_patches.sql` — **run LAST** to repair broken discovery tables
 
 ---
 
@@ -83,4 +58,4 @@ SELECT COUNT(*) AS migration_count FROM schema_migrations;
 SELECT extname FROM pg_extension ORDER BY extname;
 ```
 
-Expected: 40+ tables, 30+ migrations tracked, 4+ extensions installed.
+Expected: 45+ tables, 35+ migrations tracked, 4+ extensions installed.

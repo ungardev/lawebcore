@@ -1,10 +1,10 @@
 -- =================================================================
--- LA WEB CORE — Railway Bootstrap Part 4 of 5
--- AI/RAG + Dashboards/Audit + Data Quality + PIAR + Benchmarks + Sentiment
--- Run in Railway Query Editor FOURTH
+-- Railway Bootstrap P4 — AI/RAG + Dashboards + Audit + PIAR + Benchmarks
+-- Version 94 — runs AFTER existing migrations 1-28
+-- Conditional: AI tables only if pgvector extension available
+-- Idempotent: uses CREATE TABLE IF NOT EXISTS
 -- =================================================================
 
--- AI/RAG (conditional on pgvector)
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
@@ -39,11 +39,12 @@ BEGIN
             id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
             document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
             chunk_index INTEGER NOT NULL, content TEXT NOT NULL, content_tokens INTEGER,
-            embedding extensions.vector(1536), metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+            embedding extensions.vector(384), metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             UNIQUE (document_id, chunk_index)
         );
         CREATE INDEX IF NOT EXISTS idx_document_chunks_doc ON document_chunks(document_id);
+        CREATE INDEX IF NOT EXISTS idx_document_chunks_embedding ON document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
         CREATE TABLE IF NOT EXISTS ai_conversations (
             id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
@@ -88,7 +89,7 @@ BEGIN
         CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC);
 
         CREATE OR REPLACE FUNCTION public.match_document_chunks(
-            query_embedding extensions.vector(1536), match_threshold FLOAT DEFAULT 0.7,
+            query_embedding extensions.vector(384), match_threshold FLOAT DEFAULT 0.7,
             match_count INT DEFAULT 10, filter_campaign_id UUID DEFAULT NULL
         )
         RETURNS TABLE (id UUID, document_id UUID, content TEXT, similarity FLOAT, metadata JSONB)
@@ -110,7 +111,6 @@ BEGIN
     END IF;
 END $$;
 
--- Dashboards, Audit, Integrations
 CREATE TABLE IF NOT EXISTS dashboards (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE, team_id UUID REFERENCES teams(id) ON DELETE CASCADE,
@@ -189,7 +189,6 @@ CREATE TRIGGER trg_scheduled_reports_updated_at BEFORE UPDATE ON scheduled_repor
 CREATE TRIGGER trg_integrations_updated_at BEFORE UPDATE ON integrations FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_webhooks_updated_at BEFORE UPDATE ON webhooks FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Data Quality
 CREATE TABLE IF NOT EXISTS data_quality_issues (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     resource_type TEXT NOT NULL, resource_id UUID, issue_type TEXT NOT NULL,
@@ -204,7 +203,6 @@ CREATE INDEX IF NOT EXISTS idx_dqi_unresolved ON data_quality_issues(is_resolved
 CREATE INDEX IF NOT EXISTS idx_dqi_issue_type ON data_quality_issues(issue_type);
 CREATE INDEX IF NOT EXISTS idx_dqi_severity ON data_quality_issues(severity);
 
--- PIAR: Publicaciones
 CREATE TABLE IF NOT EXISTS publicaciones (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
@@ -215,6 +213,9 @@ CREATE TABLE IF NOT EXISTS publicaciones (
     sentimiento_positivo INTEGER DEFAULT 0, sentimiento_neutro INTEGER DEFAULT 0, sentimiento_negativo INTEGER DEFAULT 0,
     url_publicacion TEXT, plataforma TEXT NOT NULL DEFAULT 'instagram', formato TEXT,
     source TEXT NOT NULL DEFAULT 'SHEETS',
+    score_retention NUMERIC(3,2), score_engagement NUMERIC(3,2), score_viralidad NUMERIC(3,2),
+    score_final NUMERIC(3,2), score_decision TEXT, score_decision_mode TEXT, scored_at TIMESTAMPTZ,
+    comentarios_analizados JSONB, sentimiento_analizado_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_publicaciones_campaign ON publicaciones(campaign_id);
@@ -222,11 +223,14 @@ CREATE INDEX IF NOT EXISTS idx_publicaciones_influencer ON publicaciones(influen
 CREATE INDEX IF NOT EXISTS idx_publicaciones_fecha ON publicaciones(fecha_publicacion DESC);
 CREATE INDEX IF NOT EXISTS idx_publicaciones_campaign_fecha ON publicaciones(campaign_id, fecha_publicacion DESC);
 CREATE INDEX IF NOT EXISTS idx_publicaciones_source ON publicaciones(source);
+CREATE INDEX IF NOT EXISTS idx_publicaciones_score ON publicaciones(score_final) WHERE score_final IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_publicaciones_decision ON publicaciones(score_decision) WHERE score_decision IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS comentarios (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     publicacion_id UUID NOT NULL REFERENCES publicaciones(id) ON DELETE CASCADE,
     autor_handle TEXT, texto TEXT NOT NULL, sentimiento TEXT, confianza NUMERIC(3,2),
+    analyzed_sentiment TEXT, analyzed_confidence NUMERIC(3,2), analyzed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_comentarios_publicacion ON comentarios(publicacion_id);
@@ -238,9 +242,6 @@ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$;
 
 CREATE TRIGGER trg_publicaciones_updated_at BEFORE UPDATE ON publicaciones
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at_piar();
-
--- Benchmarks
-DO $$ BEGIN CREATE TYPE influencer_subtier AS ENUM ('NANO_BAJO','NANO_ALTO','MICRO_BAJO','MICRO_MEDIO','MICRO_ALTO','MID_BAJO','MID_ALTO','MACRO_BAJO','MACRO_ALTO'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 
 CREATE TABLE IF NOT EXISTS tier_benchmarks (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
@@ -272,25 +273,6 @@ INSERT INTO tier_benchmarks (subtier, followers_min, followers_max, vf_min, vf_m
     ('MACRO_ALTO',750000,1000000,0.200,0.900,2.00,5.00,0.0240,'Top awareness')
 ON CONFLICT (subtier) DO NOTHING;
 
--- Score columns on publicaciones
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_retention NUMERIC(3,2);
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_engagement NUMERIC(3,2);
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_viralidad NUMERIC(3,2);
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_final NUMERIC(3,2);
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_decision TEXT;
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS score_decision_mode TEXT;
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS scored_at TIMESTAMPTZ;
-CREATE INDEX IF NOT EXISTS idx_publicaciones_score ON publicaciones(score_final) WHERE score_final IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_publicaciones_decision ON publicaciones(score_decision) WHERE score_decision IS NOT NULL;
-
--- Sentiment columns on publicaciones/comentarios
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS comentarios_analizados JSONB;
-ALTER TABLE publicaciones ADD COLUMN IF NOT EXISTS sentimiento_analizado_at TIMESTAMPTZ;
-ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS analyzed_sentiment TEXT;
-ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS analyzed_confidence NUMERIC(3,2);
-ALTER TABLE comentarios ADD COLUMN IF NOT EXISTS analyzed_at TIMESTAMPTZ;
-
--- Helper functions
 CREATE OR REPLACE FUNCTION public.resolve_subtier(p_followers BIGINT)
 RETURNS influencer_subtier LANGUAGE plpgsql AS $$
 DECLARE result influencer_subtier;

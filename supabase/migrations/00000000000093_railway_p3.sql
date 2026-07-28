@@ -1,10 +1,9 @@
 -- =================================================================
--- LA WEB CORE — Railway Bootstrap Part 3 of 5
--- Influencers + Campaigns + KPIs + Operations
--- Run in Railway Query Editor THIRD
+-- Railway Bootstrap P3 — Influencers + Campaigns + KPIs + Operations
+-- Version 93 — runs AFTER existing migrations 1-28
+-- Idempotent: uses CREATE TABLE IF NOT EXISTS
 -- =================================================================
 
--- Influencers
 CREATE TABLE IF NOT EXISTS influencers (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     full_name TEXT NOT NULL, email TEXT, phone TEXT,
@@ -14,12 +13,19 @@ CREATE TABLE IF NOT EXISTS influencers (
     status TEXT NOT NULL DEFAULT 'active', tags TEXT[] NOT NULL DEFAULT '{}',
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb, source TEXT, source_id TEXT,
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), deleted_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), deleted_at TIMESTAMPTZ,
+    gender TEXT, age_range TEXT, latitude NUMERIC(9,6), longitude NUMERIC(9,6),
+    audience_demographics JSONB DEFAULT '{}'::jsonb, is_discoverable BOOLEAN NOT NULL DEFAULT TRUE,
+    discovered_at TIMESTAMPTZ, discovery_query TEXT, discovery_confidence NUMERIC(5,2),
+    platform TEXT, followers BIGINT, following BIGINT, posts_count INTEGER,
+    avg_likes NUMERIC(12,2), avg_comments NUMERIC(12,2), engagement_rate NUMERIC(6,4),
+    audience_credibility NUMERIC(5,2), profile_pic_url TEXT, enriched_at TIMESTAMPTZ, sub_tier TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_influencers_primary_tier ON influencers(primary_tier);
 CREATE INDEX IF NOT EXISTS idx_influencers_status ON influencers(status) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_influencers_niches ON influencers USING GIN(content_niches);
 CREATE INDEX IF NOT EXISTS idx_influencers_tags ON influencers USING GIN(tags);
+CREATE INDEX IF NOT EXISTS idx_influencers_sub_tier ON influencers(sub_tier) WHERE sub_tier IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS influencer_social_accounts (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
@@ -49,7 +55,6 @@ CREATE INDEX IF NOT EXISTS idx_metrics_snapshot_date ON influencer_metrics_snaps
 CREATE TRIGGER trg_influencers_updated_at BEFORE UPDATE ON influencers FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_social_accounts_updated_at BEFORE UPDATE ON influencer_social_accounts FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Campaigns
 CREATE TABLE IF NOT EXISTS campaigns (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     code TEXT NOT NULL UNIQUE, client_id UUID NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
@@ -125,7 +130,6 @@ CREATE TABLE IF NOT EXISTS campaign_documents (
 CREATE INDEX IF NOT EXISTS idx_campaign_documents_campaign ON campaign_documents(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_documents_type ON campaign_documents(doc_type);
 
--- Campaign status change trigger
 CREATE OR REPLACE FUNCTION public.log_campaign_status_change()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -142,12 +146,10 @@ END; $$;
 
 CREATE TRIGGER trg_campaign_status_change AFTER INSERT OR UPDATE OF status ON campaigns
     FOR EACH ROW EXECUTE FUNCTION public.log_campaign_status_change();
-
 CREATE TRIGGER trg_campaigns_updated_at BEFORE UPDATE ON campaigns FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_campaign_influencers_updated_at BEFORE UPDATE ON campaign_influencers FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_campaign_links_updated_at BEFORE UPDATE ON campaign_links FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- KPIs
 CREATE TABLE IF NOT EXISTS kpi_definitions (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT,
@@ -204,7 +206,6 @@ CREATE TABLE IF NOT EXISTS winning_formats (
 CREATE TRIGGER trg_kpi_definitions_updated_at BEFORE UPDATE ON kpi_definitions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_benchmarks_updated_at BEFORE UPDATE ON benchmarks FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Operations
 CREATE TABLE IF NOT EXISTS budgets (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE UNIQUE,

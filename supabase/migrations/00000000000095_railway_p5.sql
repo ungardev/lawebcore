@@ -1,15 +1,10 @@
 -- =================================================================
--- LA WEB CORE — Railway Bootstrap Part 5 of 5 (FINAL)
--- Discovery tables + Migration tracking + Mark all applied
--- Run in Railway Query Editor FIFTH (LAST)
+-- Railway Bootstrap P5 — Discovery tables + Migration tracking
+-- Version 95 — runs AFTER existing migrations 1-28
+-- Mark all railway bootstrap migrations as applied in schema_migrations
+-- Idempotent: uses CREATE TABLE IF NOT EXISTS + ON CONFLICT DO NOTHING
 -- =================================================================
 
--- Discovery enums
-DO $$ BEGIN CREATE TYPE candidate_status AS ENUM ('new','saved','dismissed','contacted','replied','won','lost'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE discovery_run_status AS ENUM ('pending','running','completed','failed','cancelled'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE conversation_step AS ENUM ('start','brief','refining','searching','ranking','candidates_review','done'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
-
--- discovery_runs
 CREATE TABLE IF NOT EXISTS discovery_runs (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     bu_id UUID REFERENCES business_units(id) ON DELETE SET NULL,
@@ -33,7 +28,6 @@ CREATE INDEX IF NOT EXISTS idx_discovery_runs_created_by ON discovery_runs(creat
 CREATE INDEX IF NOT EXISTS idx_discovery_runs_brand ON discovery_runs(brand_id);
 CREATE INDEX IF NOT EXISTS idx_discovery_runs_created_at ON discovery_runs(created_at DESC);
 
--- discovery_candidates
 CREATE TABLE IF NOT EXISTS discovery_candidates (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     run_id UUID NOT NULL REFERENCES discovery_runs(id) ON DELETE CASCADE,
@@ -66,7 +60,6 @@ CREATE INDEX IF NOT EXISTS idx_discovery_candidates_country ON discovery_candida
 CREATE INDEX IF NOT EXISTS idx_discovery_candidates_tier ON discovery_candidates(tier);
 CREATE INDEX IF NOT EXISTS idx_discovery_candidates_is_tienda ON discovery_candidates(is_tienda);
 
--- discovery_conversations
 CREATE TABLE IF NOT EXISTS discovery_conversations (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -83,7 +76,6 @@ CREATE INDEX IF NOT EXISTS idx_discovery_conversations_user ON discovery_convers
 CREATE INDEX IF NOT EXISTS idx_discovery_conversations_status ON discovery_conversations(status);
 CREATE INDEX IF NOT EXISTS idx_discovery_conversations_last_message ON discovery_conversations(last_message_at DESC);
 
--- discovery_messages
 CREATE TABLE IF NOT EXISTS discovery_messages (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     conversation_id UUID NOT NULL REFERENCES discovery_conversations(id) ON DELETE CASCADE,
@@ -95,7 +87,6 @@ CREATE TABLE IF NOT EXISTS discovery_messages (
 CREATE INDEX IF NOT EXISTS idx_discovery_messages_conversation ON discovery_messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_discovery_messages_created_at ON discovery_messages(created_at);
 
--- api_costs
 CREATE TABLE IF NOT EXISTS api_costs (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     provider TEXT NOT NULL, operation TEXT, entity_id UUID,
@@ -106,7 +97,6 @@ CREATE TABLE IF NOT EXISTS api_costs (
 CREATE INDEX IF NOT EXISTS idx_api_costs_provider ON api_costs(provider, occurred_at DESC);
 CREATE INDEX IF NOT EXISTS idx_api_costs_entity ON api_costs(entity_id) WHERE entity_id IS NOT NULL;
 
--- integration_credentials
 CREATE TABLE IF NOT EXISTS integration_credentials (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     provider TEXT NOT NULL, business_unit_id UUID REFERENCES business_units(id) ON DELETE CASCADE,
@@ -119,21 +109,6 @@ CREATE TABLE IF NOT EXISTS integration_credentials (
 CREATE INDEX IF NOT EXISTS idx_integration_credentials_provider ON integration_credentials(provider);
 CREATE INDEX IF NOT EXISTS idx_integration_credentials_status ON integration_credentials(status);
 
--- Influencer discovery columns
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS gender TEXT;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS age_range TEXT;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS latitude NUMERIC(9,6);
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS longitude NUMERIC(9,6);
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS audience_demographics JSONB DEFAULT '{}'::jsonb;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS is_discoverable BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS discovered_at TIMESTAMPTZ;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS discovery_query TEXT;
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS discovery_confidence NUMERIC(5,2);
-ALTER TABLE influencers ADD COLUMN IF NOT EXISTS sub_tier TEXT;
-
-CREATE INDEX IF NOT EXISTS idx_influencers_sub_tier ON influencers(sub_tier) WHERE sub_tier IS NOT NULL;
-
--- Discovery triggers
 CREATE TRIGGER trg_discovery_runs_updated_at BEFORE UPDATE ON discovery_runs
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_discovery_candidates_updated_at BEFORE UPDATE ON discovery_candidates
@@ -143,7 +118,6 @@ CREATE TRIGGER trg_discovery_conversations_updated_at BEFORE UPDATE ON discovery
 CREATE TRIGGER trg_integration_credentials_updated_at BEFORE UPDATE ON integration_credentials
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- RPC: discovery_runs_merge_metadata
 CREATE OR REPLACE FUNCTION discovery_runs_merge_metadata(p_run_id UUID, p_metadata JSONB)
 RETURNS VOID LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
@@ -153,51 +127,24 @@ BEGIN
     WHERE id = p_run_id;
 END; $$;
 
--- Migration tracking table
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version TEXT PRIMARY KEY, filename TEXT NOT NULL,
     applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), checksum TEXT
 );
 
--- Mark ALL migrations as applied (idempotent — ON CONFLICT DO NOTHING)
 INSERT INTO schema_migrations (version, filename) VALUES
-    ('1',  '00000000000001_extensions.sql'),
-    ('2',  '00000000000002_enums.sql'),
-    ('3',  '00000000000003_identity.sql'),
-    ('4',  '00000000000004_commercial.sql'),
-    ('5',  '00000000000005_influencers.sql'),
-    ('6',  '00000000000006_campaigns.sql'),
-    ('7',  '00000000000007_kpis.sql'),
-    ('8',  '00000000000008_operations.sql'),
-    ('9',  '00000000000009_ai.sql'),
-    ('10', '00000000000010_audit_integrations.sql'),
-    ('11', '00000000000011_rls.sql'),
-    ('12', '00000000000012_data_quality.sql'),
-    ('15', '00000000000015_piar_foundation.sql'),
-    ('16', '00000000000016_benchmarks_lwfa.sql'),
-    ('17', '00000000000017_sentiment_analysis.sql'),
-    ('18', '00000000000018_migration_tracking.sql'),
-    ('19', '00000000000019_discovery_foundation.sql'),
-    ('20', '00000000000020_api_costs_index_fix.sql'),
-    ('21', '00000000000021_discovery_recovery.sql'),
-    ('22', '00000000000022_discovery_candidates_additions.sql'),
-    ('23', '00000000000023_embeddings_384.sql'),
-    ('24', '00000000000024_enrichment_columns.sql'),
-    ('26', '00000000000026_atomic_discovery_metadata.sql'),
-    ('27', '00000000000027_rls_discovery_tables.sql'),
-    ('28', '00000000000028_discovery_tier_persistence.sql'),
-    ('p1', '0000_02_railway_bootstrap_p1.sql'),
-    ('p2', '0000_03_railway_bootstrap_p2.sql'),
-    ('p3', '0000_04_railway_bootstrap_p3.sql'),
-    ('p4', '0000_05_railway_bootstrap_p4.sql'),
-    ('p5', '0000_06_railway_bootstrap_p5.sql')
+    ('91', '00000000000091_railway_p1.sql'),
+    ('92', '00000000000092_railway_p2.sql'),
+    ('93', '00000000000093_railway_p3.sql'),
+    ('94', '00000000000094_railway_p4.sql'),
+    ('95', '00000000000095_railway_p5.sql'),
+    ('96', '00000000000096_railway_remaining.sql'),
+    ('97', '00000000000097_railway_patches.sql')
 ON CONFLICT (version) DO NOTHING;
 
--- Final smoke test
 DO $$
 DECLARE cnt INTEGER;
 BEGIN
     SELECT COUNT(*) INTO cnt FROM information_schema.tables WHERE table_schema = 'public';
-    RAISE NOTICE '=== LA WEB CORE RAILWAY BOOTSTRAP COMPLETE ===';
-    RAISE NOTICE 'Public tables: %', cnt;
+    RAISE NOTICE '=== Railway Bootstrap P5 complete — % tables ===', cnt;
 END $$;

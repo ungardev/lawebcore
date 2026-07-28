@@ -1,9 +1,8 @@
 -- =================================================================
--- LA WEB CORE — Railway Bootstrap Part 1 of 5
--- Extensions + Auth stub + All Enums
--- Run in Railway Query Editor FIRST
--- =================================================================
+-- Railway Bootstrap P1 — Extensions + Auth stub + All Enums
+-- Version 91 — runs AFTER existing migrations 1-28
 -- Idempotent: uses DO $$ blocks for types (won't fail if already exist)
+-- =================================================================
 
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE SCHEMA IF NOT EXISTS auth;
@@ -22,11 +21,9 @@ END $$;
 GRANT USAGE ON SCHEMA extensions TO PUBLIC;
 GRANT ALL ON SCHEMA extensions TO postgres;
 
--- Auth stub (satisfies FK references from users table)
 CREATE TABLE IF NOT EXISTS auth.users (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email       TEXT,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT, created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID
@@ -36,7 +33,6 @@ CREATE OR REPLACE FUNCTION auth.uid() RETURNS UUID
         '00000000-0000-0000-0000-000000000000'::UUID
     );
 
--- Enums (all wrapped in DO $$ so re-run is safe)
 DO $$ BEGIN CREATE TYPE user_status AS ENUM ('active','invited','suspended','deactivated'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE campaign_status AS ENUM ('BRIEF','CONTACTANDO','PLAN_DE_CUENTAS','PULL','CAMPAÑA_INTERNA','REPORTE','TERMINADA','CANCELADA','PAUSADA'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE campaign_objective AS ENUM ('AWARENESS','CONSIDERACION','CONVERSION','GESTION_DE_CRISIS','BRANDING','LANZAMIENTO','RETENCION'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
@@ -51,3 +47,7 @@ DO $$ BEGIN CREATE TYPE integration_provider AS ENUM ('HYPEAUDITOR','CANVA','GOO
 DO $$ BEGIN CREATE TYPE ai_job_status AS ENUM ('PENDING','RUNNING','COMPLETED','FAILED','CANCELLED'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE ai_job_type AS ENUM ('EMBEDDING','RAG_QUERY','BRIEF_GENERATION','POST_MORTEM_GENERATION','INSIGHT_GENERATION','FORECAST','MATCHMAKING','SENTIMENT_ANALYSIS'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE audit_action AS ENUM ('CREATE','UPDATE','DELETE','RESTORE','LOGIN','LOGOUT','EXPORT','IMPORT','STATUS_CHANGE','PERMISSION_CHANGE','ROLE_CHANGE'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE influencer_subtier AS ENUM ('NANO_BAJO','NANO_ALTO','MICRO_BAJO','MICRO_MEDIO','MICRO_ALTO','MID_BAJO','MID_ALTO','MACRO_BAJO','MACRO_ALTO'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE candidate_status AS ENUM ('new','saved','dismissed','contacted','replied','won','lost'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE discovery_run_status AS ENUM ('pending','running','completed','failed','cancelled'); EXCEPTION WHEN OTHERS THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE conversation_step AS ENUM ('start','brief','refining','searching','ranking','candidates_review','done'); EXCEPTION WHEN OTHERS THEN NULL; END $$;

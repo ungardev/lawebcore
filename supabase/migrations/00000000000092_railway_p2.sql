@@ -1,20 +1,18 @@
 -- =================================================================
--- LA WEB CORE — Railway Bootstrap Part 2 of 5
--- Identity & Permissions + Commercial Hierarchy
--- Run in Railway Query Editor SECOND
+-- Railway Bootstrap P2 — Identity & Commercial Hierarchy
+-- Version 92 — runs AFTER existing migrations 1-28
+-- Idempotent: uses CREATE TABLE IF NOT EXISTS
 -- =================================================================
 
 CREATE OR REPLACE FUNCTION public.set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$;
 
--- Identity tables
 CREATE TABLE IF NOT EXISTS business_units (
-    id          UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
-    code        TEXT NOT NULL UNIQUE, name        TEXT NOT NULL,
-    description TEXT, is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, description TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS users (
@@ -79,7 +77,6 @@ CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE 
 CREATE TRIGGER trg_roles_updated_at BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 CREATE TRIGGER trg_teams_updated_at BEFORE UPDATE ON teams FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- Commercial tables
 CREATE TABLE IF NOT EXISTS clients (
     id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
     code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, legal_name TEXT, tax_id TEXT, industry TEXT,
