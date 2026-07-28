@@ -340,6 +340,15 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             lowest_score=qualified[-1].get("match_score") if qualified else None,
         )
 
+        if len(qualified) == 0 and len(all_profiles) > 0:
+            logger.warning(
+                "discovery_run_no_ve_candidates",
+                run_id=run_id,
+                all_profiles_count=len(all_profiles),
+                scored_count=len(all_candidates),
+                reason="geo_filter_rejected_all",
+            )
+
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
 
         total = inserted_count
@@ -371,12 +380,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 f"ER {c.get('engagement_rate', 0):.1%}"
                 for c in top_candidates
             ]
-            content = (
-                f"Terminé la búsqueda con pipeline de 4 capas. "
-                f"Encontré {total} candidatos para tu brief.\n\n"
-                + ("Aquí están los más relevantes:\n" + "\n".join(summary_lines) + "\n\n"
-                if summary_lines else "")
-                + "Puedes ver todos en la lista de candidatos."
+            if total == 0:
+                content = (
+                    f"Escaneé {len(all_profiles)} perfiles pero ninguno "
+                    f"califica como venezolano (bio, ubicación o país confirmado en su perfil de Instagram). "
+                    f"Esto puede ocurrir si la cuenta no declara ubicación ni menciona a Venezuela. "
+                    f"Intenta con otros términos o hashtags más específicos en el brief."
+                )
+            else:
+                content = (
+                    f"Terminé la búsqueda con pipeline de 4 capas. "
+                    f"Encontré {total} candidatos para tu brief.\n\n"
+                    + ("Aquí están los más relevantes:\n" + "\n".join(summary_lines) + "\n\n"
+                    if summary_lines else "")
+                    + "Puedes ver todos en la lista de candidatos."
+                )
             )
             await conversation_memory.save_message(
                 conversation_id=pyUUID(conv["id"]),

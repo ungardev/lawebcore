@@ -21,19 +21,53 @@ LATAM_KEYWORDS = (
 def country_boost(profile: dict) -> float:
     """Returns 1.0 for VE, 0.5 for Latam, 0.0 for rest.
 
-    Checks biography, username, fullName, and country field.
+    Checks ALL text fields from every Apify actor variant:
+    - instagram-search-scraper: username, fullName, biography, profilePicUrl
+    - instagram-hashtag-scraper: ownerUsername, ownerFullName, caption, locationName
+    - instagram-profile-scraper: username, fullName, biography, country, about (dict)
+    - instagram-scraper: various combinations of the above
+
     Pure function — no side effects.
     """
-    bio = (profile.get("biography") or profile.get("bio") or "").lower()
-    country = (profile.get("country") or "").lower()
-    username = (profile.get("username") or profile.get("handle") or "").lower()
-    full_name = (profile.get("fullName") or profile.get("full_name") or "").lower()
-    location = (profile.get("locationName") or profile.get("location") or "").lower()
-    haystack = " ".join([bio, username, full_name, location])
+    sources: list[str] = []
+
+    for field in [
+        "biography",
+        "bio",
+        "caption",
+        "about",
+        "locationName",
+        "location",
+        "fullName",
+        "full_name",
+        "username",
+        "handle",
+        "ownerUsername",
+        "ownerFullName",
+        "ownerFullname",
+    ]:
+        val = profile.get(field)
+        if val is None:
+            continue
+        if isinstance(val, str):
+            sources.append(val.lower())
+        elif isinstance(val, dict):
+            for dict_val in val.values():
+                if isinstance(dict_val, str):
+                    sources.append(dict_val.lower())
+
+    about = profile.get("about")
+    if isinstance(about, dict):
+        for val in about.values():
+            if isinstance(val, str):
+                sources.append(val.lower())
+
+    haystack = " ".join(sources)
 
     if any(k in haystack for k in VE_KEYWORDS):
         return 1.0
-    if country in ("ve", "venezuela"):
+    country_field = (profile.get("country") or "").lower()
+    if country_field in ("ve", "venezuela"):
         return 1.0
     if any(k in haystack for k in LATAM_KEYWORDS):
         return 0.5

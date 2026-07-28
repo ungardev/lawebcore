@@ -5,6 +5,19 @@ from typing import Any
 from discovery.schemas import BriefStructured, DiscoveryPlan, Platform
 
 
+DEFAULT_VE_HASHTAGS = [
+    "purinaVE", "dogchowVE", "amorporruno", "mascotasVE", "perrosVE",
+    "mascotasVenezuela", "dogChow", "purina", "petlovers", "doglover",
+    "vzla", "venezuela", "adopcionvzla", "rescateanimalvzla",
+    "mascotasvzla", "perrosdevzla",
+]
+
+DEFAULT_VE_KEYWORDS = [
+    "PurinaVE", "DogChowVE", "purina dog chow venezuela",
+    "mascotasVE", "perrosVenezuela", "amantesdelosperros",
+    "mascotas caracas", "perrosvzla",
+]
+
 DISCOVERY_KEYWORDS = {
     "brand_competition": [
         "DogChow",
@@ -63,6 +76,13 @@ DISCOVERY_KEYWORDS = {
 VE_GEO_KEYWORDS = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "san cristobal"]
 
 
+_MASCOTA_TRIGGERS = [
+    "purina", "dog chow", "dogchow", "mascota", "mascotas",
+    "perro", "perros", "dog", "dogs", "pet", "pets",
+    "cachorro", "cachorros", "canino", "canina",
+]
+
+
 class QueryBuilder:
     def build(self, brief: BriefStructured) -> DiscoveryPlan:
         keywords = self._build_keywords(brief)
@@ -79,17 +99,17 @@ class QueryBuilder:
             max_followers=10_000_000,
         )
 
-    def _build_keywords(self, brief: BriefStructured) -> list[str]:
+    def _is_vertical_mascota(self, brief: BriefStructured) -> bool:
+        """Detecta si el brief es de la vertical mascotas/perros."""
         product = (brief.product_name or "").lower()
-        is_mascota_related = any(
-            kw in product for kw in ["purina", "dog chow", "mascota", "perro", "dog", "pet"]
-        )
+        additional = (brief.additional_context or "").lower()
+        niches_text = " ".join(brief.niches or []).lower()
+        combined = f"{product} {additional} {niches_text}"
+        return any(trigger in combined for trigger in _MASCOTA_TRIGGERS)
 
-        if is_mascota_related:
-            all_keywords: list[str] = []
-            for category in DISCOVERY_KEYWORDS.values():
-                all_keywords.extend(category)
-            return list(set(all_keywords))[:40]
+    def _build_keywords(self, brief: BriefStructured) -> list[str]:
+        if self._is_vertical_mascota(brief):
+            return DEFAULT_VE_KEYWORDS
 
         keywords: list[str] = []
         for niche in brief.niches:
@@ -100,36 +120,9 @@ class QueryBuilder:
         return list(set(keywords))[:40]
 
     def _build_hashtags(self, brief: BriefStructured) -> list[str]:
-        product = (brief.product_name or "").lower()
-        is_mascota_related = any(
-            kw in product for kw in ["purina", "dog chow", "mascota", "perro", "dog", "pet"]
-        )
+        if self._is_vertical_mascota(brief):
+            return [f"#{tag}" for tag in DEFAULT_VE_HASHTAGS]
 
-        if is_mascota_related:
-            return [
-                "#mascotasvzla",
-                "#perrosdevzla",
-                "#mascotas",
-                "#perros",
-                "#adopcion",
-                "#rescate",
-                "#veterinaria",
-                "#saludcanina",
-                "#vzla",
-                "#venezuela",
-                "#doglover",
-                "#nutricioncanina",
-                "#DogChow",
-                "#Purina",
-                "#Pedigree",
-                "#Cachorros",
-                "#PerroSenior",
-                "#DogMom",
-                "#DogDad",
-                "#AmorPerruno",
-                "#ComidaBarf",
-                "#SinGrano",
-            ]
         return [f"#{n.lower().replace(' ', '')}" for n in brief.niches[:15]]
 
     def _get_tier(self, brief: BriefStructured) -> str:
