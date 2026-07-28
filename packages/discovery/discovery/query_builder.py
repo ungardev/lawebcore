@@ -10,6 +10,9 @@ DEFAULT_VE_HASHTAGS = [
     "mascotasVenezuela", "dogChow", "purina", "petlovers", "doglover",
     "vzla", "venezuela", "adopcionvzla", "rescateanimalvzla",
     "mascotasvzla", "perrosdevzla",
+    "cachorrosVE", "perrosVenezuela", "tiendademascotasVE",
+    "veterinariaVenezuela", "adoptaVE", "perritosVE",
+    "amigosde4patasVE", "petloversVE",
 ]
 
 DEFAULT_VE_KEYWORDS = [

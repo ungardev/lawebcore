@@ -9,6 +9,13 @@ VE_KEYWORDS = (
     "san cristobal", "maturin", "barquisimeto", "puerto la cruz",
     "maracay", "merida", "ciudad guayana", "ciudad bolivar",
     "vzlatex", "vzlan", "venezolano", "venezolana",
+    "🇻🇪", "anzoategui", "zulia", "lara", "yaracuy",
+    "carabobo", "aragua", "portuguesa", "trujillo", "cojedes",
+    "monagas", "sucre", "nueva esparta", "guarico", "apure", "barinas", "falcon",
+    "amazonas", "bolivariano", "vzlano",
+    "anzoátegui", "guatire", "los teques", "baruta", "chacao", "el hatillo",
+    "petare", "catia", "cabudare",
+    "villa de cura",
 )
 
 LATAM_KEYWORDS = (
@@ -58,16 +65,17 @@ def classify_tier(followers: int) -> str:
 
 
 def composite_score(profile: dict) -> float:
-    """v4 formula: engagement*100 + geo*30 + business*20 + verified*10.
+    """v5 formula: engagement*200 + geo*50 + business*25 + verified*15.
 
     Used as the primary ranking metric for candidate selection.
+    Higher weight on engagement and geo to prioritize real VE influencers.
     """
     followers = profile.get("followersCount") or profile.get("follower_count") or 0
     er = profile.get("engagement_rate") or 0.0
     geo = country_boost(profile)
     is_business = profile.get("isBusinessAccount") or profile.get("is_business") or False
     is_verified = profile.get("verified") or profile.get("is_verified") or False
-    return (er * 100) + (geo * 30) + (20 if is_business else 0) + (10 if is_verified else 0)
+    return (er * 200) + (geo * 50) + (25 if is_business else 0) + (15 if is_verified else 0)
 
 
 def is_venezuelan(profile: dict) -> bool:
