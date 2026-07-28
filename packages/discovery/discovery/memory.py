@@ -131,7 +131,6 @@ async def launch_discovery_run(
         "audience_countries": brief.audience_countries,
         "audience_cities": brief.audience_cities,
         "budget_usd": brief.budget_usd,
-        "tone": brief.tone,
         "platforms": [p.value for p in brief.platforms],
         "status": "pending",
         "created_by": str(created_by),
