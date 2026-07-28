@@ -1,5 +1,8 @@
 -- =============================================================================
 -- RAILWAY POSTGRESQL BOOTSTRAP — La Web Core
+-- DEPRECATED: Use sequential files 0000_02_p1 through 0000_06_p5 instead.
+-- This single-file version fails on Railway Query Editor (single batch limit).
+-- See: RAILWAY_BOOTSTRAP_README.md for execution instructions.
 -- =============================================================================
 -- Single-file migration for Railway PostgreSQL.
 -- Consolidates migrations 0001–0018 + 0019–0028 (already applied on prod).
