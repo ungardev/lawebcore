@@ -28,7 +28,7 @@ from discovery.tools import (
     tiktok_client,
     youtube_client,
     composite_score,
-    is_venezuelan,
+    country_boost,
     classify_tier,
     build_rationale,
 )
@@ -65,13 +65,12 @@ async def shutdown(ctx):
 
 async def discovery_run_task(ctx, run_id: str) -> dict:
     """
-    Ejecuta un discovery_run completo con pipeline de 4 capas:
+    Ejecuta un discovery_run completo replicando extract_purina_real_apify.py v4.
 
-    STEP 1: Keyword Discovery — instagram-search-scraper (usuarios por keyword)
-    STEP 2: Hashtag Deep Dive — instagram-hashtag-scraper (posts con geotags)
-    STEP 3: Profile Enrichment — instagram-profile-scraper (followers, latestPosts, country)
-    STEP 4: Engagement Analytics — engagement-analytics actor (LWFA KPIs)
-    STEP 5: LWFA Scoring — 4 KPIs exclusivos + composite score
+    STEP 1: Hashtag search (single sync call — all hashtags at once)
+    STEP 2: Keyword search (single sync call — all keywords at once)
+    STEP 3: Profile enrichment (single sync call — up to 80 profiles)
+    STEP 4: Scoring con country_boost + composite_score
     """
     try:
         await _run_set_status(run_id, "running")
@@ -99,259 +98,213 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         plan = query_builder.build(brief)
 
         await _run_update_metadata(run_id, {
-            "current_step": "step1_keyword_discovery",
+            "current_step": "step1_hashtag_search",
             "completed_steps": [],
             "keywords_count": len(plan.keyword_queries),
             "hashtags_count": len(plan.hashtag_queries),
             "candidates_found": 0,
         })
 
-        all_profiles: list[dict] = []
-        seen_handles: set[str] = set()
+        profiles: dict[str, dict] = {}
 
-        all_candidates: list[dict] = []
-        analytics_by_handle: dict[str, dict] = {}
-        posts_by_hashtag: dict[str, list[dict]] = {}
+        print(f"[discovery_run_task] STEP 1: Hashtag search ({len(plan.hashtag_queries)} hashtags)", flush=True)
+        hashtag_items = await apify_client.scrape_hashtags_all_sync(
+            plan.hashtag_queries,
+            results_limit=50,
+        )
+        logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
 
-        try:
-            await _run_update_metadata(run_id, {"current_step": "step1_keyword_discovery"})
-            users_from_keywords = await apify_client.search_users_by_multiple_keywords(
-                plan.keyword_queries,
-                limit_per_keyword=30,
-            )
-            logger.info(
-                "step1_keyword_discovery_done",
-                users_found=len(users_from_keywords),
-            )
-            for u in users_from_keywords:
-                h = u.get("username", "")
-                if h and h not in seen_handles:
-                    seen_handles.add(h)
-                    all_profiles.append(u)
+        for item in hashtag_items:
+            handle = item.get("ownerUsername") or item.get("username")
+            if not handle or handle in profiles:
+                continue
+            profiles[handle] = {
+                "username": handle,
+                "full_name": item.get("ownerFullName", "") or item.get("fullName", ""),
+                "fullName": item.get("ownerFullName", "") or item.get("fullName", ""),
+                "full_name": item.get("ownerFullName", "") or item.get("fullName", ""),
+                "bio": item.get("caption", "") or item.get("biography", ""),
+                "biography": item.get("caption", "") or item.get("biography", ""),
+                "avatar_url": item.get("displayUrl", "") or item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("displayUrl", "") or item.get("profilePicUrl", ""),
+                "follower_count": 0,
+                "followersCount": 0,
+                "following_count": 0,
+                "followsCount": 0,
+                "posts_count": 0,
+                "postsCount": 0,
+                "is_business": False,
+                "isBusinessAccount": False,
+                "is_verified": False,
+                "verified": False,
+                "locationName": item.get("locationName", "") or "",
+                "location": item.get("locationName", "") or "",
+            }
 
-            await _run_update_metadata(run_id, {
-                "completed_steps": ["step1_keyword_discovery"],
-                "step1_profiles": len(all_profiles),
-                "current_step": "step2_hashtag_discovery",
-            })
+        print(f"[discovery_run_task] STEP 2: Keyword search ({len(plan.keyword_queries)} keywords)", flush=True)
+        keyword_items = await apify_client.search_users_by_keywords_sync(
+            plan.keyword_queries,
+            limit_per_keyword=30,
+        )
+        logger.info("step2_keyword_done", keyword_users=len(keyword_items))
 
-            await _run_update_metadata(run_id, {"current_step": "step2_hashtag_deep_dive"})
-            posts_by_hashtag = await apify_client.scrape_hashtags_batch(
-                plan.hashtag_queries,
-                results_per_hashtag=30,
-            )
-            total_hashtag_posts = sum(len(v) for v in posts_by_hashtag.values())
-            logger.info(
-                "step2_hashtag_deep_dive_done",
-                hashtags_scraped=len(posts_by_hashtag),
-                total_posts=total_hashtag_posts,
-            )
+        for item in keyword_items:
+            handle = item.get("username", "")
+            if not handle or handle in profiles:
+                continue
+            profiles[handle] = {
+                "username": handle,
+                "full_name": item.get("fullName", ""),
+                "fullName": item.get("fullName", ""),
+                "bio": item.get("biography", ""),
+                "biography": item.get("biography", ""),
+                "avatar_url": item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", ""),
+                "follower_count": 0,
+                "followersCount": 0,
+                "following_count": 0,
+                "followsCount": 0,
+                "posts_count": 0,
+                "postsCount": 0,
+                "is_business": item.get("isBusinessAccount", False),
+                "isBusinessAccount": item.get("isBusinessAccount", False),
+                "is_verified": item.get("verified", False),
+                "verified": item.get("verified", False),
+            }
 
-            for hashtag, posts in posts_by_hashtag.items():
-                for post in posts:
-                    h = post.get("ownerUsername", "")
-                    if h and h not in seen_handles:
-                        seen_handles.add(h)
-                        all_profiles.append(post)
+        unique_handles = list(profiles.keys())
+        logger.info("step2_merge_done", unique_profiles=len(unique_handles))
 
-            await _run_update_metadata(run_id, {
-                "completed_steps": ["step1_keyword_discovery", "step2_hashtag_deep_dive"],
-                "total_unique_handles": len(all_profiles),
-                "current_step": "step3_profile_enrichment",
-            })
-
-            await _run_update_metadata(run_id, {"current_step": "step3_profile_enrichment"})
-            handles_to_enrich = list(seen_handles)[:MAX_HANDLES_TO_ENRICH]
-            logger.info(
-                "step3_enriching_profiles",
-                handles_count=len(handles_to_enrich),
-            )
-
-            enriched_profiles: list[dict] = []
-            if handles_to_enrich:
-                async with APIFY_SEMAPHORE:
-                    enriched_profiles = await apify_client.search_instagram_profiles_batch(
-                        handles_to_enrich
-                    )
-            profile_map = {p.get("username", ""): p for p in enriched_profiles if p.get("username")}
-
-            logger.info(
-                "step3_profile_enrichment_done",
-                enriched=len(profile_map),
-                total_handles=len(handles_to_enrich),
-            )
-
-            await _run_update_metadata(run_id, {
-                "completed_steps": [
-                    "step1_keyword_discovery",
-                    "step2_hashtag_deep_dive",
-                    "step3_profile_enrichment",
-                ],
-                "enriched_profiles": len(profile_map),
-                "current_step": "step4_engagement_analytics",
-            })
-
-            top_handles_for_analytics = sorted(
-                profile_map.keys(),
-                key=lambda h: profile_map[h].get("followersCount", 0) or 0,
-                reverse=True,
-            )[:plan.analytics_top_n]
-
-            if top_handles_for_analytics:
-                await _run_update_metadata(run_id, {"current_step": "step4_engagement_analytics"})
-                try:
-                    analytics_results = await apify_client.analyze_profile_engagement(
-                        top_handles_for_analytics,
-                        posts_to_analyze=30,
-                    )
-                    for a in analytics_results:
-                        handle = a.get("profile_username", a.get("username", ""))
-                        if handle:
-                            analytics_by_handle[handle] = a
-                    logger.info(
-                        "step4_analytics_done",
-                        profiles_analyzed=len(analytics_by_handle),
-                    )
-                except Exception as analytics_err:
-                    logger.warning(
-                        "step4_analytics_skipped",
-                        reason=str(analytics_err),
-                        fallback="profile_enrichment_data_used",
-                    )
-                    analytics_by_handle = {}
-
-        except Exception as e:
-            logger.error("discovery_pipeline_steps_1_4_failed", run_id=run_id, error=str(e), exc_info=True)
-            await _run_set_status(run_id, "failed", error=f"Pipeline steps 1-4 failed: {str(e)}")
-            raise
-
-        total_cost = apify_client.get_and_clear_cost(run_id)
         await _run_update_metadata(run_id, {
-            "completed_steps": [
-                "step1_keyword_discovery",
-                "step2_hashtag_deep_dive",
-                "step3_profile_enrichment",
-                "step4_engagement_analytics",
-            ],
-            "current_step": "step5_lwfa_scoring",
-            "candidates_found": len(all_profiles),
-            "actual_cost_usd": round(total_cost, 4),
+            "completed_steps": ["step1_hashtag_search", "step2_keyword_search"],
+            "total_unique_handles": len(unique_handles),
+            "current_step": "step3_profile_enrichment",
         })
 
-        for raw in all_profiles:
-            handle = raw.get("username", raw.get("ownerUsername", ""))
-            if not handle:
+        handles_to_enrich = unique_handles[:MAX_HANDLES_TO_ENRICH]
+        print(f"[discovery_run_task] STEP 3: Profile enrichment ({len(handles_to_enrich)} profiles)", flush=True)
+
+        enriched_profiles: list[dict] = []
+        if handles_to_enrich:
+            enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
+
+        for e in enriched_profiles:
+            handle = e.get("username", "")
+            if not handle or handle not in profiles:
                 continue
+            profiles[handle].update({
+                "follower_count": e.get("followersCount", 0) or 0,
+                "followersCount": e.get("followersCount", 0) or 0,
+                "following_count": e.get("followsCount", 0) or 0,
+                "followsCount": e.get("followsCount", 0) or 0,
+                "posts_count": e.get("postsCount", 0) or 0,
+                "postsCount": e.get("postsCount", 0) or 0,
+                "is_business": e.get("isBusinessAccount", False),
+                "isBusinessAccount": e.get("isBusinessAccount", False),
+                "is_verified": e.get("verified", False),
+                "verified": e.get("verified", False),
+                "bio": e.get("biography", profiles[handle].get("bio", "")),
+                "biography": e.get("biography", profiles[handle].get("biography", "")),
+                "full_name": e.get("fullName", profiles[handle].get("full_name", "")),
+                "fullName": e.get("fullName", profiles[handle].get("fullName", "")),
+                "avatar_url": e.get("profilePicUrl", profiles[handle].get("avatar_url", "")),
+                "profilePicUrl": e.get("profilePicUrl", profiles[handle].get("profilePicUrl", "")),
+                "country": e.get("country", ""),
+                "locationName": e.get("locationName", profiles[handle].get("locationName", "")),
+                "location": e.get("locationName", profiles[handle].get("location", "")),
+                "latestPosts": e.get("latestPosts", []),
+            })
 
-            profile_data = profile_map.get(handle, raw)
-            followers = profile_data.get("followersCount") or profile_data.get("follower_count") or 0
+        logger.info(
+            "step3_enrichment_done",
+            enriched=len(enriched_profiles),
+            total_profiles=len(profiles),
+        )
 
-            if followers == 0:
-                logger.info("candidate_filtered_no_followers", handle=handle)
-                continue
+        print(f"[discovery_run_task] STEP 4: Scoring {len(profiles)} profiles", flush=True)
 
-            if not is_venezuelan(profile_data):
-                logger.info("candidate_filtered_not_ve", handle=handle, handle_lower=handle.lower())
-                continue
-
+        scored: list[dict] = []
+        for handle, p in profiles.items():
+            followers = p.get("followersCount") or p.get("follower_count") or 0
             if followers < 1000:
-                logger.info("candidate_filtered_too_small", handle=handle, followers=followers)
                 continue
 
-            latest = profile_data.get("latestPosts") or []
+            latest = p.get("latestPosts") or []
             er = 0.0
             if latest and followers > 0:
                 likes_avg = sum((post.get("likesCount") or 0) for post in latest) / max(len(latest), 1)
                 comments_avg = sum((post.get("commentsCount") or 0) for post in latest) / max(len(latest), 1)
                 er = (likes_avg + comments_avg) / followers
 
-            profile_for_score = {
-                **profile_data,
-                "engagement_rate": er,
-            }
-            score_val = composite_score(profile_for_score)
+            p["engagement_rate"] = er
+            geo = country_boost(p)
+            score_val = composite_score(p)
             tier = classify_tier(followers)
 
-            logger.info(
-                "candidate_scored",
-                handle=handle,
-                followers=followers,
-                er=round(er, 6),
-                score=round(score_val, 2),
-                tier=tier,
-            )
+            if geo >= 1.0:
+                scored.append({
+                    "run_id": run_id,
+                    "platform": "instagram",
+                    "handle": handle,
+                    "full_name": p.get("fullName") or p.get("full_name"),
+                    "bio": p.get("biography") or p.get("bio"),
+                    "avatar_url": p.get("profilePicUrl") or p.get("avatar_url"),
+                    "country": "VE",
+                    "city": p.get("locationName") or p.get("location") or "",
+                    "followers": followers,
+                    "following": p.get("followsCount") or p.get("following_count") or 0,
+                    "posts_count": p.get("postsCount") or p.get("posts_count") or 0,
+                    "avg_likes": None,
+                    "avg_comments": None,
+                    "avg_views": None,
+                    "engagement_rate": round(er, 6),
+                    "audience_credibility": (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if p.get("verified") or p.get("is_verified") else 0),
+                    "audience_quality": 50,
+                    "audience_gender_split": {},
+                    "audience_age_buckets": {},
+                    "match_score": round(score_val, 2),
+                    "niche_relevance": 0.9 if tier in ("MICRO", "MID") else 0.7,
+                    "geo_relevance": 1.0,
+                    "audience_relevance": 0.8,
+                    "content_quality": 0.8,
+                    "estimated_cost": int(followers * 0.005),
+                    "expected_reach": int(followers * 0.7),
+                    "expected_engagement": int(followers * er),
+                    "roi_estimate": None,
+                    "rationale": build_rationale(p, tier, followers, er),
+                    "status": "new",
+                    "raw_payload": {
+                        "composite_score": round(score_val, 2),
+                        "tier": tier,
+                        "er_calculated": round(er, 6),
+                        "geo_score": geo,
+                    },
+                    "fetched_at": datetime.now(timezone.utc),
+                })
 
-            all_candidates.append({
-                "run_id": run_id,
-                "platform": "instagram",
-                "handle": handle,
-                "full_name": profile_data.get("fullName") or profile_data.get("full_name"),
-                "bio": profile_data.get("biography") or profile_data.get("bio"),
-                "avatar_url": profile_data.get("profilePicUrl") or profile_data.get("profilePicUrlHD"),
-                "country": "VE",
-                "city": profile_data.get("locationName") or profile_data.get("city") or "",
-                "followers": followers,
-                "following": profile_data.get("followsCount") or profile_data.get("following_count") or 0,
-                "posts_count": profile_data.get("postsCount") or profile_data.get("posts_count") or 0,
-                "avg_likes": None,
-                "avg_comments": None,
-                "avg_views": None,
-                "engagement_rate": round(er, 6),
-                "audience_credibility": (20 if profile_data.get("isBusinessAccount") or profile_data.get("is_business") else 0) + (20 if profile_data.get("verified") or profile_data.get("is_verified") else 0),
-                "audience_quality": 50,
-                "audience_gender_split": {},
-                "audience_age_buckets": {},
-                "match_score": round(score_val, 2),
-                "niche_relevance": 0.9 if tier in ("MICRO", "MID") else 0.7,
-                "geo_relevance": 1.0,
-                "audience_relevance": 0.8,
-                "content_quality": 0.8,
-                "estimated_cost": int(followers * 0.005),
-                "expected_reach": int(followers * 0.7),
-                "expected_engagement": int(followers * er),
-                "roi_estimate": None,
-                "rationale": build_rationale(profile_data, tier, followers, er),
-                "status": "new",
-                "raw_payload": {
-                    **raw,
-                    "composite_score": round(score_val, 2),
-                    "tier": tier,
-                    "er_calculated": round(er, 6),
-                },
-                "fetched_at": datetime.now(timezone.utc),
-            })
-
-        await _run_update_metadata(run_id, {
-            "current_step": "inserting_candidates",
-            "candidates_found": len(all_candidates),
-        })
-
+        scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
         TARGET_CANDIDATES = 15
-
-        all_candidates.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
-        qualified = all_candidates[:TARGET_CANDIDATES]
+        qualified = scored[:TARGET_CANDIDATES]
 
         logger.info(
-            "candidates_ranked_and_truncated",
-            total_before_filter=len(all_candidates),
+            "scoring_done",
+            total_profiles=len(profiles),
+            ve_candidates=len(scored),
             qualified=len(qualified),
-            target=TARGET_CANDIDATES,
             top_score=qualified[0].get("match_score") if qualified else None,
-            lowest_score=qualified[-1].get("match_score") if qualified else None,
         )
 
-        if len(qualified) == 0 and len(all_profiles) > 0:
+        if len(qualified) == 0:
             logger.warning(
                 "discovery_run_no_ve_candidates",
                 run_id=run_id,
-                all_profiles_count=len(all_profiles),
-                scored_count=len(all_candidates),
-                reason="geo_filter_rejected_all",
+                profiles_scored=len(profiles),
+                ve_filtered=len(scored),
             )
 
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
-
         total = inserted_count
+
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
         await _run_update(run_id, {
             "status": "completed",
@@ -382,7 +335,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             ]
             if total == 0:
                 content = (
-                    f"Escaneé {len(all_profiles)} perfiles pero ninguno "
+                    f"Escaneé {len(profiles)} perfiles pero ninguno "
                     f"califica como venezolano (bio, ubicación o país confirmado en su perfil de Instagram). "
                     f"Esto puede ocurrir si la cuenta no declara ubicación ni menciona a Venezuela. "
                     f"Intenta con otros términos o hashtags más específicos en el brief."

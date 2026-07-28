@@ -125,6 +125,40 @@ class ApifyClient:
         response.raise_for_status()
         return response.json()
 
+    async def _run_sync(self, actor_id: str, run_input: dict, timeout_s: int = 300) -> list[dict[str, Any]]:
+        """Sync endpoint — waits for completion and returns dataset items directly.
+
+        Mirrors the /run-sync-get-dataset-items endpoint used in extract_purina_real_apify.py v4.
+        """
+        client = await self._get_client()
+        cache_key = self._build_cache_key(actor_id, run_input)
+        cached = await self._get_cached(cache_key)
+        if cached is not None:
+            logger.info("apify_sync_cache_hit", actor_id=actor_id, cached_count=len(cached))
+            return cached
+
+        cache_key_for_ttl = cache_key
+        response = await client.post(
+            f"/acts/{actor_id}/run-sync-get-dataset-items",
+            json=run_input,
+            timeout=timeout_s,
+        )
+        if response.status_code >= 400:
+            logger.error(
+                "apify_sync_api_error",
+                actor_id=actor_id,
+                status_code=response.status_code,
+                request_body=run_input,
+                response_body=response.text[:500],
+            )
+        response.raise_for_status()
+        items = response.json()
+        result = items if isinstance(items, list) else []
+        if result and cache_key_for_ttl:
+            await self._set_cached(cache_key_for_ttl, result, CACHE_TTL_PROFILES)
+        logger.info("apify_sync_done", actor_id=actor_id, items_count=len(result))
+        return result
+
     def _build_client_headers(self) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {self.token}",
@@ -436,8 +470,6 @@ class ApifyClient:
         results_limit: int = 50,
     ) -> list[dict[str, Any]]:
         """Obtiene posts de un hashtag con geotags y engagement vía instagram-hashtag-scraper."""
-        client = await self._get_client()
-
         clean_hashtag = hashtag.lstrip("#")
 
         logger.info(
@@ -447,27 +479,69 @@ class ApifyClient:
         )
 
         run_input = {
-            "hashtag": clean_hashtag,
+            "hashtags": [clean_hashtag],
             "resultsLimit": results_limit,
-            "locationName": "Venezuela",
         }
 
-        cache_key = self._build_cache_key(INSTAGRAM_HASHTAG_SCRAPER, run_input)
-        cached = await self._get_cached(cache_key)
-        if cached is not None:
-            return cached
-
-        run_data = await self._post_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_input)
-        run_id = run_data["data"]["id"]
-        default_dataset_id = run_data["data"].get("defaultDatasetId")
-
-        items = await self._poll_run(client, INSTAGRAM_HASHTAG_SCRAPER, run_id, default_dataset_id, cache_key=cache_key, cache_ttl=CACHE_TTL_PROFILES)
+        items = await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input)
         logger.info(
             "apify_hashtag_posts_done",
             hashtag=clean_hashtag,
             results_count=len(items),
         )
         return items
+
+    async def scrape_hashtags_all_sync(
+        self,
+        hashtags: list[str],
+        results_limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Single sync call with all hashtags at once (v4 pattern)."""
+        clean = [h.lstrip("#") for h in hashtags]
+        logger.info(
+            "apify_hashtags_all_sync_start",
+            hashtags_count=len(clean),
+            results_limit=results_limit,
+        )
+        run_input = {
+            "hashtags": clean,
+            "resultsLimit": results_limit,
+        }
+        return await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input)
+
+    async def search_users_by_keywords_sync(
+        self,
+        keywords: list[str],
+        limit_per_keyword: int = 30,
+    ) -> list[dict[str, Any]]:
+        """Single sync call with all keywords (v4 pattern)."""
+        logger.info(
+            "apify_keywords_sync_start",
+            keywords_count=len(keywords),
+            limit_per_keyword=limit_per_keyword,
+        )
+        run_input = {
+            "searchType": "user",
+            "searchQueries": keywords,
+            "resultsLimit": limit_per_keyword,
+        }
+        return await self._run_sync(INSTAGRAM_SEARCH_SCRAPER, run_input)
+
+    async def enrich_profiles_sync(
+        self,
+        usernames: list[str],
+    ) -> list[dict[str, Any]]:
+        """Single sync call for batch profile enrichment (v4 pattern)."""
+        clean = [u.lstrip("@") for u in usernames]
+        logger.info(
+            "apify_enrich_sync_start",
+            usernames_count=len(clean),
+        )
+        run_input = {
+            "usernames": clean,
+            "resultsType": "details",
+        }
+        return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input)
 
     async def scrape_hashtags_batch(
         self,
