@@ -136,16 +136,26 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
         initial_brief=body.initial_brief,
     )
 
+    orchestrator_step = result.get("step", ConversationStep.START.value)
+
     await conversation_memory.save_conversation(
         conversation_id=conversation_id,
         user_id=user.id,
         bu_id=body.bu_id,
-        step=ConversationStep.START.value,
+        step=orchestrator_step,
+    )
+
+    await conversation_memory.update_conversation(
+        conversation_id=conversation_id,
+        updates={
+            "accumulated_brief": result.get("accumulated_brief", ""),
+            "parsed_brief_json": result.get("brief"),
+        },
     )
 
     return ConversationResponse(
         id=conversation_id,
-        current_step=ConversationStep.START,
+        current_step=ConversationStep(orchestrator_step),
         status="active",
         started_at=result.get("started_at", ""),
         last_message_at=result.get("last_message_at", ""),

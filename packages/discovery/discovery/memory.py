@@ -66,7 +66,7 @@ async def save_conversation(
 async def get_conversation(conversation_id: UUID) -> dict[str, Any] | None:
     return await supabase_rest.select_one(
         table="discovery_conversations",
-        select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,status,started_at,last_message_at",
+        select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,parsed_brief_json,pending_refinements,status,started_at,last_message_at",
         filters=[f"id=eq.{conversation_id}"],
     )
 

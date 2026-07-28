@@ -362,6 +362,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 role="assistant",
                 content=content,
             )
+            await conversation_memory.update_conversation(
+                conversation_id=pyUUID(conv["id"]),
+                updates={"current_step": "candidates_review"},
+            )
 
         logger.info("discovery_run_completed", run_id=run_id, candidates=total)
         return {"run_id": run_id, "candidates": total}

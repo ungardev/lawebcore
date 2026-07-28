@@ -112,7 +112,6 @@ class DiscoveryOrchestrator:
         if initial_brief:
             state.accumulated_brief = initial_brief
             result = await self._process_message(conversation_id, initial_brief)
-            await self._save_state(conversation_id, state)
             return result
 
         state.step = ConversationStep.START
@@ -155,6 +154,22 @@ class DiscoveryOrchestrator:
 
         elif state.step == ConversationStep.CANDIDATES_REVIEW:
             return await self._step_candidates_review(conversation_id, content)
+
+        elif state.step == ConversationStep.SEARCHING:
+            return {
+                "conversation_id": str(conversation_id),
+                "step": state.step.value,
+                "message": "La búsqueda está en curso. Te avisaré cuando tenga los candidatos listos.",
+                "candidates": [],
+            }
+
+        elif state.step == ConversationStep.RANKING:
+            return {
+                "conversation_id": str(conversation_id),
+                "step": state.step.value,
+                "message": "Estoy rankeando los candidatos por score de match. Un momento más...",
+                "candidates": [],
+            }
 
         else:
             return {
@@ -368,7 +383,7 @@ class DiscoveryOrchestrator:
     ) -> CandidateMetrics:
         from discovery.schemas import Platform
 
-        p = Platform(platform.value) if isinstance(platform, Any) else platform
+        p = platform if isinstance(platform, Platform) else Platform(platform)
 
         if p == Platform.INSTAGRAM:
             return CandidateMetrics(

@@ -74,7 +74,7 @@ export function LensRunsListPage() {
                   <tr
                     key={run.id}
                     className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/influencer-lens/search?run=${run.id}`)}
+                    onClick={() => navigate(`/influencer-lens/search?runId=${run.id}`)}
                   >
                     <td className="px-4 py-3 text-muted-foreground">
                       {run.created_at ? new Date(run.created_at).toLocaleDateString('es-ES', {
