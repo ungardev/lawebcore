@@ -21,6 +21,11 @@ interface SearchProgressProps {
 const STEP_LABELS: Record<string, string> = {
   parsing_brief: "Parseando brief...",
   building_queries: "Construyendo queries...",
+  step1_hashtag_search: "Buscando hashtags...",
+  step2_keyword_search: "Buscando por keywords...",
+  step3_profile_enrichment: "Enriqueciendo perfiles...",
+  step4_engagement_analytics: "Analizando engagement...",
+  step5_scoring: "Rankeando candidatos...",
   querying_instagram_hashtag_search: "Buscando en Instagram...",
   querying_tiktok_hashtag_search: "Buscando en TikTok...",
   querying_youtube_channel_search: "Buscando en YouTube...",

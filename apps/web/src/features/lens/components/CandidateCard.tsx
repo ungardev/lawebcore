@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { formatEngagement, formatFollowers, isTienda, classifyTier, getTierColor } from '@/lib/format';
 import type { DiscoveryCandidate } from '../types/discovery';
 import { MatchScoreCircle } from './MatchScoreCircle';
 import { PlatformBadge } from './PlatformBadge';
@@ -36,6 +37,26 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
               {candidate.full_name || candidate.handle}
             </span>
             <PlatformBadge platform={candidate.platform} />
+            {candidate.tier && (
+              <span
+                className={cn(
+                  "text-[10px] px-1.5 py-0.5 rounded-full font-semibold border",
+                  getTierColor(candidate.tier)
+                )}
+              >
+                {candidate.tier}
+              </span>
+            )}
+            {candidate.country === "VE" && (
+              <span className="text-sm" title="Venezuela">
+                🇻🇪
+              </span>
+            )}
+            {isTienda(candidate.bio) && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 border border-orange-200">
+                Tienda
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">@{candidate.handle}</p>
 
@@ -44,19 +65,9 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           )}
 
           <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-            {candidate.followers != null && (
-              <span>{candidate.followers >= 1000
-                ? `${(candidate.followers / 1000).toFixed(1)}K`
-                : candidate.followers} seguidores</span>
-            )}
-            {candidate.engagement_rate != null && (
-              <span>
-                {candidate.engagement_rate > 1
-                  ? `${candidate.engagement_rate.toFixed(2)}%`
-                  : `${(candidate.engagement_rate * 100).toFixed(2)}%`} engagement
-              </span>
-            )}
-            {candidate.country && <span>{candidate.country}</span>}
+            <span>{formatFollowers(candidate.followers)} seguidores</span>
+            <span>{formatEngagement(candidate.engagement_rate)} engagement</span>
+            {candidate.city && <span>{candidate.city}</span>}
           </div>
         </div>
 

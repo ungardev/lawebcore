@@ -52,7 +52,7 @@ export function MatchScoreCircle({ score, size = 'md', showLabel = false }: Matc
         />
       </svg>
       <span className={cn('absolute font-bold', sizeClasses[size], colorClass)}>
-        {clampedScore}
+        {Math.round(clampedScore)}
       </span>
       {showLabel && (
         <span className="absolute -bottom-4 text-[9px] text-muted-foreground">match</span>

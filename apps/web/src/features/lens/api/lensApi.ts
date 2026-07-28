@@ -62,6 +62,7 @@ export const lensApi = {
       tone?: string[];
       platforms?: Platform[];
       max_candidates?: number;
+      hashtags?: string[];
     }) => {
       const { data } = await api.post<DiscoveryRun>('/lens/discovery/search', brief);
       return data;
@@ -77,6 +78,7 @@ export const lensApi = {
       const { data } = await api.get<DiscoveryCandidate[]>(`/lens/discovery/runs/${runId}/candidates`, { params });
       return data;
     },
+    getProposalUrl: (runId: string) => `/lens/discovery/runs/${runId}/proposal.csv`,
   },
 
   candidates: {

@@ -212,6 +212,7 @@ export function LensSearchPage() {
               onSave={saveCandidate}
               onDismiss={dismissCandidate}
               isLoading={isLoading}
+              runId={run.id}
             />
           )}
         </Card>

@@ -83,6 +83,8 @@ export interface DiscoveryCandidate {
   country: string | null;
   city: string | null;
   bio: string | null;
+  tier?: "NANO" | "MICRO" | "MID" | "MACRO" | null;
+  is_tienda?: boolean;
 }
 
 export interface DiscoveryMessage {

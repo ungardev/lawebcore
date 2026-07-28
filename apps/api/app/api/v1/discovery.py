@@ -44,6 +44,69 @@ class EnrichResponse(BaseModel):
     cost_usd: float
     results: list[EnrichResult]
 
+
+# ---- Candidate serialization helpers ----
+
+def _tier_from_followers(followers: int | float | None) -> str | None:
+    if not followers:
+        return None
+    f = int(followers)
+    if f < 10_000:
+        return "NANO"
+    if f < 100_000:
+        return "MICRO"
+    if f < 500_000:
+        return "MID"
+    return "MACRO"
+
+
+_TIENDA_PATTERNS = [
+    "tienda", "shop", "ventas", "pedidos", "catálogo",
+    "mayor y detal", "envíos", "mercado libre", "delivery",
+    "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono",
+]
+
+
+def _is_tienda(bio: str | None) -> bool:
+    if not bio:
+        return False
+    lower = bio.lower()
+    return any(p in lower for p in _TIENDA_PATTERNS)
+
+
+def _serialize_candidate(c: dict) -> dict:
+    followers = c.get("followers") or 0
+    bio = c.get("bio") or c.get("biography") or ""
+    tier = _tier_from_followers(followers)
+    engagement_rate = c.get("engagement_rate")
+    if engagement_rate is not None:
+        engagement_rate = round(float(engagement_rate), 4)
+    return {
+        "id": str(c.get("id", "")),
+        "platform": c.get("platform", "instagram"),
+        "handle": str(c.get("handle", "")),
+        "full_name": c.get("full_name") or c.get("fullName"),
+        "avatar_url": c.get("avatar_url") or c.get("profilePicUrl"),
+        "followers": int(followers) if followers else 0,
+        "engagement_rate": engagement_rate,
+        "match_score": round(float(c.get("match_score") or 0), 1),
+        "tier": tier,
+        "niche_relevance": round(float(c.get("niche_relevance") or 0), 2),
+        "geo_relevance": round(float(c.get("geo_relevance") or 0), 2),
+        "audience_relevance": round(float(c.get("audience_relevance") or 0), 2),
+        "content_quality": round(float(c.get("content_quality") or 0), 2),
+        "status": c.get("status", "new"),
+        "estimated_cost": int(c.get("estimated_cost") or 0),
+        "expected_reach": int(c.get("expected_reach") or 0),
+        "expected_engagement": int(c.get("expected_engagement") or 0),
+        "rationale": c.get("rationale"),
+        "country": c.get("country"),
+        "city": c.get("city"),
+        "bio": bio[:300] if bio else None,
+        "is_tienda": _is_tienda(bio),
+    }
+
+
 router = APIRouter(prefix="/discovery", tags=["discovery"])
 
 
@@ -458,13 +521,54 @@ async def list_run_candidates(
     if min_score is not None:
         filters.append(f"match_score=gte.{min_score}")
 
-    return await supabase_rest.select(
+    rows = await supabase_rest.select(
         table="discovery_candidates",
-        select="id,platform,handle,full_name,followers,engagement_rate,match_score,niche_relevance,geo_relevance,audience_relevance,content_quality,status,estimated_cost,expected_reach,expected_engagement,rationale,country,city,avatar_url",
+        select="*",
         filters=filters,
         order="match_score.desc",
         limit=limit,
         offset=offset,
+    )
+    return [_serialize_candidate(r) for r in rows]
+
+
+@router.get("/runs/{run_id}/proposal.csv")
+async def download_proposal_csv(run_id: UUID):
+    """Descarga propuesta CSV con los candidatos guardados (top 10)."""
+    from fastapi.responses import StreamingResponse
+    from app.services.proposal_generator import generate_proposal_csv
+
+    candidates = await supabase_rest.select(
+        table="discovery_candidates",
+        select="*",
+        filters=[f"run_id=eq.{run_id}", "status=eq.saved"],
+        order="match_score.desc",
+        limit=10,
+    )
+
+    if not candidates:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay candidatos guardados. Guarda al menos 1 candidato primero.",
+        )
+
+    run = await supabase_rest.select_one(
+        table="discovery_runs",
+        select="product_name",
+        filters=[f"id=eq.{run_id}"],
+    )
+    product_name = (run.get("product_name") or "Influencer Proposal") if run else "Influencer Proposal"
+
+    csv_bytes = generate_proposal_csv(
+        [_serialize_candidate(c) for c in candidates],
+        product_name=product_name,
+    )
+
+    filename = f"propuesta_{str(run_id)[:8]}_{datetime.now().strftime('%Y%m%d')}.csv"
+    return StreamingResponse(
+        iter([csv_bytes]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
