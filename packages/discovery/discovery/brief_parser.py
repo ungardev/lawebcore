@@ -24,9 +24,8 @@ Tu trabajo: cuando el usuario describe una campaña en lenguaje natural, extrae 
 REGLAS DE ORO:
 1. País por defecto: Venezuela (VE) si no dice otro. Siempre pregunta si no especifica país.
 2. Plataformas: IG + TikTok son el default para VE. Siempre confirma.
-3. Nichos: extrae keywords del texto. Si dice "mascotas" o "perros", el nicho es ["mascotas", "perros"].
-4. Presupuesto: siempre en USD. Si dice "$15000" → budget_usd: 15000.
-5. Audience gender: "female" por defecto para campañas de mascotas, belleza, lifestyle.
+ 3. Nichos: extrae keywords del texto. Si dice "mascotas" o "perros", el nicho es ["mascotas", "perros"].
+ 4. Audience gender: "female" por defecto para campañas de mascotas, belleza, lifestyle.
 6. Si algo falta o es ambiguo, PREGUNTA. No asumas valores inventados.
 7. additional_context: aquí va todo lo que no encaje en los campos pero sea relevante para el scoring.
 8. Tono: usa EXACTAMENTE estas palabras — sin abbreviaturas, sin cortes:
@@ -56,7 +55,6 @@ Responde en JSON con este formato exacto:
   "audience_age_max": número,
   "audience_countries": ["VE"],
   "audience_cities": ["ciudad1"],
-  "budget_usd": número o null,
   "tone": ["tono1"],
   "platforms": ["instagram"],
   "additional_context": "contexto adicional o vacío"
@@ -238,12 +236,6 @@ class BriefParserAgent:
             sanitized["tone"] = normalized_tones
         else:
             sanitized["tone"] = []
-
-        if "budget_usd" in sanitized and sanitized["budget_usd"] is not None:
-            try:
-                sanitized["budget_usd"] = float(sanitized["budget_usd"])
-            except (ValueError, TypeError):
-                sanitized["budget_usd"] = None
 
         return sanitized
 

@@ -74,6 +74,23 @@ def _is_tienda(bio: str | None) -> bool:
     return any(p in lower for p in _TIENDA_PATTERNS)
 
 
+def _build_fallback_url(c: dict) -> str | None:
+    url = c.get("url")
+    if url:
+        return url
+    handle = c.get("handle") or ""
+    platform = c.get("platform") or ""
+    if not handle:
+        return None
+    if platform == "tiktok":
+        return f"https://tiktok.com/@{handle}"
+    if platform == "youtube":
+        return f"https://youtube.com/@{handle}"
+    if platform == "instagram":
+        return f"https://instagram.com/{handle}"
+    return None
+
+
 def _serialize_candidate(c: dict) -> dict:
     followers = c.get("followers") or 0
     bio = c.get("bio") or c.get("biography") or ""
@@ -88,6 +105,7 @@ def _serialize_candidate(c: dict) -> dict:
         "id": str(c.get("id", "")),
         "platform": c.get("platform", "instagram"),
         "handle": str(c.get("handle", "")),
+        "url": c.get("url") or _build_fallback_url(c),
         "full_name": c.get("full_name") or c.get("fullName"),
         "avatar_url": c.get("avatar_url") or c.get("profilePicUrl"),
         "followers": int(followers) if followers else 0,
@@ -99,7 +117,6 @@ def _serialize_candidate(c: dict) -> dict:
         "audience_relevance": round(float(c.get("audience_relevance") or 0), 2),
         "content_quality": round(float(c.get("content_quality") or 0), 2),
         "status": c.get("status", "new"),
-        "estimated_cost": int(c.get("estimated_cost") or 0),
         "expected_reach": int(c.get("expected_reach") or 0),
         "expected_engagement": int(c.get("expected_engagement") or 0),
         "rationale": c.get("rationale"),
@@ -254,7 +271,6 @@ async def send_message(
                         audience_age_max=brief.audience_age_max,
                         audience_countries=brief.audience_countries,
                         audience_cities=brief.audience_cities,
-                        budget_usd=brief.budget_usd,
                         tone=brief.tone,
                         platforms=brief.platforms,
                     ),

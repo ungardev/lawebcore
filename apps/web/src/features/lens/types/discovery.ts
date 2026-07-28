@@ -15,7 +15,6 @@ export interface BriefStructured {
   audience_age_max: number;
   audience_countries: string[];
   audience_cities: string[];
-  budget_usd: number | null;
   tone: string[];
   platforms: Platform[];
   additional_context: string;
@@ -56,7 +55,6 @@ export interface MatchScoreResult {
   geo_relevance: number;
   audience_relevance: number;
   content_quality: number;
-  estimated_cost: number | null;
   expected_reach: number | null;
   expected_engagement: number | null;
   roi_estimate: number | null;
@@ -67,6 +65,7 @@ export interface DiscoveryCandidate {
   id: string;
   platform: Platform;
   handle: string;
+  url?: string | null;
   full_name: string | null;
   avatar_url: string | null;
   followers: number | null;
@@ -77,7 +76,6 @@ export interface DiscoveryCandidate {
   audience_relevance: number | null;
   content_quality: number | null;
   status: CandidateStatus;
-  estimated_cost: number | null;
   expected_reach: number | null;
   expected_engagement: number | null;
   rationale: string | null;

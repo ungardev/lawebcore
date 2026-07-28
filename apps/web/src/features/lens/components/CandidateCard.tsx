@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { ExternalLink } from 'lucide-react';
 import { formatEngagement, formatFollowers, isTienda, classifyTier, getTierColor } from '@/lib/format';
 import type { DiscoveryCandidate } from '../types/discovery';
 import { MatchScoreCircle } from './MatchScoreCircle';
@@ -64,7 +65,19 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground">@{candidate.handle}</p>
+          {candidate.url ? (
+            <a
+              href={candidate.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
+            >
+              @{candidate.handle}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          ) : (
+            <p className="text-xs text-muted-foreground">@{candidate.handle}</p>
+          )}
 
           {!compact && candidate.bio && (
             <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{candidate.bio}</p>

@@ -58,7 +58,6 @@ export const lensApi = {
       audience_age_max?: number;
       audience_countries?: string[];
       audience_cities?: string[];
-      budget_usd?: number;
       tone?: string[];
       platforms?: Platform[];
       max_candidates?: number;

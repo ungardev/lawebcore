@@ -274,7 +274,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "geo_relevance": 1.0,
                     "audience_relevance": 0.8,
                     "content_quality": 0.8,
-                    "estimated_cost": int(followers * 0.005),
                     "expected_reach": int(followers * 0.7),
                     "expected_engagement": int(followers * er),
                     "roi_estimate": None,

@@ -61,7 +61,6 @@ class BriefStructured(BaseModel):
     audience_age_max: int = 65
     audience_countries: list[str] = Field(default_factory=list)
     audience_cities: list[str] = Field(default_factory=list)
-    budget_usd: float | None = None
     tone: list[str] = Field(default_factory=list)
     platforms: list[Platform] = Field(default_factory=list)
     additional_context: str = ""
@@ -115,7 +114,6 @@ class MatchScoreResult(BaseModel):
     geo_relevance: float = Field(ge=0, le=100)
     audience_relevance: float = Field(ge=0, le=100)
     content_quality: float = Field(ge=0, le=100)
-    estimated_cost: float | None = None
     expected_reach: int | None = None
     expected_engagement: float | None = None
     roi_estimate: float | None = None
@@ -172,7 +170,6 @@ class DiscoverySearchRequest(BaseModel):
     audience_age_max: int = 65
     audience_countries: list[str] = Field(default_factory=["VE"])
     audience_cities: list[str] = Field(default_factory=list)
-    budget_usd: float | None = None
     tone: list[str] = Field(default_factory=list)
     platforms: list[Platform] = Field(default_factory=[Platform.INSTAGRAM])
     max_candidates: int = Field(default=20, ge=1, le=100)

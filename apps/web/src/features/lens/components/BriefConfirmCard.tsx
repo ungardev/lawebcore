@@ -37,9 +37,6 @@ export function BriefConfirmCard({ brief, onConfirm, onEdit, isLoading }: BriefC
         {brief.audience_countries.length > 0 && (
           <div><span className="text-muted-foreground">Países:</span> <span className="font-medium">{brief.audience_countries.join(', ')}</span></div>
         )}
-        {brief.budget_usd != null && (
-          <div><span className="text-muted-foreground">Presupuesto:</span> <span className="font-medium">${brief.budget_usd.toLocaleString()} USD</span></div>
-        )}
         {brief.platforms.length > 0 && (
           <div><span className="text-muted-foreground">Plataformas:</span> <span className="font-medium">{brief.platforms.join(', ')}</span></div>
         )}

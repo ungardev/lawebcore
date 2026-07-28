@@ -131,15 +131,6 @@ class QueryBuilder:
         return [f"#{n.lower().replace(' ', '')}" for n in brief.niches[:15]]
 
     def _get_tier(self, brief: BriefStructured) -> str:
-        budget = brief.budget_usd or 0
-        if budget >= 10000:
-            return "mid"
-        elif budget >= 5000:
-            return "micro_high"
-        elif budget >= 2000:
-            return "micro"
-        elif budget >= 500:
-            return "nano"
         return "micro"
 
     def _tier_to_min_followers(self, tier: str) -> int:

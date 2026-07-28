@@ -89,7 +89,6 @@ function createEmptyBrief(): Partial<BriefStructured> {
     audience_countries: ['VE'],
     audience_cities: [],
     platforms: ['instagram'],
-    budget_usd: null,
     tone: [],
     additional_context: '',
   };
@@ -429,15 +428,6 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
               </div>
             </div>
             <div>
-              <Label className="mb-1.5 block">Presupuesto (USD)</Label>
-              <Input
-                type="number"
-                placeholder="Ej: 3000"
-                value={brief.budget_usd ?? ''}
-                onChange={(e) => update({ budget_usd: e.target.value ? parseFloat(e.target.value) : null })}
-              />
-            </div>
-            <div>
               <Label className="mb-1.5 block">Contexto adicional (opcional)</Label>
               <textarea
                 className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -481,9 +471,6 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
               )}
               {brief.platforms && brief.platforms.length > 0 && (
                 <div><span className="text-muted-foreground">Plataformas:</span> <span className="font-medium">{brief.platforms.join(', ')}</span></div>
-              )}
-              {brief.budget_usd && (
-                <div><span className="text-muted-foreground">Presupuesto:</span> <span className="font-medium">${brief.budget_usd.toLocaleString()} USD</span></div>
               )}
             </div>
             {brief.additional_context && (

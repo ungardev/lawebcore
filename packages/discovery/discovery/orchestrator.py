@@ -118,7 +118,7 @@ class DiscoveryOrchestrator:
         return {
             "conversation_id": str(conversation_id),
             "step": state.step.value,
-            "message": "Soy Influencer Lens, el cerebro estratégico de La Web Figital Agency. Llevo 12 años haciendo influencer marketing en Latam — sé exactamente qué creators funcionan en Venezuela y por qué.\n\nCuéntame sobre la campaña que quieres planificar. ¿Qué producto o marca? ¿Qué mercado? ¿Tienes ya un presupuesto en mente?",
+            "message": "Soy Influencer Lens, el cerebro estratégico de La Web Figital Agency. Llevo 12 años haciendo influencer marketing en Latam — sé exactamente qué creators funcionan en Venezuela y por qué.\n\nCuéntame sobre la campaña que quieres planificar. ¿Qué producto o marca? ¿Qué mercado?",
             "candidates": [],
         }
 
@@ -207,7 +207,7 @@ class DiscoveryOrchestrator:
             "message": (
                 f"Entendí tu brief. Déjame confirmar:\n\n{confirmation}\n\n"
                 f"¿Está correcto o quieres ajustar algo? "
-                f"(país, plataformas, presupuesto, tono, etc.)"
+                f"(país, plataformas, tono, etc.)"
             ),
             "brief": state.brief_structured.model_dump() if state.brief_structured else None,
             "candidates": [],
@@ -447,8 +447,6 @@ class DiscoveryOrchestrator:
         parts.append(f"**Edad:** {brief.audience_age_min}-{brief.audience_age_max}")
         if brief.platforms:
             parts.append(f"**Plataformas:** {', '.join(p.value for p in brief.platforms)}")
-        if brief.budget_usd:
-            parts.append(f"**Presupuesto:** ${brief.budget_usd:,.0f} USD")
         if brief.tone:
             parts.append(f"**Tono:** {', '.join(brief.tone)}")
         if brief.additional_context:
@@ -488,14 +486,6 @@ class DiscoveryOrchestrator:
         ]:
             if any(k in text_lower for k in kws):
                 cities.append(c)
-        budget = None
-        import re
-        budget_match = re.search(r"\$?\s*(\d{1,3}(?:[.,]\d{3})*)\s*(?:usd|dólares|dolares)?", text_lower)
-        if budget_match:
-            try:
-                budget = float(budget_match.group(1).replace(",", ""))
-            except ValueError:
-                pass
         return BriefStructured(
             product_name=None,
             industry="pet_food" if any(w in text_lower for w in ["perro", "perros", "mascota", "pet"]) else "general",
@@ -505,7 +495,6 @@ class DiscoveryOrchestrator:
             audience_age_max=45,
             audience_countries=countries,
             audience_cities=cities if cities else None,
-            budget_usd=budget,
             tone=["emocional"],
             platforms=platforms,
             additional_context=accumulated_text[:500],
@@ -521,7 +510,6 @@ class DiscoveryOrchestrator:
                 f"| Score: {s.match_score:.0f}/100 "
                 f"| Followers: {m.followers or 'N/A':,} "
                 f"| ER: {(m.engagement_rate or 0):.2%} "
-                f"| Costo est.: ${s.estimated_cost or 'N/A'} "
                 f"| Reach est.: {s.expected_reach or 'N/A':,}"
             )
         return "\n".join(lines) if lines else "No se encontraron candidatos."

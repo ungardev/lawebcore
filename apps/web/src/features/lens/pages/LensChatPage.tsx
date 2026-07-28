@@ -112,7 +112,6 @@ export function LensChatPage() {
         audience_countries: brief.audience_countries ?? ['VE'],
         audience_cities: brief.audience_cities ?? [],
         platforms: brief.platforms ?? ['instagram'],
-        budget_usd: brief.budget_usd ?? undefined,
         tone: brief.tone ?? [],
       });
       toast.success('Búsqueda iniciada con wizard');

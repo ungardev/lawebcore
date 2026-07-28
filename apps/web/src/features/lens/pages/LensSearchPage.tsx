@@ -26,7 +26,6 @@ export function LensSearchPage() {
     audience_age_min: 18,
     audience_age_max: 45,
     audience_countries: '',
-    budget_usd: '',
     platforms: [] as Platform[],
   });
 
@@ -56,7 +55,6 @@ export function LensSearchPage() {
         audience_age_min: form.audience_age_min,
         audience_age_max: form.audience_age_max,
         audience_countries: form.audience_countries ? form.audience_countries.split(',').map((s) => s.trim()) : [],
-        budget_usd: form.budget_usd ? parseFloat(form.budget_usd) : undefined,
         platforms: form.platforms.length > 0 ? form.platforms : undefined,
       };
 
@@ -113,15 +111,6 @@ export function LensSearchPage() {
               value={form.audience_countries}
               onChange={(e) => setForm((f) => ({ ...f, audience_countries: e.target.value }))}
               placeholder="Ej: Colombia, México, España"
-            />
-          </div>
-          <div>
-            <Label>Presupuesto USD</Label>
-            <Input
-              type="number"
-              value={form.budget_usd}
-              onChange={(e) => setForm((f) => ({ ...f, budget_usd: e.target.value }))}
-              placeholder="Ej: 5000"
             />
           </div>
           <div>
