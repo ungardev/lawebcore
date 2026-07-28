@@ -25,7 +25,7 @@ export function HashtagChips({
 }: HashtagChipsProps) {
   const [inputValue, setInputValue] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const suggestionGroups = getSuggestionsForIndustry(industry);
+  const suggestionGroups = getSuggestionsForIndustry(industry ?? null);
 
   const addHashtag = (tag: string) => {
     const clean = tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '');
@@ -49,7 +49,7 @@ export function HashtagChips({
     }
   };
 
-  const filteredSuggestions = getAllSuggestions(industry)
+  const filteredSuggestions = getAllSuggestions(industry ?? null)
     .filter((s) => !hashtags.includes(s))
     .filter((s) => s.includes(inputValue.toLowerCase()))
     .slice(0, 12);
