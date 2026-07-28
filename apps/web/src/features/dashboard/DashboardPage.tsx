@@ -21,19 +21,22 @@ import type { DiscoveryConversation } from '@/features/lens/types/discovery';
 export function DashboardPage() {
   const navigate = useNavigate();
 
-  const { data: summary, isLoading } = useQuery({
+  const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => dashboardApi.summary({}),
+    retry: 1,
   });
 
   const { data: recentConversations } = useQuery<DiscoveryConversation[]>({
     queryKey: ['lens-conversations-recent'],
     queryFn: () => lensApi.conversations.list({ limit: 5 }),
+    retry: 1,
   });
 
   const { data: statusCounts } = useQuery({
     queryKey: ['dashboard-by-status'],
     queryFn: () => dashboardApi.byStatus(),
+    retry: 1,
   });
 
   const activeCount = summary?.active_campaigns ?? 0;
@@ -63,11 +66,22 @@ export function DashboardPage() {
         <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-purple opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-brand" />
-              </span>
-              Lens AI está listo · sincronizando {activeCount} campañas
+              {isSummaryError ? (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+                  </span>
+                  Configura tu base de datos
+                </>
+              ) : (
+                <>
+                  <span className="relative flex h-2 w-2">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-purple opacity-60" />
+                    <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-brand" />
+                  </span>
+                  Lens AI está listo · sincronizando {activeCount} campañas
+                </>
+              )}
             </div>
 
             <h1 className="font-bold text-5xl leading-[1.02] tracking-tight text-foreground md:text-6xl">
@@ -75,7 +89,9 @@ export function DashboardPage() {
             </h1>
 
             <p className="mt-4 text-base text-muted-foreground md:text-lg">
-              {isLoading ? (
+              {isSummaryError ? (
+                <span className="text-muted-foreground">Configura tu base de datos para ver métricas</span>
+              ) : isSummaryLoading ? (
                 <span className="inline-block h-4 w-72 animate-pulse rounded bg-muted" />
               ) : (
                 <>
