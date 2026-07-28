@@ -103,16 +103,23 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No hay candidatos para este filtro.</p>
       ) : (
-        <div className="space-y-3">
-          {filtered.map((candidate) => (
-            <CandidateCard
-              key={candidate.id}
-              candidate={candidate}
-              onSave={onSave}
-              onDismiss={onDismiss}
-            />
-          ))}
-        </div>
+        <>
+          {candidates.length > 0 && candidates.length < 15 && !isLoading && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              <strong>Solo {candidates.length} candidatos.</strong> Para ver más resultados intenta ampliar hashtags o palabras clave en el brief.
+            </div>
+          )}
+          <div className="space-y-3">
+            {filtered.map((candidate) => (
+              <CandidateCard
+                key={candidate.id}
+                candidate={candidate}
+                onSave={onSave}
+                onDismiss={onDismiss}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

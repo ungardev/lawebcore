@@ -36,7 +36,7 @@ from discovery.tools import (
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(3)
-MAX_HANDLES_TO_ENRICH = 80
+MAX_HANDLES_TO_ENRICH = 150
 MAX_POSTS_PER_HASHTAG = 50
 
 
@@ -242,12 +242,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             tier = classify_tier(followers)
 
             if geo >= 1.0:
+                bio = p.get("biography") or p.get("bio") or ""
+                is_tienda = any(
+                    kw in bio.lower()
+                    for kw in ("tienda", "shop", "ventas", "pedidos", "catálogo",
+                               "mayor y detal", "envíos", "mercado libre", "delivery",
+                               "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
+                )
                 scored.append({
                     "run_id": run_id,
                     "platform": "instagram",
                     "handle": handle,
                     "full_name": p.get("fullName") or p.get("full_name"),
-                    "bio": p.get("biography") or p.get("bio"),
+                    "bio": bio,
                     "avatar_url": p.get("profilePicUrl") or p.get("avatar_url"),
                     "country": "VE",
                     "city": p.get("locationName") or p.get("location") or "",
@@ -272,6 +279,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "expected_engagement": int(followers * er),
                     "roi_estimate": None,
                     "rationale": build_rationale(p, tier, followers, er),
+                    "tier": tier,
+                    "is_tienda": is_tienda,
                     "status": "new",
                     "raw_payload": {
                         "composite_score": round(score_val, 2),

@@ -43,6 +43,12 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
                   "text-[10px] px-1.5 py-0.5 rounded-full font-semibold border",
                   getTierColor(candidate.tier)
                 )}
+                title={
+                  candidate.tier === 'NANO' ? '<10K seguidores · micro-influencer local' :
+                  candidate.tier === 'MICRO' ? '10K–100K seguidores · alcance medio' :
+                  candidate.tier === 'MID' ? '100K–500K seguidores · macro-influencer' :
+                  '500K+ seguidores · mega-influencer'
+                }
               >
                 {candidate.tier}
               </span>

@@ -77,10 +77,13 @@ def _is_tienda(bio: str | None) -> bool:
 def _serialize_candidate(c: dict) -> dict:
     followers = c.get("followers") or 0
     bio = c.get("bio") or c.get("biography") or ""
-    tier = _tier_from_followers(followers)
+    tier = c.get("tier") or _tier_from_followers(followers)
     engagement_rate = c.get("engagement_rate")
     if engagement_rate is not None:
         engagement_rate = round(float(engagement_rate), 4)
+    is_tienda = c.get("is_tienda")
+    if is_tienda is None:
+        is_tienda = _is_tienda(bio)
     return {
         "id": str(c.get("id", "")),
         "platform": c.get("platform", "instagram"),
@@ -103,7 +106,7 @@ def _serialize_candidate(c: dict) -> dict:
         "country": c.get("country"),
         "city": c.get("city"),
         "bio": bio[:300] if bio else None,
-        "is_tienda": _is_tienda(bio),
+        "is_tienda": is_tienda,
     }
 
 
