@@ -54,19 +54,14 @@ def _needs_rag(query: str) -> bool:
     """Detect if a query would benefit from RAG retrieval."""
     query_lower = query.lower()
     rag_keywords = [
-        "influencer", "creador", "campaña", "publicación", "métricas", "kpis",
-        "er", "engagement", "vistas", "alcance", "sentimiento", "score",
-        "benchmark", "sub-tier", "tier", "proyección", "proyeccion",
-        "mejor", "peor", "top", "ranking", "comparar", "comparación",
-        "rendimiento", "performance", "audiencia", "seguidores",
+        "purina", "nestlé", "nestle", "tendencia", "benchmark",
+        "venezuela", "influencer", "creador", "campaña", "métricas",
+        "er ", "engagement", "vistas", "alcance", "sentimiento", "score",
+        "sub-tier", "proyección", "mejor", "peor", "top", "ranking",
+        "comparar", "rendimiento", "performance", "audiencia",
     ]
-    general_keywords = [
-        "que es", "qué es", "definición", "concepto", "cómo funciona",
-        "hola", "buenos días", "saludos", "gracias", "ayuda",
-    ]
-    query_has_rag = any(kw in query_lower for kw in rag_keywords)
-    query_is_general = any(kw in query_lower for kw in general_keywords)
-    return query_has_rag or not query_is_general
+    matches = sum(1 for kw in rag_keywords if kw in query_lower)
+    return matches >= 2
 
 
 async def retrieve_context(
@@ -160,6 +155,7 @@ async def generate_with_context(
         response = await deepseek_client.complete(
             prompt=user_prompt,
             system=PIAR_SYSTEM_PROMPT,
+            max_tokens=800,
         )
         answer = response.content
         tokens = response.tokens_used or 0

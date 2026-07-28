@@ -1,5 +1,6 @@
 """BriefParser agent — interprets free text into BriefStructured."""
 
+import hashlib
 import re
 from typing import Any
 
@@ -10,31 +11,13 @@ from discovery.schemas import BriefStructured
 
 logger = structlog.get_logger(__name__)
 
-BRIEF_PARSER_SYSTEM_PROMPT = """Eres el planner estratégico de La Web Figital Agency — la agencia de influencer marketing #1 en Venezuela, con más de 12 años ejecutando campañas en Latam.
+BRIEF_PARSER_SYSTEM_PROMPT = """Eres el planner estratégico de La Web Figital Agency. Extrae información de campañas en lenguaje natural y devuélvela en JSON. Si algo falta, pregunta antes de asumir."""
 
-Contexto clave del mercado:
-- Venezuela: 4.5M usuarios activos en Instagram, 65% femenino, rango 25-44 años
-- Engagement rate promedio VE: 4-7% es bueno, >8% es excelente
-- Tiers: MACRO (>500K), MID (100K-500K), MICRO (10K-100K), NANO (<10K)
-- Purina Dog Chow: tono emocional, dueños responsables, comunidad de amantes de mascotas
-- Mercado colombiano: 12M usuarios IG, tendencia coffee/lifestyle en auge
+_parse_cache: dict[str, str] = {}
 
-Tu trabajo: cuando el usuario describe una campaña en lenguaje natural, extrae TODA la información útil y estructúrala en JSON. No improvises datos — si algo falta, pregunta antes de asumir.
 
-REGLAS DE ORO:
-1. País por defecto: Venezuela (VE) si no dice otro. Siempre pregunta si no especifica país.
-2. Plataformas: IG + TikTok son el default para VE. Siempre confirma.
- 3. Nichos: extrae keywords del texto. Si dice "mascotas" o "perros", el nicho es ["mascotas", "perros"].
- 4. Audience gender: "female" por defecto para campañas de mascotas, belleza, lifestyle.
-6. Si algo falta o es ambiguo, PREGUNTA. No asumas valores inventados.
-7. additional_context: aquí va todo lo que no encaje en los campos pero sea relevante para el scoring.
-8. Tono: usa EXACTAMENTE estas palabras — sin abbreviaturas, sin cortes:
-   - emocional, divertido, formal, casual, humorístico, inspirador, educativo, lujoso, premium, auténtico, real, competitivo, ambivalente, corporativo, infantil, juvenil, maternal, femenino, masculino, neutro, mincioso.
-   - IMPORTANTE: "emocional" se escribe COMPLETO, nunca "emocio", "emociona", "emocion", "emocive".
-   - "divertido" se escribe completo, nunca "divert", "diverti".
-   - Escribe las palabras con tildes cuando corresponda (humorístico, éducatif, auténtico, ambivalente, maternal).
-
-Cuando confirmes el brief, di algo como "Entendido. Estamos hablando de [resumen de 1 línea]. ¿Confirmas?"."""
+def _get_cache_key(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
 
 BRIEF_PARSER_USER_TEMPLATE = """Extrae el brief de la siguiente descripción de campaña:
 
@@ -128,15 +111,27 @@ _TONE_NORMALIZATION_MAP = {
 }
 
 
+
+
+
 class BriefParserAgent:
     async def parse(self, text: str) -> BriefStructured:
+        cache_key = _get_cache_key(text)
+        if cache_key in _parse_cache:
+            cached = _parse_cache[cache_key]
+            logger.info("brief_parser_cache_hit", cache_key=cache_key[:8])
+            return self._parse_response(cached, text)
+
         user_prompt = BRIEF_PARSER_USER_TEMPLATE.format(brief_text=text)
 
         response = await deepseek_client.complete(
             prompt=user_prompt,
             system=BRIEF_PARSER_SYSTEM_PROMPT,
             temperature=0.3,
+            max_tokens=300,
         )
+
+        _parse_cache[cache_key] = response.content
 
         logger.info(
             "deepseek_brief_response",

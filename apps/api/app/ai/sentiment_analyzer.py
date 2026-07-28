@@ -60,7 +60,7 @@ class SentimentDistribution:
         }
 
 
-BATCH_SIZE = 10
+BATCH_SIZE = 50
 
 SYSTEM_PROMPT = """Eres un clasificador de sentimiento de comentarios de redes sociales. Clasifica cada comentario como POSITIVO, NEUTRO o NEGATIVO.
 
@@ -125,7 +125,7 @@ async def analyze_comments_batch(comments: list[str]) -> SentimentDistribution:
     prompt = _build_prompt(batch)
 
     try:
-        response: LLMResponse = await deepseek_client.complete(prompt, system=SYSTEM_PROMPT)
+        response: LLMResponse = await deepseek_client.complete(prompt, system=SYSTEM_PROMPT, max_tokens=200)
     except Exception as e:
         logger.error("sentiment_llm_error", error=str(e))
         return SentimentDistribution(

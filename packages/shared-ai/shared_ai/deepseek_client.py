@@ -42,6 +42,7 @@ class DeepSeekClient:
             temperature=self.temperature,
             api_key=self.api_key,
             base_url="https://api.deepseek.com",
+            extra_body={"cache": {"mode": "enabled"}},
         )
 
     async def _call_with_retry(self, client: Any, messages: list[dict], **kwargs) -> LLMResponse:

@@ -14,11 +14,11 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import structlog
+from langchain_openai import ChatOpenAI
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared_core import settings
-from app.ai.llm import get_llm
 from shared_ai import embed_text
 
 logger = structlog.get_logger(__name__)
@@ -26,6 +26,25 @@ logger = structlog.get_logger(__name__)
 
 class AIService:
     """Orchestrates all AI operations."""
+
+    async def _load_system_prompt(self, code: str, fallback: str, db: AsyncSession) -> str:
+        """Load system prompt from ai_prompts table. Falls back to hardcoded string."""
+        try:
+            row = (
+                await db.execute(
+                    text("""
+                        SELECT system_prompt FROM ai_prompts
+                        WHERE code = :code AND is_active = TRUE
+                        ORDER BY version DESC LIMIT 1
+                    """),
+                    {"code": code},
+                )
+            ).mappings().first()
+            if row:
+                return row["system_prompt"]
+        except Exception as e:
+            logger.warning("load_system_prompt_failed", code=code, error=str(e))
+        return fallback
 
     async def chat(
         self,
@@ -101,7 +120,7 @@ class AIService:
                 logger.warning("vector_search_failed", error=str(e))
 
         # 4. Build prompt and call LLM
-        system_prompt = (
+        _SYSTEM_PROMPT_FALLBACK = (
             "Eres el asistente estratégico de La Web Figital Agency — la agencia de influencer marketing "
             "#1 en Venezuela, con 12 años ejecutando campañas en Latam.\n\n"
             "CONOCIMIENTO CLAVE:\n"
@@ -118,6 +137,7 @@ class AIService:
             "6. Si el usuario pregunta por 'mejor influencer' o 'top creators', responde solo con datos de la base.\n"
             "7. Para decisiones de campaña, siempre da contexto de mercado (no solo números)."
         )
+        system_prompt = await self._load_system_prompt("rag_system_v1", _SYSTEM_PROMPT_FALLBACK, db)
         user_prompt = (
             f"Contexto recuperado de la base de conocimiento:\n\n{context_text}\n\n"
             f"---\n\nPregunta del usuario: {message}\n\n"
@@ -127,14 +147,27 @@ class AIService:
         )
 
         try:
-            llm = get_llm(temperature=0.4)
+            llm = ChatOpenAI(
+                model=settings.DEEPSEEK_MODEL,
+                temperature=0.4,
+                api_key=settings.DEEPSEEK_API_KEY,
+                base_url="https://api.deepseek.com",
+            )
             response = await llm.ainvoke([{"role": "system", "content": system_prompt},
                                            {"role": "user", "content": user_prompt}])
             answer_text = response.content if hasattr(response, "content") else str(response)
-            tokens_used = 0
-            if hasattr(response, "response_metadata"):
-                usage = response.response_metadata.get("token_usage", {})
-                tokens_used = usage.get("total_tokens", 0)
+            tokens_input = 0
+            tokens_output = 0
+            cost_usd = 0.0
+            latency_ms = 0
+            if hasattr(response, "usage_metadata"):
+                usage = response.usage_metadata
+                tokens_input = usage.get("input_tokens", 0)
+                tokens_output = usage.get("output_tokens", 0)
+                total = usage.get("total_tokens", 0)
+                if total == 0:
+                    total = tokens_input + tokens_output
+                cost_usd = (tokens_input * 0.14e-6) + (tokens_output * 0.28e-6)
         except Exception as e:
             logger.error("llm_call_failed", error=str(e))
             answer_text = (
@@ -142,15 +175,28 @@ class AIService:
                 "El equipo tecnico ha sido notificado. "
                 "Por favor intenta de nuevo en unos momentos."
             )
-            tokens_used = 0
+            tokens_input = 0
+            tokens_output = 0
+            cost_usd = 0.0
+            latency_ms = 0
 
         # 5. Persist assistant message
         await db.execute(
             text("""
-            INSERT INTO ai_messages (conversation_id, role, content, model_provider, model_name)
-            VALUES (:cid, 'assistant', :content, :prov, :model)
+            INSERT INTO ai_messages (conversation_id, role, content, model_provider, model_name,
+                                      tokens_input, tokens_output, cost_usd, latency_ms)
+            VALUES (:cid, 'assistant', :content, :prov, :model, :tin, :tout, :cost, :lat)
             """),
-            {"cid": str(conv_id), "content": answer_text, "prov": "deepseek", "model": settings.DEEPSEEK_MODEL},
+            {
+                "cid": str(conv_id),
+                "content": answer_text,
+                "prov": "deepseek",
+                "model": settings.DEEPSEEK_MODEL,
+                "tin": tokens_input,
+                "tout": tokens_output,
+                "cost": cost_usd,
+                "lat": latency_ms,
+            },
         )
         await db.commit()
 
@@ -158,7 +204,7 @@ class AIService:
             "conversation_id": conv_id,
             "message": answer_text,
             "sources": sources,
-            "tokens_used": tokens_used,
+            "tokens_used": tokens_input + tokens_output,
             "used_rag": bool(context_text),
         }
 
@@ -227,7 +273,20 @@ class AIService:
 
         # Call LLM
         try:
-            llm = get_llm(temperature=float(prompt_row["temperature"]))
+            model_name = prompt_row.get("model_name") or settings.DEEPSEEK_MODEL
+            provider = prompt_row.get("model_provider", "deepseek")
+            if provider == "deepseek":
+                base_url = "https://api.deepseek.com"
+                api_key = settings.DEEPSEEK_API_KEY
+            else:
+                base_url = None
+                api_key = None
+            llm = ChatOpenAI(
+                model=model_name,
+                temperature=float(prompt_row["temperature"]),
+                api_key=api_key,
+                base_url=base_url,
+            )
             response = await llm.ainvoke([
                 {"role": "system", "content": prompt_row["system_prompt"]},
                 {"role": "user", "content": user_prompt},

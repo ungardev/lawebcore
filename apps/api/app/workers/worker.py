@@ -640,100 +640,6 @@ async def _run_update_metadata(run_id: str, metadata: dict) -> None:
 
 # ---- Existing tasks ----
 
-async def embed_document_task(ctx, document_id: str) -> dict:
-    """Chunk a document, embed it, store in pgvector."""
-    logger.info("embed_document_task", document_id=document_id)
-
-    doc = await supabase_rest.select_one(
-        table="documents",
-        select="id,content,doc_type",
-        filters=[f"id=eq.{document_id}"],
-    )
-
-    if not doc:
-        return {"error": "Document not found"}
-
-    from shared_ai import embed_texts
-    from app.ai.indexer import index_document_chunks
-
-    text = doc.get("content", "")
-    chunks = _chunk_text(text, chunk_size=600, overlap=100)
-    embeddings = await embed_texts(chunks)
-
-    await index_document_chunks(
-        document_id=document_id,
-        chunks=chunks,
-        embeddings=embeddings,
-        content_type=doc.get("doc_type", "document"),
-    )
-
-    await supabase_rest.update(
-        table="documents",
-        filters=[f"id=eq.{document_id}"],
-        values={
-            "status": "indexed",
-            "chunk_count": len(chunks),
-            "indexed_at": datetime.now(timezone.utc),
-        },
-    )
-
-    return {"document_id": document_id, "chunks": len(chunks)}
-
-
-def _chunk_text(text: str, chunk_size: int = 600, overlap: int = 100) -> list[str]:
-    words = text.split()
-    chunks = []
-    for i in range(0, len(words), chunk_size - overlap):
-        chunk = " ".join(words[i:i + chunk_size])
-        if chunk:
-            chunks.append(chunk)
-    return chunks
-
-
-async def generate_insight_task(ctx, campaign_id: str, prompt_code: str) -> dict:
-    """Generate an AI insight for a campaign."""
-    logger.info("generate_insight_task", campaign_id=campaign_id, prompt_code=prompt_code)
-
-    campaign = await supabase_rest.select_one(
-        table="campaigns",
-        select="*",
-        filters=[f"id=eq.{campaign_id}"],
-    )
-
-    if not campaign:
-        return {"error": "Campaign not found"}
-
-    from app.services.ai_service import get_ai_service
-    ai = get_ai_service()
-
-    prompt = _build_insight_prompt(prompt_code, campaign)
-    response = await ai.generate(prompt=prompt, user_id=None)
-
-    insight = await supabase_rest.insert(
-        table="insights",
-        values={
-            "campaign_id": campaign_id,
-            "prompt_code": prompt_code,
-            "content": response.get("content", ""),
-            "model_provider": "deepseek",
-            "created_by": "system",
-        },
-        select="id",
-        return_http_status=201,
-    )
-
-    return {"insight_id": insight["id"], "campaign_id": campaign_id}
-
-
-def _build_insight_prompt(code: str, campaign: dict) -> str:
-    base = f"Análisis de campaña: {campaign.get('name', 'Sin nombre')}"
-    if code == "performance":
-        return f"{base}\n\nGenera un insight de performance con recomendaciones."
-    elif code == "audience":
-        return f"{base}\n\nAnaliza la audiencia y sugiere mejoras."
-    return f"{base}\n\nGenera un insight general."
-
-
 async def sync_hypeauditor_task(ctx, influencer_id: str) -> dict:
     """Pull fresh metrics from Hypeauditor for an influencer."""
     logger.info("sync_hypeauditor_task", influencer_id=influencer_id)
@@ -796,8 +702,6 @@ class WorkerSettings:
     redis_settings = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
     functions = [
         discovery_run_task,
-        embed_document_task,
-        generate_insight_task,
         sync_hypeauditor_task,
         sync_metricool_task,
     ]

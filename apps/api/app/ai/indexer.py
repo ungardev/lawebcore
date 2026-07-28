@@ -22,7 +22,7 @@ from shared_ai import embed_texts, chunk_text
 
 logger = structlog.get_logger(__name__)
 
-CHUNK_SIZE = 600
+CHUNK_SIZE = 800
 EMBED_BATCH = 20
 
 
