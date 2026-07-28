@@ -395,7 +395,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     if summary_lines else "")
                     + "Puedes ver todos en la lista de candidatos."
                 )
-            )
             await conversation_memory.save_message(
                 conversation_id=pyUUID(conv["id"]),
                 role="assistant",
