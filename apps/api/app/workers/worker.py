@@ -19,15 +19,7 @@ from arq.connections import RedisSettings
 from shared_core import settings
 from shared_core import supabase_rest
 from discovery.query_builder import query_builder
-from discovery.result_ranker import result_ranker
-from discovery.result_ranker import (
-    calculate_ica,
-    calculate_geo_foco_real,
-    calculate_engagement_velocity,
-    calculate_business_intent,
-    calculate_lwfa_composite,
-)
-from discovery.schemas import BriefStructured, CandidateMetrics, Platform
+from discovery.schemas import BriefStructured, Platform
 from discovery.tools import (
     apify_client,
     meta_client,
@@ -35,6 +27,10 @@ from discovery.tools import (
     multi_actor_instagram_client,
     tiktok_client,
     youtube_client,
+    composite_score,
+    is_venezuelan,
+    classify_tier,
+    build_rationale,
 )
 
 logger = structlog.get_logger(__name__)
@@ -248,78 +244,79 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
 
             profile_data = profile_map.get(handle, raw)
-            metrics = _raw_to_candidate_dict(profile_data, Platform.INSTAGRAM)
-            score = result_ranker.rank(CandidateMetrics(**metrics), brief)
+            followers = profile_data.get("followersCount") or profile_data.get("follower_count") or 0
 
-            analytics = analytics_by_handle.get(handle, {})
+            if followers == 0:
+                logger.info("candidate_filtered_no_followers", handle=handle)
+                continue
 
-            geo_foco = calculate_geo_foco_real(
-                geotags=analytics.get("top_geotags", []),
-                captions=analytics.get("captions_sample", []),
-                profile_bio=profile_data.get("biography", ""),
-            )
-            velocity = analytics.get("avg_engagement_velocity_per_day", 0.0)
-            business_intent = calculate_business_intent(profile_data)
-            consistency = analytics.get("engagement_consistency_score", 0.5)
-            clips_pct = analytics.get("content_mix_clips_pct", 0.0)
+            if not is_venezuelan(profile_data):
+                logger.info("candidate_filtered_not_ve", handle=handle, handle_lower=handle.lower())
+                continue
 
-            comment_rate = analytics.get("comment_rate_pct", 0.0)
-            total_views = analytics.get("total_views", 0) or 0
-            sample_comments = analytics.get("latest_comments", [])
-            ica_score = calculate_ica(sample_comments, total_views) if sample_comments else comment_rate
+            if followers < 1000:
+                logger.info("candidate_filtered_too_small", handle=handle, followers=followers)
+                continue
 
-            er = metrics.get("engagement_rate") or 0.0
-            lwfa_composite = calculate_lwfa_composite(
-                engagement_rate=er,
-                business_intent=business_intent,
-                velocity_score=velocity,
-                geo_foco=geo_foco,
-                consistency_score=consistency,
-                clips_pct=clips_pct,
-                ica_score=ica_score,
+            latest = profile_data.get("latestPosts") or []
+            er = 0.0
+            if latest and followers > 0:
+                likes_avg = sum((post.get("likesCount") or 0) for post in latest) / max(len(latest), 1)
+                comments_avg = sum((post.get("commentsCount") or 0) for post in latest) / max(len(latest), 1)
+                er = (likes_avg + comments_avg) / followers
+
+            profile_for_score = {
+                **profile_data,
+                "engagement_rate": er,
+            }
+            score_val = composite_score(profile_for_score)
+            tier = classify_tier(followers)
+
+            logger.info(
+                "candidate_scored",
+                handle=handle,
+                followers=followers,
+                er=round(er, 6),
+                score=round(score_val, 2),
+                tier=tier,
             )
 
             all_candidates.append({
                 "run_id": run_id,
                 "platform": "instagram",
                 "handle": handle,
-                "full_name": metrics.get("full_name"),
-                "bio": metrics.get("bio"),
-                "avatar_url": metrics.get("avatar_url"),
-                "country": metrics.get("country"),
-                "city": metrics.get("city"),
-                "followers": metrics.get("followers"),
-                "following": metrics.get("following"),
-                "posts_count": metrics.get("posts_count"),
-                "avg_likes": metrics.get("avg_likes"),
-                "avg_comments": metrics.get("avg_comments"),
-                "avg_views": metrics.get("avg_views"),
-                "engagement_rate": er,
-                "audience_credibility": metrics.get("audience_credibility"),
-                "audience_quality": metrics.get("audience_quality"),
-                "audience_gender_split": metrics.get("audience_gender_split"),
-                "audience_age_buckets": metrics.get("audience_age_buckets"),
-                "match_score": lwfa_composite,
-                "niche_relevance": score.niche_relevance,
-                "geo_relevance": score.geo_relevance,
-                "audience_relevance": score.audience_relevance,
-                "content_quality": score.content_quality,
-                "estimated_cost": score.estimated_cost,
-                "expected_reach": score.expected_reach,
-                "expected_engagement": score.expected_engagement,
-                "roi_estimate": score.roi_estimate,
-                "rationale": score.rationale,
+                "full_name": profile_data.get("fullName") or profile_data.get("full_name"),
+                "bio": profile_data.get("biography") or profile_data.get("bio"),
+                "avatar_url": profile_data.get("profilePicUrl") or profile_data.get("profilePicUrlHD"),
+                "country": "VE",
+                "city": profile_data.get("locationName") or profile_data.get("city") or "",
+                "followers": followers,
+                "following": profile_data.get("followsCount") or profile_data.get("following_count") or 0,
+                "posts_count": profile_data.get("postsCount") or profile_data.get("posts_count") or 0,
+                "avg_likes": None,
+                "avg_comments": None,
+                "avg_views": None,
+                "engagement_rate": round(er, 6),
+                "audience_credibility": (20 if profile_data.get("isBusinessAccount") or profile_data.get("is_business") else 0) + (20 if profile_data.get("verified") or profile_data.get("is_verified") else 0),
+                "audience_quality": 50,
+                "audience_gender_split": {},
+                "audience_age_buckets": {},
+                "match_score": round(score_val, 2),
+                "niche_relevance": 0.9 if tier in ("MICRO", "MID") else 0.7,
+                "geo_relevance": 1.0,
+                "audience_relevance": 0.8,
+                "content_quality": 0.8,
+                "estimated_cost": int(followers * 0.005),
+                "expected_reach": int(followers * 0.7),
+                "expected_engagement": int(followers * er),
+                "roi_estimate": None,
+                "rationale": build_rationale(profile_data, tier, followers, er),
                 "status": "new",
                 "raw_payload": {
                     **raw,
-                    "ica_score": ica_score,
-                    "geo_foco_score": geo_foco,
-                    "velocity_score": velocity,
-                    "business_intent_score": business_intent,
-                    "consistency_score": consistency,
-                    "clips_pct": clips_pct,
-                    "lwfa_composite": lwfa_composite,
-                    "analytics": analytics,
+                    "composite_score": round(score_val, 2),
+                    "tier": tier,
+                    "er_calculated": round(er, 6),
                 },
                 "fetched_at": datetime.now(timezone.utc),
             })
@@ -329,28 +326,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "candidates_found": len(all_candidates),
         })
 
-        MIN_SCORE = 15
-        MIN_FOLLOWERS = 100
+        TARGET_CANDIDATES = 15
 
-        qualified = [
-            c for c in all_candidates
-            if (c.get("match_score") or 0) >= MIN_SCORE
-            and (c.get("followers") or 0) >= MIN_FOLLOWERS
-        ]
-
-        if len(qualified) < 5:
-            qualified = [
-                c for c in all_candidates
-                if (c.get("match_score") or 0) >= 5
-                and (c.get("followers") or 0) >= 50
-            ]
+        all_candidates.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
+        qualified = all_candidates[:TARGET_CANDIDATES]
 
         logger.info(
-            "candidates_filtered",
-            total=len(all_candidates),
+            "candidates_ranked_and_truncated",
+            total_before_filter=len(all_candidates),
             qualified=len(qualified),
-            min_score=MIN_SCORE,
-            min_followers=MIN_FOLLOWERS,
+            target=TARGET_CANDIDATES,
+            top_score=qualified[0].get("match_score") if qualified else None,
+            lowest_score=qualified[-1].get("match_score") if qualified else None,
         )
 
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
