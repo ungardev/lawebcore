@@ -23,7 +23,9 @@ export function ToolCallBlock({ tool_calls, tool_results }: ToolCallBlockProps) 
     <div className="mt-3 space-y-2">
       <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Herramientas ejecutadas</p>
       {tool_calls.map((tc, i) => {
-        const result = tool_results?.find((r) => r.tool_call_id === tc.id);
+        const result = Array.isArray(tool_results)
+          ? tool_results.find((r) => r.tool_call_id === tc.id)
+          : undefined;
         const isLoading = !result;
         const isSuccess = result?.success;
         const isError = result && !result.success;
