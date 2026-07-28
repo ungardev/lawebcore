@@ -6,9 +6,12 @@ in a `schema_migrations` table and only runs pending ones.
 Migrations are fetched directly from GitHub at runtime to avoid build-context
 issues in Docker (the supabase/migrations/ directory is outside the API
 Docker build context).
+
+Logging is kept minimal to avoid Railway's 500 logs/sec rate limit.
 """
 import asyncio
 import hashlib
+import logging
 import os
 import re
 import sys
@@ -16,6 +19,7 @@ import sys
 import asyncpg
 import httpx
 
+logger = logging.getLogger("migrations")
 
 GITHUB_API_URL = (
     "https://api.github.com/repos/ungardev/lawebcore/"
@@ -44,7 +48,7 @@ async def list_remote_migrations() -> list[str]:
     headers = {"Accept": "application/vnd.github.v3+json"}
     if GITHUB_TOKEN:
         headers["Authorization"] = f"token {GITHUB_TOKEN}"
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(GITHUB_API_URL, headers=headers)
         r.raise_for_status()
         return [
@@ -57,7 +61,7 @@ async def list_remote_migrations() -> list[str]:
 async def fetch_migration_content(filename: str) -> str:
     """Download .sql file content from GitHub raw."""
     url = f"{GITHUB_RAW_URL}/{filename}"
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         r = await client.get(url)
         r.raise_for_status()
         return r.text
@@ -107,16 +111,16 @@ async def apply_migrations() -> None:
     """Main logic: fetch and apply any pending migrations."""
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        print("[migrations] DATABASE_URL not set, skipping migrations")
+        logger.warning("migrations_skipped", reason="DATABASE_URL not set")
         return
 
     try:
         all_migrations = await list_remote_migrations()
     except Exception as e:
-        print(f"[migrations] Failed to fetch migration list from GitHub: {e}", file=sys.stderr)
-        sys.exit(1)
+        logger.error("migrations_failed_to_fetch_list", error=str(e))
+        return
 
-    conn = await asyncpg.connect(db_url, command_timeout=60)
+    conn = await asyncpg.connect(db_url, command_timeout=120)
     try:
         await ensure_tracking_table(conn)
 
@@ -129,33 +133,30 @@ async def apply_migrations() -> None:
                 pending.append((version, filename))
 
         if not pending:
-            total = len(applied)
-            print(f"[migrations] All {total} migrations already applied")
+            logger.info("migrations_all_applied", count=len(applied))
             return
 
-        print(f"[migrations] Found {len(pending)} pending migrations:")
-        for _, name in pending:
-            print(f"  → {name}")
+        logger.info("migrations_pending", count=len(pending), versions=[v for v, _ in pending])
 
         for version, filename in pending:
             try:
                 sql = await fetch_migration_content(filename)
             except Exception as e:
-                print(f"  ✗ Failed to download {filename}: {e}", file=sys.stderr)
-                raise
+                logger.error("migration_download_failed", filename=filename, error=str(e))
+                continue
 
             checksum = file_checksum(sql)
             try:
                 async with conn.transaction():
                     await conn.execute(sql)
                     await record_migration(conn, version, filename, checksum)
-                print(f"  ✓ {filename} applied")
+                logger.info("migration_applied", version=version, filename=filename)
             except Exception as e:
-                print(f"  ✗ {filename} failed: {e}", file=sys.stderr)
-                raise
+                logger.error("migration_failed", version=version, filename=filename, error=str(e))
+                continue
 
         total = len(applied) + len(pending)
-        print(f"[migrations] Done: {len(pending)} applied, {total} total")
+        logger.info("migrations_complete", applied=len(pending), total=total)
     finally:
         await conn.close()
 
@@ -164,7 +165,7 @@ def main() -> None:
     try:
         asyncio.run(apply_migrations())
     except Exception as e:
-        print(f"[migrations] Fatal: {e}", file=sys.stderr)
+        logger.error("migrations_fatal_error", error=str(e))
         sys.exit(1)
 
 

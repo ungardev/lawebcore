@@ -3,6 +3,7 @@ La Web Core - FastAPI Application
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 import structlog
@@ -52,11 +53,14 @@ async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
     logger.info("lawebcore_api_starting", env=settings.API_ENV, version="0.1.0")
 
-    try:
-        from scripts.apply_migrations import apply_migrations
-        await apply_migrations()
-    except Exception as e:
-        logger.warning("migrations_failed_on_startup", error=str(e))
+    if os.environ.get("SKIP_MIGRATIONS_ON_STARTUP", "false").lower() != "true":
+        try:
+            from scripts.apply_migrations import apply_migrations
+            await apply_migrations()
+        except Exception as e:
+            logger.warning("migrations_failed_on_startup", error=str(e))
+    else:
+        logger.info("migrations_skipped_on_startup", reason="SKIP_MIGRATIONS_ON_STARTUP=true")
 
     await init_db()
     from discovery.memory import migrate_discovery_conversations_schema
