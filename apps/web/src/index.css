@@ -55,7 +55,7 @@
     --brand-blue-hover: 217 91% 50%;
 
     /* Sidebar tokens */
-    --sidebar: 240 10% 97%;
+    --sidebar: 0 0% 100%;
     --sidebar-foreground: 240 10% 10%;
     --sidebar-primary: 271 91% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
