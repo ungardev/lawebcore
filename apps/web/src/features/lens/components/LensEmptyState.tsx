@@ -31,7 +31,7 @@ export function LensEmptyState({ variant = 'no_conversations', className }: Lens
 
   return (
     <div className={cn('flex flex-col items-center justify-center py-16 text-center', className)}>
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-500/10 to-blue-500/10 flex items-center justify-center text-primary mb-4">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-md border border-divider bg-surface-raised text-primary">
         {v.icon}
       </div>
       <h3 className="font-semibold text-foreground mb-1">{v.title}</h3>

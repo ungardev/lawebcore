@@ -26,7 +26,7 @@ export function ActionChips({ onSend, disabled }: ActionChipsProps) {
           onClick={() => onSend(action.prompt)}
           disabled={disabled}
           className={cn(
-            'text-xs gap-1.5 h-7 px-2.5 bg-muted/50 hover:bg-muted border-dashed',
+            'min-h-8 text-xs gap-1.5 px-2.5 bg-surface-raised hover:bg-surface-3 border-divider',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         >

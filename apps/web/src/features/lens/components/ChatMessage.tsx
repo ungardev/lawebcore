@@ -20,15 +20,15 @@ export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatM
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'max-w-[90%] md:max-w-[85%] rounded-2xl px-4 py-3',
-          isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
+          'max-w-[92%] md:max-w-[86%] rounded-md border px-4 py-3 shadow-sm',
+          isUser ? 'border-primary/30 bg-primary/10 text-foreground' : 'border-divider bg-surface-raised text-foreground',
         )}
       >
         <div className="flex items-start gap-2">
           {!isUser && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gradient-to-r from-pink-500/20 to-blue-500/20 text-foreground font-medium border border-pink-500/30 mt-0.5">
-              IA
-            </span>
+              <span className="mt-0.5 rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                LENS
+              </span>
           )}
           <div className="flex-1 min-w-0">
             {isUser ? (

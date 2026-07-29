@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronLeft, Check, Sparkles } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { HashtagChips } from './HashtagChips';
 import { FileUploadZone } from './FileUploadZone';
 import type { BriefStructured, AudienceGender, Platform } from '../types/discovery';
@@ -77,6 +79,7 @@ interface BriefWizardProps {
   onSubmit: SubmitCallback;
   onCancel: () => void;
   initialBrief?: Partial<BriefStructured>;
+  isSubmitting?: boolean;
 }
 
 function createEmptyBrief(): Partial<BriefStructured> {
@@ -96,7 +99,7 @@ function createEmptyBrief(): Partial<BriefStructured> {
   };
 }
 
-export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardProps) {
+export function BriefWizard({ onSubmit, onCancel, initialBrief, isSubmitting = false }: BriefWizardProps) {
   const [step, setStep] = useState(1);
   const [brief, setBrief] = useState<Partial<BriefStructured>>(
     initialBrief ?? createEmptyBrief()
@@ -144,7 +147,7 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
       case 3: return true;
       case 4: return true;
       case 5: return brief.platforms && brief.platforms.length > 0;
-      case 6: return true;
+      case 6: return !isSubmitting;
       default: return true;
     }
   };
@@ -208,34 +211,34 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        {STEPS.map((s) => (
-          <div key={s.id} className="flex items-center gap-1 flex-1">
+      <div className="border-b border-divider px-5 pb-4 pt-5">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-eyebrow text-muted-foreground">Nueva búsqueda / configuración</p>
+            <h2 className="mt-1 text-lg font-semibold text-foreground">Construye el brief de discovery</h2>
+          </div>
+          <span className="font-mono text-xs text-muted-foreground">0{step} / 06</span>
+        </div>
+        <div className="mt-4 grid grid-cols-6 gap-1" aria-label="Progreso del brief">
+          {STEPS.map((s) => (
             <button
+              key={s.id}
               type="button"
               onClick={() => setStep(s.id)}
-              className={cn(
-                'flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold transition-all flex-shrink-0',
-                step === s.id
-                  ? 'bg-brand-purple text-white shadow-sm'
-                  : s.id < step
-                  ? 'bg-green-100 text-green-700 border border-green-200'
-                  : 'bg-muted text-muted-foreground border border-border'
-              )}
-            >
-              {s.id < step ? <Check className="w-3.5 h-3.5" /> : s.id}
-            </button>
-            <span className={cn('text-xs hidden sm:block', step === s.id ? 'text-foreground font-medium' : 'text-muted-foreground')}>
-              {s.label}
-            </span>
-            {s.id < STEPS.length && (
-              <div className={cn('flex-1 h-px mx-1', s.id < step ? 'bg-green-300' : 'bg-border')} />
-            )}
-          </div>
-        ))}
+              disabled={isSubmitting || s.id > step + 1}
+              aria-current={step === s.id ? 'step' : undefined}
+              aria-label={`Paso ${s.id}: ${s.label}`}
+              className={cn('h-1.5 rounded-full transition-colors focus-ring disabled:cursor-not-allowed', step === s.id ? 'bg-primary' : s.id < step ? 'bg-success' : 'bg-surface-raised')}
+            />
+          ))}
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>{STEPS[step - 1]?.label}</span>
+          <span>{step === STEPS.length ? 'Listo para ejecutar' : 'Puedes volver a cualquier paso anterior'}</span>
+        </div>
       </div>
 
-      <Card className="p-5">
+      <Card className="mx-5 my-4 border-divider bg-surface-sunken p-5 shadow-none">
         {step === 1 && (
           <div className="space-y-4">
             <div>
@@ -244,6 +247,7 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
                 onBriefExtracted={handleBriefExtracted}
                 onClear={handleClearUpload}
                 isLoading={isUploading}
+                onLoadingChange={setIsUploading}
                 extractedBrief={extractedBrief}
                 extractedFileName={extractedFileName}
               />
@@ -273,10 +277,10 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
                     type="button"
                     onClick={() => update({ industry: ind.value, niches: NICHE_PRESETS[ind.value] ?? [] })}
                     className={cn(
-                      'text-left px-3 py-2 rounded-lg border text-xs transition-colors',
+                      'min-h-11 rounded-md border px-3 py-2 text-left text-xs transition-colors focus-ring',
                       brief.industry === ind.value
-                        ? 'border-brand-purple bg-brand-purple/5 text-brand-purple font-medium'
-                        : 'border-border hover:border-brand-purple/50 hover:bg-muted'
+                        ? 'border-primary/50 bg-primary/10 font-medium text-primary'
+                        : 'border-divider hover:border-primary/40 hover:bg-surface-raised'
                     )}
                   >
                     {ind.label}
@@ -354,10 +358,10 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
                     type="button"
                     onClick={() => update({ audience_gender: g.value })}
                     className={cn(
-                      'flex-1 py-2 rounded-lg border text-xs font-medium transition-colors',
+                      'min-h-11 flex-1 rounded-md border text-xs font-medium transition-colors focus-ring',
                       brief.audience_gender === g.value
-                        ? 'border-brand-purple bg-brand-purple/5 text-brand-purple'
-                        : 'border-border hover:bg-muted'
+                        ? 'border-primary/50 bg-primary/10 text-primary'
+                        : 'border-divider hover:bg-surface-raised'
                     )}
                   >
                     {g.label}
@@ -371,27 +375,25 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
                 Rango de edad: {brief.audience_age_min} – {brief.audience_age_max} años
               </Label>
               <div className="flex gap-4">
-                <input
-                  type="range"
+                <Slider
                   min={13}
                   max={65}
                   value={brief.audience_age_min ?? 25}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value);
+                    const val = parseInt(e.target.value, 10);
                     update({ audience_age_min: Math.min(val, (brief.audience_age_max ?? 65) - 1) });
                   }}
-                  className="flex-1 accent-brand-purple"
+                  aria-label="Edad mínima"
                 />
-                <input
-                  type="range"
+                <Slider
                   min={13}
                   max={65}
                   value={brief.audience_age_max ?? 45}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value);
+                    const val = parseInt(e.target.value, 10);
                     update({ audience_age_max: Math.max(val, (brief.audience_age_min ?? 13) + 1) });
                   }}
-                  className="flex-1 accent-brand-purple"
+                  aria-label="Edad máxima"
                 />
               </div>
             </div>
@@ -492,8 +494,7 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
             </div>
             <div>
               <Label className="mb-1.5 block">Contexto adicional (opcional)</Label>
-              <textarea
-                className="w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              <Textarea
                 rows={3}
                 placeholder="Ej: Solo creadoras de contenido individuales, NO tiendas..."
                 value={brief.additional_context ?? ''}
@@ -509,8 +510,8 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
               <Sparkles className="w-4 h-4 text-brand-purple" />
               <span className="text-sm font-semibold text-foreground">Resumen del Brief</span>
               {extractedBrief && (
-                <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-                  {extractedFileName}
+              <span className="ml-auto max-w-[12rem] truncate rounded border border-success/30 bg-success/10 px-2 py-1 text-xs text-success">
+                  Fuente: {extractedFileName}
                 </span>
               )}
             </div>
@@ -578,7 +579,7 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
           </div>
         )}
 
-        <div className="flex justify-between mt-6 pt-4 border-t">
+        <div className="flex justify-between border-t border-divider px-5 pb-5 pt-4">
           {step > 1 ? (
             <Button type="button" variant="outline" size="sm" onClick={() => setStep(step - 1)}>
               <ChevronLeft className="w-4 h-4 mr-1" />
@@ -606,10 +607,11 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
               type="button"
               size="sm"
               onClick={handleSubmit}
-              className="gap-1 bg-brand-purple hover:bg-brand-purple/90"
+              className="min-w-40 gap-2"
+              disabled={isSubmitting}
             >
-              <Sparkles className="w-4 h-4" />
-              Buscar candidatos
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Sparkles className="h-4 w-4" aria-hidden="true" />}
+              {isSubmitting ? 'Iniciando…' : 'Buscar candidatos'}
             </Button>
           )}
         </div>

@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
-import { Upload, FileText, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useCallback, useId, useState } from 'react';
+import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, X } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { lensApi } from '../api/lensApi';
 import type { BriefStructured } from '../types/discovery';
 
 type BriefExtractedCallback = (_: BriefStructured, _2: string) => void;
@@ -8,139 +11,96 @@ interface FileUploadZoneProps {
   onBriefExtracted: BriefExtractedCallback;
   onClear: () => void;
   isLoading: boolean;
+  onLoadingChange?: (loading: boolean) => void;
   extractedBrief: BriefStructured | null;
   extractedFileName: string | null;
 }
 
 type UploadState = 'idle' | 'uploading' | 'success' | 'error';
 
-export function FileUploadZone({
-  onBriefExtracted,
-  onClear,
-  isLoading,
-  extractedBrief,
-  extractedFileName,
-}: FileUploadZoneProps) {
+export function FileUploadZone({ onBriefExtracted, onClear, isLoading, onLoadingChange, extractedBrief, extractedFileName }: FileUploadZoneProps) {
+  const inputId = useId();
   const [dragOver, setDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<UploadState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
-    const allowed = ['application/pdf', 'text/plain', 'text/csv'];
-    const ext = file.name.toLowerCase().split('.').pop();
-    const allowedExt = ['pdf', 'txt', 'csv'];
+    const allowedTypes = ['application/pdf', 'text/plain', 'text/csv'];
+    const extension = file.name.toLowerCase().split('.').pop();
+    const allowedExtensions = ['pdf', 'txt', 'csv'];
 
-    if (!allowed.includes(file.type) && !allowedExt.includes(ext || '')) {
+    if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension || '')) {
       setErrorMessage('Formato no soportado. Usa PDF, TXT o CSV.');
       setUploadState('error');
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
-      setErrorMessage('Archivo muy grande. Máximo 5MB.');
+      setErrorMessage('Archivo muy grande. El límite es 5MB.');
       setUploadState('error');
       return;
     }
 
     setUploadState('uploading');
     setErrorMessage(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
+    onLoadingChange?.(true);
     try {
-      const response = await fetch('/api/v1/lens/discovery/upload-brief', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ detail: 'Error desconocido' }));
-        throw new Error(err.detail || `HTTP ${response.status}`);
-      }
-
-      const result = await response.json();
-      onBriefExtracted(result.brief as BriefStructured, result.file_name as string);
+      const result = await lensApi.uploadBrief(file);
+      onBriefExtracted(result.brief, result.file_name);
       setUploadState('success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error al procesar archivo';
-      setErrorMessage(msg);
+    } catch (error) {
+      const responseDetail = typeof error === 'object' && error !== null && 'response' in error
+        ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : undefined;
+      setErrorMessage(responseDetail || (error instanceof Error ? error.message : 'Error al procesar archivo'));
       setUploadState('error');
+    } finally {
+      onLoadingChange?.(false);
     }
-  }, [onBriefExtracted]);
+  }, [onBriefExtracted, onLoadingChange]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
+  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    const file = event.dataTransfer.files[0];
+    if (file) void handleFile(file);
   }, [handleFile]);
 
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) void handleFile(file);
+    event.target.value = '';
   }, [handleFile]);
 
   const handleClear = useCallback(() => {
     setUploadState('idle');
     setErrorMessage(null);
+    onLoadingChange?.(false);
     onClear();
-  }, [onClear]);
+  }, [onClear, onLoadingChange]);
 
   if (extractedBrief && extractedFileName) {
     return (
-      <div className="border-2 border-green-200 bg-green-50 rounded-lg p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-medium text-green-800">
-              {extractedFileName}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={handleClear}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-green-700">
-          {extractedBrief.product_name && (
-            <div><span className="opacity-70">Producto:</span> {extractedBrief.product_name}</div>
-          )}
-          {extractedBrief.brand_name && (
-            <div><span className="opacity-70">Marca:</span> {extractedBrief.brand_name}</div>
-          )}
-          {extractedBrief.industry && (
-            <div><span className="opacity-70">Industria:</span> {extractedBrief.industry}</div>
-          )}
-          {extractedBrief.campaign_objective && (
-            <div><span className="opacity-70">Objetivo:</span> {extractedBrief.campaign_objective}</div>
-          )}
-          {extractedBrief.budget_usd && (
-            <div><span className="opacity-70">Budget:</span> ${extractedBrief.budget_usd.toLocaleString()} {extractedBrief.budget_currency}</div>
-          )}
-          {extractedBrief.audience_countries && extractedBrief.audience_countries.length > 0 && (
-            <div><span className="opacity-70">Países:</span> {extractedBrief.audience_countries.join(', ')}</div>
-          )}
-          {extractedBrief.niches && extractedBrief.niches.length > 0 && (
-            <div><span className="opacity-70">Nichos:</span> {extractedBrief.niches.slice(0, 3).join(', ')}</div>
-          )}
-          {extractedBrief.kpis && extractedBrief.kpis.length > 0 && (
-            <div><span className="opacity-70">KPIs:</span> {extractedBrief.kpis.join(', ')}</div>
-          )}
-          {extractedBrief.competitor_brands && extractedBrief.competitor_brands.length > 0 && (
-            <div><span className="opacity-70">Competencia:</span> {extractedBrief.competitor_brands.slice(0, 2).join(', ')}</div>
-          )}
-          {extractedBrief.influencer_preferences && (
-            <div>
-              <span className="opacity-70">Tiers:</span>{' '}
-              {(extractedBrief.influencer_preferences as Record<string, unknown>).tiers instanceof Array
-                ? ((extractedBrief.influencer_preferences as Record<string, unknown>).tiers as string[]).join(', ')
-                : null}
+      <div className="rounded-md border border-success/30 bg-success/10 p-4">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-success/15 text-success"><CheckCircle2 className="h-4 w-4" aria-hidden="true" /></span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate text-sm font-medium text-foreground">Brief analizado</p>
+              <Badge variant="outline" className="border-success/30 bg-success/10 text-success">{extractedFileName}</Badge>
             </div>
-          )}
+            <p className="mt-1 text-xs text-muted-foreground">Los datos detectados se incorporaron al resumen. Revisa y ajusta antes de ejecutar.</p>
+          </div>
+          <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="-mr-2 -mt-2 h-8 w-8 text-muted-foreground hover:text-foreground" aria-label="Quitar brief cargado"><X className="h-4 w-4" aria-hidden="true" /></Button>
+        </div>
+        <div className="mt-4 grid gap-2 border-t border-success/20 pt-3 text-xs sm:grid-cols-2">
+          {extractedBrief.product_name && <SummaryField label="Producto" value={extractedBrief.product_name} />}
+          {extractedBrief.brand_name && <SummaryField label="Marca" value={extractedBrief.brand_name} />}
+          {extractedBrief.industry && <SummaryField label="Industria" value={extractedBrief.industry} />}
+          {extractedBrief.campaign_objective && <SummaryField label="Objetivo" value={extractedBrief.campaign_objective} />}
+          {extractedBrief.budget_usd != null && <SummaryField label="Budget" value={`$${extractedBrief.budget_usd.toLocaleString()} ${extractedBrief.budget_currency ?? 'USD'}`} />}
+          {extractedBrief.audience_countries?.length > 0 && <SummaryField label="Países" value={extractedBrief.audience_countries.join(', ')} />}
+          {extractedBrief.niches?.length > 0 && <SummaryField label="Nichos" value={extractedBrief.niches.slice(0, 3).join(', ')} />}
+          {extractedBrief.kpis?.length > 0 && <SummaryField label="KPIs" value={extractedBrief.kpis.join(', ')} />}
         </div>
       </div>
     );
@@ -148,71 +108,38 @@ export function FileUploadZone({
 
   if (uploadState === 'uploading' || isLoading) {
     return (
-      <div className="border-2 border-dashed border-brand-purple/40 bg-brand-purple/5 rounded-lg p-6 flex flex-col items-center gap-2">
-        <Loader2 className="w-6 h-6 text-brand-purple animate-spin" />
-        <p className="text-sm text-brand-purple font-medium">Analizando brief con IA...</p>
-        <p className="text-xs text-muted-foreground">Extrayendo datos del documento</p>
+      <div className="flex flex-col items-center gap-2 rounded-md border border-primary/30 bg-primary/10 p-6 text-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" aria-hidden="true" />
+        <p className="text-sm font-medium text-foreground">Analizando brief con IA…</p>
+        <p className="text-xs text-muted-foreground">Extrayendo producto, audiencia, objetivos y señales de campaña.</p>
       </div>
     );
   }
 
   if (uploadState === 'error') {
     return (
-      <div className="border-2 border-red-200 bg-red-50 rounded-lg p-4">
-        <div className="flex items-start gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-sm text-red-700 font-medium">Error al procesar archivo</p>
-            <p className="text-xs text-red-600 mt-0.5">{errorMessage}</p>
-          </div>
-          <button type="button" onClick={handleClear} className="text-red-400 hover:text-red-600">
-            <X className="w-4 h-4" />
-          </button>
+      <div className="rounded-md border border-destructive/30 bg-destructive/10 p-4">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+          <div className="min-w-0 flex-1"><p className="text-sm font-medium text-foreground">No se pudo analizar el archivo</p><p className="mt-1 text-xs leading-5 text-destructive">{errorMessage}</p></div>
+          <Button type="button" variant="ghost" size="icon" onClick={handleClear} className="-mr-2 -mt-2 h-8 w-8 text-destructive/70 hover:text-destructive" aria-label="Cerrar error de carga"><X className="h-4 w-4" aria-hidden="true" /></Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-      className={cn(
-        'border-2 border-dashed rounded-lg p-4 transition-colors',
-        dragOver
-          ? 'border-brand-purple bg-brand-purple/5'
-          : 'border-muted-foreground/30 hover:border-brand-purple/50 hover:bg-muted/50'
-      )}
-    >
-      <label className="flex flex-col items-center gap-2 cursor-pointer">
-        <div className="flex items-center gap-3">
-          <div className={cn(
-            'w-10 h-10 rounded-full flex items-center justify-center',
-            dragOver ? 'bg-brand-purple/20' : 'bg-muted'
-          )}>
-            <Upload className={cn('w-5 h-5', dragOver ? 'text-brand-purple' : 'text-muted-foreground')} />
-          </div>
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground">
-              Arrastra tu brief aquí
-            </p>
-            <p className="text-xs text-muted-foreground">
-              PDF · TXT · CSV — máximo 5MB
-            </p>
-          </div>
-        </div>
-        <input
-          type="file"
-          accept=".pdf,.txt,.csv"
-          onChange={handleInputChange}
-          className="hidden"
-        />
-        <div className="flex items-center gap-1.5 mt-1">
-          <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">o haz click para seleccionar</span>
-        </div>
-      </label>
+    <div onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} className={cn('rounded-md border border-dashed p-4 transition-colors', dragOver ? 'border-primary bg-primary/10' : 'border-divider hover:border-primary/50 hover:bg-surface-raised')}>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span className={cn('flex h-10 w-10 items-center justify-center rounded-md transition-colors', dragOver ? 'bg-primary/15 text-primary' : 'bg-surface-raised text-muted-foreground')}><Upload className="h-5 w-5" aria-hidden="true" /></span>
+        <div><p className="text-sm font-medium text-foreground">Arrastra tu brief aquí</p><p className="mt-1 text-xs text-muted-foreground">PDF · TXT · CSV · máximo 5MB</p></div>
+        <Button asChild type="button" variant="outline" size="sm" className="gap-2"><label htmlFor={inputId} className="cursor-pointer"><FileText className="h-3.5 w-3.5" aria-hidden="true" />Seleccionar archivo<input id={inputId} type="file" accept=".pdf,.txt,.csv" onChange={handleInputChange} className="sr-only" /></label></Button>
+        <p className="text-[10px] text-muted-foreground">La extracción solo lee el documento para preparar el brief.</p>
+      </div>
     </div>
   );
+}
+
+function SummaryField({ label, value }: { label: string; value: string }) {
+  return <div className="min-w-0"><span className="text-muted-foreground">{label}:</span> <span className="font-medium text-foreground">{value}</span></div>;
 }

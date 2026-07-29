@@ -61,14 +61,14 @@ export function HashtagChips({
           {hashtags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-1 pl-2 pr-1.5 py-0.5 rounded-full bg-brand-purple/10 text-brand-purple text-xs font-medium border border-brand-purple/20"
+              className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/10 py-1 pl-2 pr-1.5 text-xs font-medium text-primary"
             >
               <Hash className="w-2.5 h-2.5 opacity-60" />
               {tag}
               <button
                 type="button"
                 onClick={() => removeHashtag(tag)}
-                className="ml-0.5 hover:bg-brand-purple/20 rounded-full p-0.5 transition-colors"
+                className="ml-0.5 rounded p-1 transition-colors hover:bg-primary/20 focus-ring"
               >
                 <X className="w-2.5 h-2.5" />
               </button>
@@ -92,7 +92,7 @@ export function HashtagChips({
         </div>
 
         {showSuggestions && filteredSuggestions.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full rounded-lg border bg-popover shadow-md p-2 max-h-48 overflow-y-auto">
+          <div className="absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-md border border-divider bg-popover p-2 shadow-elevated">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 font-semibold px-1">
               Sugerencias{industry ? ` · ${industry}` : ''}
             </p>
@@ -105,7 +105,7 @@ export function HashtagChips({
                     e.preventDefault();
                     addHashtag(tag);
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted hover:bg-brand-purple/10 text-xs text-foreground transition-colors"
+                  className="inline-flex items-center gap-1 rounded border border-divider bg-surface-raised px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 focus-ring"
                 >
                   <Hash className="w-2.5 h-2.5 opacity-50" />
                   {tag}

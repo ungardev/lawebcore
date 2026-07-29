@@ -51,15 +51,15 @@ export function isTienda(bio: string | null): boolean {
 export function getTierColor(tier: string | null): string {
   switch (tier) {
     case "MACRO":
-      return "bg-purple-100 text-purple-700 border-purple-200";
+      return "border-brand-purple/30 bg-brand-purple/10 text-brand-purple";
     case "MID":
-      return "bg-blue-100 text-blue-700 border-blue-200";
+      return "border-info/30 bg-info/10 text-info";
     case "MICRO":
-      return "bg-green-100 text-green-700 border-green-200";
+      return "border-success/30 bg-success/10 text-success";
     case "NANO":
-      return "bg-yellow-100 text-yellow-700 border-yellow-200";
+      return "border-warning/30 bg-warning/10 text-warning";
     default:
-      return "bg-gray-100 text-gray-700 border-gray-200";
+      return "border-divider bg-surface-raised text-muted-foreground";
   }
 }
 

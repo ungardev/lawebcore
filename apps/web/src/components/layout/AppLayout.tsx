@@ -4,7 +4,7 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 
 export function AppLayout() {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar-collapsed') === 'true');
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const toggleCollapsed = () => {
@@ -16,41 +16,37 @@ export function AppLayout() {
   };
 
   return (
-    <div className="relative flex h-screen overflow-hidden bg-background">
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-40 -top-40 h-[500px] w-[500px] rounded-full bg-primary/10 blur-[120px]" />
-        <div className="absolute -bottom-40 -right-40 h-[500px] w-[500px] rounded-full bg-secondary/10 blur-[120px]" />
-        <div className="absolute left-1/3 top-1/2 h-[400px] w-[400px] rounded-full bg-accent/8 blur-[140px]" />
-      </div>
-
-      <div className="relative z-10 hidden md:block">
+    <div className="flex min-h-[100dvh] overflow-hidden bg-background text-foreground">
+      <div className="relative z-20 hidden shrink-0 border-r border-divider md:block">
         <Sidebar collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
       <div
-        className={`fixed inset-0 z-40 md:hidden transition-opacity duration-300 ${
-          mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`}
+        className={`fixed inset-0 z-40 md:hidden ${
+          mobileOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
+        } transition-opacity duration-200`}
+        aria-hidden={!mobileOpen}
         onClick={() => setMobileOpen(false)}
       >
-        <div className="absolute inset-0 bg-background/70 backdrop-blur-md" />
+        <div className="absolute inset-0 bg-black/70" />
         <div
-          className={`absolute inset-y-0 left-0 w-72 shadow-2xl transition-transform duration-300 ${
+          className={`absolute inset-y-0 left-0 w-[min(20rem,88vw)] border-r border-divider bg-sidebar shadow-elevated transition-transform duration-200 ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
         >
           <Sidebar onNavigate={() => setMobileOpen(false)} />
         </div>
       </div>
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar
           collapsed={collapsed}
           onToggleCollapse={toggleCollapsed}
+          onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto min-h-full w-full max-w-[1600px] p-4 md:p-6 lg:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto min-h-full w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
             <Outlet />
           </div>
         </main>

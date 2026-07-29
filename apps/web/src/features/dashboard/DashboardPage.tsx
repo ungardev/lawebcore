@@ -1,38 +1,49 @@
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
-  Sparkles,
-  Megaphone,
+  ArrowUpRight,
   Building2,
-  Users,
+  ChevronRight,
+  CircleAlert,
   DollarSign,
   Eye,
-  ArrowUpRight,
+  History,
+  Megaphone,
   MessageSquare,
+  Search,
+  Sparkles,
   TrendingUp,
-  Zap,
-  ChevronRight,
+  Users,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { dashboardApi } from '@/lib/api';
 import { lensApi } from '@/features/lens/api/lensApi';
 import { formatCurrency, formatNumber } from '@/lib/utils';
 import type { DiscoveryConversation } from '@/features/lens/types/discovery';
 
+const PIPELINE_STAGES = ['BRIEF', 'CONTACTANDO', 'PLAN DE CUENTAS', 'PULL', 'CAMPAÑA INTERNA', 'REPORTE'] as const;
+const STATUS_DB_MAP: Record<string, string> = {
+  'PLAN DE CUENTAS': 'PLAN_DE_CUENTAS',
+  BRIEF: 'BRIEF',
+  CONTACTANDO: 'CONTACTANDO',
+  PULL: 'PULL',
+  'CAMPAÑA INTERNA': 'CAMPAÑA INTERNA',
+  REPORTE: 'REPORTE',
+};
+
 export function DashboardPage() {
   const navigate = useNavigate();
-
   const { data: summary, isLoading: isSummaryLoading, isError: isSummaryError } = useQuery({
     queryKey: ['dashboard-summary'],
     queryFn: () => dashboardApi.summary({}),
     retry: 1,
   });
-
   const { data: recentConversations } = useQuery<DiscoveryConversation[]>({
     queryKey: ['lens-conversations-recent'],
     queryFn: () => lensApi.conversations.list({ limit: 5 }),
     retry: 1,
   });
-
   const { data: statusCounts } = useQuery({
     queryKey: ['dashboard-by-status'],
     queryFn: () => dashboardApi.byStatus(),
@@ -45,348 +56,217 @@ export function DashboardPage() {
   const totalReach = Number(summary?.total_reach ?? 0);
   const totalBudget = Number(summary?.total_budget_usd ?? 0);
   const totalClients = summary?.total_clients ?? 0;
-
-  const STATUS_DB_MAP: Record<string, string> = {
-    'PLAN DE CUENTAS': 'PLAN_DE_CUENTAS',
-    'BRIEF': 'BRIEF',
-    'CONTACTANDO': 'CONTACTANDO',
-    'PULL': 'PULL',
-    'CAMPAÑA INTERNA': 'CAMPAÑA INTERNA',
-    'REPORTE': 'REPORTE',
-  };
-
+  const conversations = Array.isArray(recentConversations) ? recentConversations : [];
   const getStatusCount = (label: string) => {
     const dbStatus = STATUS_DB_MAP[label] ?? label;
-    return statusCounts?.find((s: { status: string; count: number }) => s.status === dbStatus)?.count ?? 0;
+    return statusCounts?.find((status: { status: string; count: number }) => status.status === dbStatus)?.count ?? 0;
   };
+  const maxStageCount = Math.max(...PIPELINE_STAGES.map(getStatusCount), 1);
 
   return (
-    <div className="mx-auto max-w-[1400px] px-6 py-8">
-      <section className="relative overflow-hidden rounded-3xl border border-border/60 bg-card p-8 shadow-soft md:p-10">
-        <div className="relative flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-border/60 bg-background/70 px-3 py-1 text-xs text-muted-foreground backdrop-blur">
-              {isSummaryError ? (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
-                  </span>
-                  Configura tu base de datos
-                </>
-              ) : (
-                <>
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-purple opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-brand" />
-                  </span>
-                  Lens AI está listo · sincronizando {activeCount} campañas
-                </>
-              )}
-            </div>
-
-            <h1 className="font-bold text-5xl leading-[1.02] tracking-tight text-foreground md:text-6xl">
-              Tu próxima <span className="text-gradient-brand">campaña</span> empieza aquí.
-            </h1>
-
-            <p className="mt-4 text-base text-muted-foreground md:text-lg">
-              {isSummaryError ? (
-                <span className="text-muted-foreground">Configura tu base de datos para ver métricas</span>
-              ) : isSummaryLoading ? (
-                <span className="inline-block h-4 w-72 animate-pulse rounded bg-muted" />
-              ) : (
-                <>
-                  <span className="font-semibold text-foreground">{activeCount}</span> campañas activas
-                  {totalInfluencers ? (
-                    <>
-                      {' · '}
-                      <span className="font-semibold text-foreground">{formatNumber(totalInfluencers)}</span> influencers en cartera
-                    </>
-                  ) : null}
-                  {totalBudget ? (
-                    <>
-                      {' · '}
-                      <span className="font-semibold text-foreground">{formatCurrency(totalBudget)}</span> en juego
-                    </>
-                  ) : null}
-                </>
-              )}
-            </p>
+    <div className="space-y-7">
+      <section className="flex flex-col gap-5 border-b border-divider pb-6 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${isSummaryError ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isSummaryError ? 'bg-warning' : 'bg-success'}`} aria-hidden="true" />
+              {isSummaryError ? 'Revisión de conexión requerida' : 'Operación sincronizada'}
+            </span>
+            <span>·</span>
+            <span>P.I.A.R. / Resumen ejecutivo</span>
           </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => navigate('/influencer-lens')}
-              className="group inline-flex items-center gap-2 rounded-xl bg-gradient-brand px-4 py-2.5 text-sm font-semibold text-white shadow-glow transition-transform hover:-translate-y-0.5"
-            >
-              <Sparkles className="h-4 w-4" />
-              Abrir Influencer Lens
-              <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-            </button>
-            <button
-              onClick={() => navigate('/campaigns')}
-              className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
-            >
-              Nueva campaña
-            </button>
-          </div>
+          <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+            Control operativo de campañas e inteligencia de creadores.
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Una lectura rápida de la operación actual, el pipeline y las últimas búsquedas del Lens.
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button variant="outline" onClick={() => navigate('/campaigns')} className="gap-2">
+            <Megaphone className="h-4 w-4" aria-hidden="true" />
+            Nueva campaña
+          </Button>
+          <Button onClick={() => navigate('/influencer-lens')} className="gap-2">
+            <Search className="h-4 w-4" aria-hidden="true" />
+            Buscar creadores
+          </Button>
         </div>
       </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-3">
-        <QuickCard
-          onClick={() => navigate('/influencer-lens')}
-          icon={<Sparkles className="h-5 w-5" />}
-          title="Abrir Influencer Lens"
-          copy="Busca, descubre y evalúa influencers con inteligencia artificial para tus campañas."
-          tone="pink"
-        />
-        <QuickCard
-          onClick={() => navigate('/campaigns')}
-          icon={<Megaphone className="h-5 w-5" />}
-          title="Gestionar campañas"
-          copy="Crea y administra tus campañas de influencer marketing. Ve el pipeline de ejecución."
-          tone="purple"
-        />
-        <QuickCard
-          onClick={() => navigate('/clients')}
-          icon={<Building2 className="h-5 w-5" />}
-          title="Administrar clientes"
-          copy="Consulta y gestiona tus clientes, marcas y contactos comerciales."
-          tone="blue"
-        />
-      </section>
-
-      <section className="mt-10">
-        <div className="mb-4 flex items-baseline justify-between">
-          <h2 className="font-bold text-2xl tracking-tight text-foreground">Resumen ejecutivo</h2>
+      <section aria-labelledby="metrics-title">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <p className="text-eyebrow text-muted-foreground">Lectura de negocio</p>
+            <h2 id="metrics-title" className="mt-1 text-sm font-semibold text-foreground">Indicadores operativos</h2>
+          </div>
           <span className="text-xs text-muted-foreground">Actualizado hace instantes</span>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <Kpi
-            icon={<Megaphone className="h-4 w-4" />}
-            label="Campañas activas"
-            value={String(activeCount)}
-            sub={`${totalCampaigns} totales`}
-            trend="+1"
-          />
-          <Kpi
-            icon={<Users className="h-4 w-4" />}
-            label="Influencers"
-            value={formatNumber(totalInfluencers)}
-            sub="en cartera"
-            trend="+0"
-          />
-          <Kpi
-            icon={<Eye className="h-4 w-4" />}
-            label="Reach total"
-            value={formatNumber(totalReach)}
-            sub="últimos 30 días"
-            trend="+0"
-          />
-          <Kpi
-            icon={<DollarSign className="h-4 w-4" />}
-            label="Budget total"
-            value={formatCurrency(totalBudget)}
-            sub="en ejecución"
-            trend="+$0"
-          />
+        <div className="grid overflow-hidden rounded-lg border border-divider bg-panel sm:grid-cols-2 xl:grid-cols-4">
+          <Metric icon={<Megaphone className="h-4 w-4" />} label="Campañas activas" value={isSummaryLoading ? '—' : String(activeCount)} detail={`${totalCampaigns} totales`} accent="blue" />
+          <Metric icon={<Users className="h-4 w-4" />} label="Influencers" value={isSummaryLoading ? '—' : formatNumber(totalInfluencers)} detail="en cartera" accent="purple" />
+          <Metric icon={<Eye className="h-4 w-4" />} label="Reach total" value={isSummaryLoading ? '—' : formatNumber(totalReach)} detail="últimos 30 días" accent="pink" />
+          <Metric icon={<DollarSign className="h-4 w-4" />} label="Budget total" value={isSummaryLoading ? '—' : formatCurrency(totalBudget)} detail="en ejecución" accent="green" />
         </div>
       </section>
 
-      <section className="mt-10 grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-bold text-2xl tracking-tight text-foreground">
-              Conversaciones recientes del Lens
-            </h2>
-            <button
-              onClick={() => navigate('/influencer-lens')}
-              className="inline-flex items-center gap-1 text-xs font-medium text-brand-purple hover:text-brand-pink"
-            >
-              Ver todas <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
-            {Array.isArray(recentConversations) && recentConversations.length > 0 ? (
-              recentConversations.map((conv: DiscoveryConversation, i: number) => (
+      <section className="grid gap-5 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.75fr)]">
+        <div className="overflow-hidden rounded-lg border border-divider bg-panel">
+          <SectionHeader
+            eyebrow="Actividad reciente"
+            title="Conversaciones del Lens"
+            actionLabel="Ver historial"
+            onAction={() => navigate('/influencer-lens/runs')}
+          />
+          {conversations.length > 0 ? (
+            <div className="divide-y divide-divider">
+              {conversations.map((conversation) => (
                 <button
-                  key={conv.id}
-                  onClick={() => navigate(`/influencer-lens/${conv.id}`)}
-                  className={`group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-muted/50 ${
-                    i !== recentConversations.length - 1 ? 'border-b border-border/60' : ''
-                  }`}
+                  key={conversation.id}
+                  type="button"
+                  onClick={() => navigate(`/influencer-lens/${conversation.id}`)}
+                  className="group flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-raised focus-ring"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-brand-soft text-brand-purple">
-                    <MessageSquare className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {conv.accumulated_brief?.slice(0, 80) || 'Nueva búsqueda'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(conv.last_message_at).toLocaleDateString('es-ES', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
+                    <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-foreground">{conversation.accumulated_brief?.slice(0, 80) || 'Nueva búsqueda'}</span>
+                    <span className="mt-1 block text-xs text-muted-foreground">{formatConversationDate(conversation.last_message_at)} · {conversation.message_count} mensajes</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                 </button>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <MessageSquare className="h-8 w-8 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">Sin conversaciones aún</p>
-                <button
-                  onClick={() => navigate('/influencer-lens')}
-                  className="mt-3 text-xs font-medium text-brand-purple hover:text-brand-pink"
-                >
-                  Iniciar primera búsqueda
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-bold text-2xl tracking-tight text-foreground">Top creadores</h2>
-            <TrendingUp className="h-4 w-4 text-brand-purple" />
-          </div>
-          <div className="space-y-3">
-            {Array.isArray(recentConversations) && recentConversations.length > 0 ? (
-              recentConversations.slice(0, 4).map((conv) => (
-                <div
-                  key={conv.id}
-                  className="flex items-center gap-3 rounded-2xl border border-border/60 bg-card p-3 shadow-soft transition-all hover:-translate-y-0.5 hover:shadow-elevated"
-                >
-                  <div className="relative">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-brand text-sm font-bold text-white">
-                      {conv.accumulated_brief?.[0]?.toUpperCase() || '?'}
-                    </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 rounded-full bg-emerald-500 px-1.5 py-0.5 text-[8px] font-bold text-white ring-2 ring-card">
-                      85
-                    </div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {conv.accumulated_brief?.slice(0, 30) || 'Nueva búsqueda'}
-                    </p>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      Lens AI · pendiente
-                    </p>
-                  </div>
-                  <Zap className="h-3.5 w-3.5 text-brand-pink" />
-                </div>
-              ))
-            ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-border/60 bg-card p-6 text-center shadow-soft">
-                <Sparkles className="h-6 w-6 text-brand-purple/60 mb-2" />
-                <p className="text-xs text-muted-foreground">Sin datos aún</p>
-                <p className="mt-1 text-[10px] text-muted-foreground/70">
-                  Las búsquedas del Lens aparecerán aquí
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-10 mb-8">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-bold text-2xl tracking-tight text-foreground">Pipeline en vivo</h2>
-          <button
-            onClick={() => navigate('/campaigns/kanban')}
-            className="inline-flex items-center gap-1 text-xs font-medium text-brand-purple hover:text-brand-pink"
-          >
-            Ver kanban completo <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-          {(['BRIEF', 'CONTACTANDO', 'PLAN DE CUENTAS', 'PULL', 'CAMPAÑA INTERNA', 'REPORTE'] as const).map((s) => (
-            <div key={s} className="rounded-xl border border-border/60 bg-card p-4 shadow-soft">
-              <span className="inline-block rounded-md border border-border/60 bg-muted/50 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                {s}
-              </span>
-              <p className="mt-3 text-3xl font-bold tracking-tight text-foreground">{getStatusCount(s)}</p>
-              <p className="text-[11px] text-muted-foreground">campañas</p>
+              ))}
             </div>
-          ))}
+          ) : (
+            <EmptyPanel icon={<History className="h-5 w-5" />} title="Todavía no hay búsquedas" description="Inicia una búsqueda para comenzar a construir tu historial operativo." actionLabel="Abrir Influencer Lens" onAction={() => navigate('/influencer-lens')} />
+          )}
+        </div>
+
+        <div className="rounded-lg border border-divider bg-panel">
+          <SectionHeader eyebrow="Capacidad operativa" title="Pipeline en vivo" actionLabel="Abrir pipeline" onAction={() => navigate('/campaigns/kanban')} />
+          <div className="space-y-4 px-5 pb-5 pt-2">
+            {PIPELINE_STAGES.map((stage) => {
+              const count = getStatusCount(stage);
+              const width = Math.max(4, Math.round((count / maxStageCount) * 100));
+              return (
+                <div key={stage}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate text-muted-foreground">{stage}</span>
+                    <span className="font-mono font-semibold tabular-nums text-foreground">{count}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised">
+                    <div className="h-full rounded-full bg-primary/75 transition-[width] duration-500" style={{ width: `${width}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 
-      <p className="mt-12 text-center text-xs text-muted-foreground">
-        {totalClients > 0 ? `${totalClients} clientes corporativos · ` : ''}La Web Figital Agency © {new Date().getFullYear()}
-      </p>
+      <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.5fr)]">
+        <div className="rounded-lg border border-divider bg-panel">
+          <SectionHeader eyebrow="Atajos operativos" title="Siguiente acción" />
+          <div className="grid divide-y divide-divider sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <ActionRow icon={<Sparkles className="h-4 w-4" />} title="Descubrir creadores" description="Busca por nicho, audiencia y territorio." onClick={() => navigate('/influencer-lens')} />
+            <ActionRow icon={<Megaphone className="h-4 w-4" />} title="Revisar campañas" description="Comprueba el estado de la ejecución." onClick={() => navigate('/campaigns')} />
+            <ActionRow icon={<Building2 className="h-4 w-4" />} title="Ver clientes" description="Accede a marcas y contactos activos." onClick={() => navigate('/clients')} />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-divider bg-panel p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-success/10 text-success">
+              <TrendingUp className="h-4 w-4" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-eyebrow text-muted-foreground">Cobertura</p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight text-metric text-foreground">{totalClients}</p>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">clientes corporativos con operación registrada en el hub.</p>
+            </div>
+          </div>
+          {isSummaryError && (
+            <div className="mt-4 flex items-start gap-2 border-t border-divider pt-4 text-xs text-warning">
+              <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <span>No se pudieron actualizar todas las métricas. Revisa la conexión de datos.</span>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <p className="pb-3 text-center text-[11px] text-muted-foreground/70">La Web Figital Agency · P.I.A.R. · {new Date().getFullYear()}</p>
     </div>
   );
 }
 
-function QuickCard({
-  onClick,
-  icon,
-  title,
-  copy,
-  tone,
-}: {
-  onClick: () => void;
-  icon: React.ReactNode;
-  title: string;
-  copy: string;
-  tone: 'pink' | 'purple' | 'blue';
-}) {
-  const tones = {
-    pink: 'from-brand-pink to-brand-purple',
-    purple: 'from-brand-purple to-brand-blue',
-    blue: 'from-brand-blue to-brand-purple',
-  };
+function Metric({ icon, label, value, detail, accent }: { icon: ReactNode; label: string; value: string; detail: string; accent: 'blue' | 'purple' | 'pink' | 'green' }) {
+  const accentClass = {
+    blue: 'bg-primary/10 text-primary',
+    purple: 'bg-brand-purple/10 text-brand-purple',
+    pink: 'bg-brand-pink/10 text-brand-pink',
+    green: 'bg-success/10 text-success',
+  }[accent];
+
   return (
-    <button
-      onClick={onClick}
-      className="group relative overflow-hidden rounded-2xl border border-border/60 bg-card p-6 text-left shadow-soft transition-all hover:-translate-y-1 hover:shadow-elevated"
-    >
-      <div
-        className={`mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br ${tones[tone]} text-white shadow-glow`}
-      >
-        {icon}
+    <div className="border-b border-divider p-5 last:border-b-0 sm:nth-[n+3]:border-b-0 xl:border-b-0 xl:border-r xl:last:border-r-0">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`flex h-8 w-8 items-center justify-center rounded-md ${accentClass}`}>{icon}</span>
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">P.I.A.R.</span>
       </div>
-      <h3 className="font-bold text-xl tracking-tight text-foreground">{title}</h3>
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{copy}</p>
-      <div className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-brand-purple opacity-0 transition-opacity group-hover:opacity-100">
-        Abrir <ArrowUpRight className="h-3 w-3" />
+      <p className="mt-5 text-3xl font-semibold text-metric text-foreground">{value}</p>
+      <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{detail}</p>
+    </div>
+  );
+}
+
+function SectionHeader({ eyebrow, title, actionLabel, onAction }: { eyebrow: string; title: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="flex items-end justify-between gap-4 border-b border-divider px-5 py-4">
+      <div>
+        <p className="text-eyebrow text-muted-foreground">{eyebrow}</p>
+        <h2 className="mt-1 text-sm font-semibold text-foreground">{title}</h2>
       </div>
+      {actionLabel && onAction && (
+        <Button variant="ghost" size="sm" onClick={onAction} className="h-8 shrink-0 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
+          {actionLabel}
+          <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function ActionRow({ icon, title, description, onClick }: { icon: ReactNode; title: string; description: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="group flex items-start gap-3 px-5 py-5 text-left transition-colors hover:bg-surface-raised focus-ring">
+      <span className="mt-0.5 text-primary">{icon}</span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="mt-1 block text-xs leading-5 text-muted-foreground">{description}</span>
+      </span>
+      <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" aria-hidden="true" />
     </button>
   );
 }
 
-function Kpi({
-  icon,
-  label,
-  value,
-  sub,
-  trend,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-  trend: string;
-}) {
+function EmptyPanel({ icon, title, description, actionLabel, onAction }: { icon: ReactNode; title: string; description: string; actionLabel: string; onAction: () => void }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-5 shadow-soft">
-      <div className="flex items-center justify-between">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-brand-soft text-brand-purple">
-          {icon}
-        </div>
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ring-1 ring-emerald-200">
-          {trend}
-        </span>
-      </div>
-      <p className="mt-4 font-bold text-4xl tracking-tight text-foreground">{value}</p>
-      <p className="mt-1 text-sm font-medium text-foreground">{label}</p>
-      <p className="text-xs text-muted-foreground">{sub}</p>
+    <div className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
+      <span className="flex h-10 w-10 items-center justify-center rounded-md border border-divider bg-surface-raised text-muted-foreground">{icon}</span>
+      <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
+      <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">{description}</p>
+      <Button variant="link" size="sm" onClick={onAction} className="mt-2 h-8 px-1 text-xs text-primary">{actionLabel}</Button>
     </div>
   );
+}
+
+function formatConversationDate(value: string) {
+  return new Date(value).toLocaleDateString('es-ES', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

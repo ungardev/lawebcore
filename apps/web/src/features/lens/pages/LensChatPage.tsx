@@ -1,45 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Sparkles, Plus, MessageSquare, DollarSign, TrendingUp, Wand2 } from 'lucide-react';
-import { useDiscoveryConversation } from '../hooks/useDiscoveryConversation';
-import { ChatMessage } from '../components/ChatMessage';
-import { BriefConfirmCard } from '../components/BriefConfirmCard';
-import { LensEmptyState } from '../components/LensEmptyState';
-import { ActionChips } from '../components/ActionChips';
-import { CostBadge } from '../components/CostBadge';
-import { BriefWizard } from '../components/BriefWizard';
+import { useNavigate, useParams } from 'react-router-dom';
+import { DollarSign, MessageSquare, Send, Sparkles, TrendingUp, Wand2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { lensApi } from '../api/lensApi';
-import { toast } from 'sonner';
+import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { lensApi } from '../api/lensApi';
+import { useDiscoveryConversation } from '../hooks/useDiscoveryConversation';
+import { ActionChips } from '../components/ActionChips';
+import { BriefConfirmCard } from '../components/BriefConfirmCard';
+import { BriefWizard } from '../components/BriefWizard';
+import { ChatMessage } from '../components/ChatMessage';
+import { LensEmptyState } from '../components/LensEmptyState';
 import type { BriefStructured, DiscoveryConversation } from '../types/discovery';
 
-const WELCOME = `Soy Influencer Lens, el cerebro AI de La Web Core — la plataforma de gestión de campañas de La Web Figital Agency.
+const WELCOME = `Puedo ayudarte a descubrir creadores, revisar campañas y preparar una búsqueda con datos reales de la agencia.
 
-Somos la agencia AI #1 en Venezuela. Puedo ayudarte a:
-
-• Descubrir influencers ideales para cualquier marca o campaña
-• Analizar el rendimiento de tus campañas activas
-• Proyectar escenarios de alcance y engagement
-• Gestionar tu cartera de creadores
-
-También ejecuto herramientas en tiempo real: busco en la base de datos, consulto APIs de scraping (Apify), rankeo prospectos con scoring de afinidad, y proyecto escenarios de alcance.
-
-Describe lo que necesitas en lenguaje natural y ve cómo trabajo.`;
+Describe el producto, la audiencia y el territorio que quieres analizar. Cuando falten datos, te pediré lo necesario antes de ejecutar el discovery.`;
 
 export function LensChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [input, setInput] = useState('');
-  const bottomRef = useRef<HTMLDivElement>(null);
   const [conversations, setConversations] = useState<DiscoveryConversation[]>([]);
   const [totalCost, setTotalCost] = useState(0);
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardBrief, setWizardBrief] = useState<Partial<BriefStructured> | undefined>(undefined);
+  const [wizardBrief, setWizardBrief] = useState<Partial<BriefStructured> | undefined>();
   const [wizardLoading, setWizardLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   const {
     conversation,
@@ -65,11 +54,10 @@ export function LensChatPage() {
     } else if (conversations.length > 0) {
       navigate(`/influencer-lens/${conversations[0].id}`, { replace: true });
     }
-  }, [id]);
+  }, [conversations, id, loadConversation, navigate]);
 
   useEffect(() => {
-    const cost = turns.reduce((sum, t) => sum + (t.cost_usd ?? 0), 0);
-    setTotalCost(cost);
+    setTotalCost(turns.reduce((sum, turn) => sum + (turn.cost_usd ?? 0), 0));
   }, [turns]);
 
   useEffect(() => {
@@ -79,33 +67,29 @@ export function LensChatPage() {
   const handleSend = async (text?: string) => {
     const message = (text ?? input).trim();
     if (!message || isLoading) return;
-
     if (!conversation) {
-      const conv = await startConversation(message);
-      navigate(`/influencer-lens/${conv.id}`);
+      const newConversation = await startConversation(message);
+      navigate(`/influencer-lens/${newConversation.id}`);
       setInput('');
       return;
     }
-
     if (!text) setInput('');
     await sendMessage(message);
   };
 
   const handleNewConversation = async () => {
-    const conv = await startConversation();
-    setConversations((prev) => [conv, ...prev]);
-    navigate(`/influencer-lens/${conv.id}`);
+    const newConversation = await startConversation();
+    setConversations((previous) => [newConversation, ...previous]);
+    navigate(`/influencer-lens/${newConversation.id}`);
   };
 
   const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
     setWizardLoading(true);
-    setShowWizard(false);
     try {
       const run = await lensApi.search.createRun({
         product_name: brief.product_name ?? undefined,
         industry: brief.industry ?? undefined,
         niches: brief.niches ?? [],
-        hashtags: brief.hashtags ?? [],
         audience_gender: brief.audience_gender ?? 'all',
         audience_age_min: brief.audience_age_min ?? 25,
         audience_age_max: brief.audience_age_max ?? 45,
@@ -113,212 +97,103 @@ export function LensChatPage() {
         audience_cities: brief.audience_cities ?? [],
         platforms: brief.platforms ?? ['instagram'],
         tone: brief.tone ?? [],
+        hashtags: brief.hashtags ?? [],
       });
-      toast.success('Búsqueda iniciada con wizard');
+      toast.success('Búsqueda iniciada');
+      setShowWizard(false);
       navigate(`/influencer-lens/search?runId=${run.id}`);
     } catch {
-      toast.error('Error al iniciar la búsqueda');
+      toast.error('No se pudo iniciar la búsqueda. Revisa los datos e intenta de nuevo.');
     } finally {
       setWizardLoading(false);
     }
   };
 
-  const handleOpenWizard = (brief?: Partial<BriefStructured>) => {
-    setWizardBrief(brief);
-    setShowWizard(true);
-  };
-
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] px-6 py-4">
-      <div className="mb-4 flex-shrink-0 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+    <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-5">
+      <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
-            <div className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-brand text-white shadow-glow">
-              <Sparkles className="h-5 w-5" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
+            <div>
+              <p className="text-eyebrow text-muted-foreground">Inteligencia / discovery</p>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Influencer Lens</h1>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">Influencer Lens</h1>
           </div>
-          <div className="flex items-center gap-3 mt-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="text-xs font-medium text-foreground">Lens AI · online</span>
-            <span className="text-muted-foreground">·</span>
-            <p className="text-xs text-muted-foreground hidden md:block">
-              El cerebro AI de La Web Figital Agency · Descubre creadores con datos reales de Apify.
-            </p>
-            {totalCost > 0 && (
-              <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60 bg-muted px-2 py-0.5 rounded-full">
-                <DollarSign className="w-3 h-3" />
-                <span>${totalCost.toFixed(4)} en uso</span>
-              </div>
-            )}
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5 text-success"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />Servicio online</span>
+            <span>·</span>
+            <span>Datos propios + Apify</span>
+            {totalCost > 0 && <span className="inline-flex items-center gap-1 rounded border border-divider bg-surface-sunken px-2 py-1 font-mono text-[10px]"><DollarSign className="h-3 w-3" aria-hidden="true" />${totalCost.toFixed(4)} sesión</span>}
           </div>
         </div>
-        <Button onClick={() => handleOpenWizard()} className="gap-2 rounded-xl bg-gradient-brand text-white shadow-glow hover:-translate-y-0.5 transition-transform">
-          <Wand2 className="w-4 h-4" />
+        <Button onClick={() => { setWizardBrief(undefined); setShowWizard(true); }} className="w-full gap-2 md:w-auto">
+          <Wand2 className="h-4 w-4" aria-hidden="true" />
           Nueva búsqueda
         </Button>
-      </div>
+      </header>
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr] flex-1 min-h-0">
-        <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-soft overflow-hidden flex flex-col">
-          <div className="mb-2 flex items-center justify-between px-2 pt-1 flex-shrink-0">
-            <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Conversaciones</h3>
-            <span className="text-[10px] text-muted-foreground">{conversations.length}</span>
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+        <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversaciones del Lens">
+          <div className="flex items-center justify-between border-b border-divider px-4 py-3">
+            <div><p className="text-eyebrow text-muted-foreground">Sesiones</p><p className="mt-1 text-xs font-medium text-foreground">Conversaciones</p></div>
+            <span className="font-mono text-[10px] text-muted-foreground">{conversations.length}</span>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-1">
-            {conversations.length === 0 ? (
-              <div className="p-3 text-xs text-muted-foreground text-center">
-                Sin conversaciones
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => navigate(`/influencer-lens/${conv.id}`)}
-                  className={cn(
-                    'w-full text-left px-3 py-2.5 rounded-xl text-sm transition-colors',
-                    conv.id === id
-                      ? 'bg-gradient-brand-soft ring-1 ring-brand-purple/30'
-                      : 'hover:bg-muted/60',
-                  )}
-                >
-                  <p className="text-[13px] font-semibold truncate">
-                    {conv.accumulated_brief?.slice(0, 40) || 'Nueva búsqueda'}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {new Date(conv.last_message_at).toLocaleDateString('es-ES')}
-                  </p>
-                </button>
-              ))
-            )}
+          <div className="min-h-28 flex-1 space-y-1 overflow-y-auto p-2">
+            {conversations.length === 0 ? <p className="px-3 py-5 text-center text-xs text-muted-foreground">Sin conversaciones guardadas.</p> : conversations.map((item) => (
+              <button key={item.id} type="button" onClick={() => navigate(`/influencer-lens/${item.id}`)} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
+                <span className="block truncate text-xs font-medium text-foreground">{item.accumulated_brief?.slice(0, 42) || 'Nueva búsqueda'}</span>
+                <span className="mt-1 block text-[10px] text-muted-foreground">{formatDate(item.last_message_at)} · {item.message_count} mensajes</span>
+              </button>
+            ))}
           </div>
-        </div>
+          <div className="border-t border-divider p-2">
+            <Button variant="ghost" size="sm" onClick={handleNewConversation} className="w-full justify-start gap-2 text-xs text-muted-foreground"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />Abrir conversación vacía</Button>
+          </div>
+        </aside>
 
-        <div className="flex flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-soft">
+        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
           {!conversation && !isLoading ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 min-h-[400px]">
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />
-              <Button onClick={handleNewConversation} className="mt-4 gap-2">
-                <MessageSquare className="w-4 h-4" />
-                Iniciar primera búsqueda
-              </Button>
+              <Button onClick={handleNewConversation} className="mt-1 gap-2"><MessageSquare className="h-4 w-4" aria-hidden="true" />Iniciar búsqueda asistida</Button>
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between border-b border-border/60 bg-muted/30 px-5 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                  </span>
-                  <span className="text-xs font-medium text-foreground">Lens AI · online</span>
-                </div>
-                <span className="text-[10px] text-muted-foreground">GPT-4 + Apify · v2.6</span>
+              <div className="flex items-center justify-between border-b border-divider bg-surface-sunken px-5 py-3">
+                <div className="flex items-center gap-2 text-xs"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /><span className="font-medium text-foreground">Lens operativo</span></div>
+                <span className="font-mono text-[10px] text-muted-foreground">CHAT / DISCOVERY</span>
               </div>
-
-              <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
-                {turns.length === 0 && (
-                  <div className="flex justify-start">
-                    <div className="max-w-[85%] md:max-w-[80%] rounded-2xl px-4 py-3 bg-muted text-sm whitespace-pre-wrap">
-                      {WELCOME}
-                    </div>
-                  </div>
-                )}
-
-                {turns.map((turn) => (
-                  <ChatMessage
-                    key={turn.id}
-                    turn={turn}
-                    onSaveCandidate={saveCandidate}
-                    onDismissCandidate={dismissCandidate}
-                  />
-                ))}
-
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-2xl px-4 py-3 flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce" />
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.15s]" />
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground animate-bounce [animation-delay:0.3s]" />
-                    </div>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="text-sm text-red-400 text-center py-2">
-                    Error: {error}
-                  </div>
-                )}
-
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
+                {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
+                {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
+                {isLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" /></span>Procesando solicitud…</div>}
+                {error && <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
                 <div ref={bottomRef} />
               </div>
-
-              {pendingBrief && (
-                <div className="border-t p-4">
-                  <BriefConfirmCard
-                    brief={pendingBrief}
-                    onConfirm={confirmBrief}
-                    onEdit={() => handleOpenWizard(pendingBrief)}
-                    isLoading={isLoading}
-                  />
+              {pendingBrief && <div className="border-t border-divider p-4"><BriefConfirmCard brief={pendingBrief} onConfirm={confirmBrief} onEdit={() => { setWizardBrief(pendingBrief); setShowWizard(true); }} isLoading={isLoading} /></div>}
+              <div className="border-t border-divider bg-surface-sunken p-4">
+                <ActionChips onSend={handleSend} disabled={isLoading} />
+                <div className="flex items-end gap-2 rounded-md border border-divider bg-background p-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10">
+                  <Textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); } }} placeholder="Describe el producto, audiencia o campaña…" rows={2} className="min-h-12 resize-none border-0 bg-transparent px-2 py-1 shadow-none focus-visible:ring-0" disabled={isLoading} aria-label="Mensaje para Influencer Lens" />
+                  <Button onClick={() => handleSend()} disabled={isLoading || !input.trim()} size="icon" className="mb-0.5 shrink-0" aria-label="Enviar mensaje"><Send className="h-4 w-4" aria-hidden="true" /></Button>
                 </div>
-              )}
-
-              <div className="border-t p-4">
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <Chip icon={<Sparkles className="h-3.5 w-3.5" />} label="Buscar creadores" />
-                  <Chip icon={<TrendingUp className="h-3.5 w-3.5" />} label="Proyección 3 escenarios" />
-                  <Chip icon={<MessageSquare className="h-3.5 w-3.5" />} label="Mis guardados" />
-                </div>
-                <div className="flex items-end gap-2 rounded-2xl border border-border bg-background p-2 focus-within:border-brand-purple/60 focus-within:shadow-glow transition-all">
-                  <textarea
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSend();
-                      }
-                    }}
-                    placeholder="Describe tu producto o campaña…"
-                    rows={1}
-                    className="flex-1 resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground"
-                    disabled={isLoading}
-                  />
-                  <Button onClick={() => handleSend()} disabled={isLoading || !input.trim()} className="rounded-xl bg-gradient-brand text-white shadow-glow hover:-translate-y-0.5 transition-transform flex-shrink-0">
-                    <Send className="w-4 h-4" />
-                  </Button>
-                </div>
-                <p className="mt-2 px-1 text-[10px] text-muted-foreground">
-                  Enter para enviar · Shift+Enter para nueva línea
-                </p>
+                <p className="mt-2 px-1 text-[10px] text-muted-foreground">Enter para enviar · Shift+Enter para una nueva línea</p>
               </div>
             </>
           )}
-        </div>
+        </section>
       </div>
 
       <Dialog open={showWizard} onOpenChange={setShowWizard}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
-          <BriefWizard
-            onSubmit={handleWizardSubmit}
-            onCancel={() => setShowWizard(false)}
-            initialBrief={wizardBrief}
-          />
+        <DialogContent className="max-h-[min(48rem,92dvh)] max-w-3xl overflow-y-auto p-0">
+          <BriefWizard onSubmit={handleWizardSubmit} onCancel={() => setShowWizard(false)} initialBrief={wizardBrief} isSubmitting={wizardLoading} />
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <button className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:border-brand-purple/50 hover:bg-gradient-brand-soft">
-      {icon}
-      {label}
-    </button>
-  );
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
 }

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Download, FileSpreadsheet } from 'lucide-react';
+import { FileSpreadsheet } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { DiscoveryCandidate, Platform } from '../types/discovery';
 import { CandidateCard } from './CandidateCard';
 import { PlatformBadge } from './PlatformBadge';
 import { lensApi } from '../api/lensApi';
-import { cn } from '@/lib/utils';
 
 interface CandidateListProps {
   candidates: DiscoveryCandidate[];
@@ -35,58 +35,48 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
-          <button
+          <Button
+            type="button"
+            size="sm"
+            variant={platformFilter === 'all' ? 'default' : 'outline'}
             onClick={() => setPlatformFilter('all')}
-            className={cn(
-              'text-xs px-2 py-1 rounded-md border transition-colors',
-              platformFilter === 'all'
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'border-border hover:bg-muted',
-            )}
+            className="h-8 text-xs"
           >
             Todos ({candidates.length})
-          </button>
+          </Button>
           {ALL_PLATFORMS.filter((p) => candidates.some((c) => c.platform === p)).map((platform) => (
-            <button
+            <Button
               key={platform}
+              type="button"
+              size="sm"
+              variant={platformFilter === platform ? 'default' : 'outline'}
               onClick={() => setPlatformFilter(platform)}
-              className={cn(
-                'text-xs px-2 py-1 rounded-md border transition-colors flex items-center gap-1',
-                platformFilter === platform
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-muted',
-              )}
+              className="h-8 gap-1 text-xs"
             >
               <PlatformBadge platform={platform} size="sm" />
               ({candidates.filter((c) => c.platform === platform).length})
-            </button>
+            </Button>
           ))}
-          <div className="w-px h-4 bg-border" />
+          <div className="h-4 w-px bg-divider" />
           {ALL_TIERS.filter((t) => candidates.some((c) => c.tier === t)).map((tier) => (
-            <button
+            <Button
               key={tier}
+              type="button"
+              size="sm"
+              variant={tierFilter === tier ? 'default' : 'outline'}
               onClick={() => setTierFilter(tierFilter === tier ? 'all' : tier)}
-              className={cn(
-                'text-xs px-2 py-1 rounded-md border transition-colors font-medium',
-                tierFilter === tier
-                  ? 'bg-brand-purple text-white border-brand-purple'
-                  : 'border-border hover:bg-muted text-muted-foreground',
-              )}
+              className="h-8 text-xs font-medium"
             >
               {tier}
-            </button>
+            </Button>
           ))}
         </div>
 
         {savedCount > 0 && runId ? (
-          <a
-            href={lensApi.search.getProposalUrl(runId)}
-            download
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-purple text-white text-xs font-medium hover:opacity-90 transition-opacity shadow-sm"
-          >
+          <Button asChild size="sm" className="gap-1.5 text-xs"><a href={lensApi.search.getProposalUrl(runId)} download>
             <FileSpreadsheet className="w-3.5 h-3.5" />
             Descargar CSV ({savedCount})
-          </a>
+          </a></Button>
         ) : candidates.length > 0 ? (
           <span className="text-[11px] text-muted-foreground">
             Guarda al menos 1 candidato para descargar propuesta CSV
@@ -105,7 +95,7 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
       ) : (
         <>
           {candidates.length > 0 && candidates.length < 15 && !isLoading && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+            <div className="rounded-md border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-warning">
               <strong>Solo {candidates.length} candidatos.</strong> Para ver más resultados intenta ampliar hashtags o palabras clave en el brief.
             </div>
           )}

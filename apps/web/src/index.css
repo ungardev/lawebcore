@@ -6,49 +6,61 @@
 
 @layer base {
   :root {
-    /* Neutros — blancos limpios */
-    --background: 0 0% 100%;
-    --foreground: 240 10% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
-    --primary: 240 10% 10%;
+    /* Command Center: charcoal/zinc base */
+    --background: 240 12% 6%;
+    --foreground: 0 0% 98%;
+    --card: 240 12% 9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 12% 9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 217 91% 60%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 10% 96%;
-    --secondary-foreground: 240 10% 10%;
-    --muted: 240 10% 96%;
-    --muted-foreground: 240 5% 46%;
-    --accent: 240 10% 92%;
-    --accent-foreground: 240 10% 10%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 10% 90%;
-    --input: 240 10% 90%;
-    --ring: 240 10% 70%;
-    --radius: 0.75rem;
+    --secondary: 240 10% 13%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 10% 13%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 10% 16%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 10% 16%;
+    --input: 240 10% 20%;
+    --ring: 217 91% 60%;
+    --radius: 0.625rem;
 
-    /* Brand — firma pink → purple → blue */
+    /* Semantic surfaces */
+    --surface-0: 240 12% 6%;
+    --surface-1: 240 12% 9%;
+    --surface-2: 240 10% 12%;
+    --surface-3: 240 9% 15%;
+    --divider: 240 8% 20%;
+    --focus: 217 91% 60%;
+    --success: 151 64% 45%;
+    --warning: 38 92% 50%;
+    --info: 217 91% 60%;
+
+    /* Brand accents — reserved for signals and visualizations */
     --brand-pink: 330 81% 60%;
     --brand-purple: 271 91% 65%;
     --brand-blue: 217 91% 60%;
+    --brand-accent: 217 91% 60%;
 
     --color-brand-pink: #ec4899;
     --color-brand-purple: #a855f7;
     --color-brand-blue: #3b82f6;
 
     /* Sidebar tokens */
-    --sidebar: 240 10% 97%;
-    --sidebar-foreground: 240 10% 10%;
-    --sidebar-primary: 271 91% 65%;
+    --sidebar: 240 12% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 217 91% 60%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 92%;
-    --sidebar-accent-foreground: 240 10% 10%;
-    --sidebar-border: 240 10% 88%;
-    --sidebar-ring: 271 91% 65%;
+    --sidebar-accent: 240 10% 13%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 10% 16%;
+    --sidebar-ring: 217 91% 60%;
 
-    --hover: 240 10% 94%;
-    --hover-foreground: 240 10% 10%;
+    --hover: 240 10% 16%;
+    --hover-foreground: 0 0% 98%;
   }
 
   .dark {
@@ -58,31 +70,41 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 12% 9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 12% 9%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 240 10% 13%;
     --secondary-foreground: 0 0% 98%;
     --muted: 240 10% 13%;
     --muted-foreground: 240 5% 65%;
     --accent: 240 10% 16%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62% 40%;
+    --destructive: 0 62% 48%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 10% 16%;
-    --input: 240 10% 16%;
-    --ring: 240 10% 70%;
+    --input: 240 10% 20%;
+    --ring: 217 91% 60%;
+
+    --surface-0: 240 12% 6%;
+    --surface-1: 240 12% 9%;
+    --surface-2: 240 10% 12%;
+    --surface-3: 240 9% 15%;
+    --divider: 240 8% 20%;
+    --focus: 217 91% 60%;
+    --success: 151 64% 45%;
+    --warning: 38 92% 50%;
+    --info: 217 91% 60%;
+
+    --sidebar: 240 12% 8%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 217 91% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 13%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 10% 16%;
+    --sidebar-ring: 217 91% 60%;
 
     --hover: 240 10% 16%;
     --hover-foreground: 0 0% 98%;
-
-    --sidebar: 240 12% 9%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 271 91% 65%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 14%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 10% 16%;
-    --sidebar-ring: 271 91% 65%;
   }
 }
 
@@ -94,29 +116,60 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
   .font-display {
-    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.02em;
   }
 }
 
 @layer utilities {
+  .bg-panel {
+    background-color: hsl(var(--surface-1));
+  }
+  .bg-panel-raised {
+    background-color: hsl(var(--surface-2));
+  }
+  .bg-panel-sunken {
+    background-color: hsl(var(--surface-0));
+  }
+  .border-divider {
+    border-color: hsl(var(--divider));
+  }
+  .text-metric {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.035em;
+  }
+  .text-eyebrow {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em];
+  }
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-background;
+  }
+
+  /* Legacy compatibility: these are no longer the preferred product surfaces. */
   .bg-gradient-brand {
     background-image: linear-gradient(135deg, #ec4899 0%, #a855f7 50%, #3b82f6 100%);
   }
   .bg-gradient-brand-soft {
     background-image: linear-gradient(
       135deg,
-      rgba(236, 72, 153, 0.10) 0%,
-      rgba(168, 85, 247, 0.10) 50%,
-      rgba(59, 130, 246, 0.10) 100%
+      rgba(236, 72, 153, 0.1) 0%,
+      rgba(168, 85, 247, 0.1) 50%,
+      rgba(59, 130, 246, 0.1) 100%
     );
   }
   .text-gradient-brand {
@@ -125,28 +178,17 @@
     background-clip: text;
     color: transparent;
   }
-
   .bg-aurora {
-    background-image:
-      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(168, 85, 247, 0.05), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(59, 130, 246, 0.05), transparent 60%),
-      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(236, 72, 153, 0.04), transparent 60%);
+    background-image: none;
   }
-  .dark .bg-aurora {
-    background-image:
-      radial-gradient(ellipse 80% 50% at 20% 0%, rgba(168, 85, 247, 0.08), transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 10%, rgba(59, 130, 246, 0.08), transparent 60%),
-      radial-gradient(ellipse 70% 40% at 50% 100%, rgba(236, 72, 153, 0.06), transparent 60%);
-  }
-
   .shadow-soft {
-    box-shadow: 0 1px 2px rgba(15, 15, 30, 0.04), 0 4px 12px rgba(15, 15, 30, 0.04);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.12);
   }
   .shadow-elevated {
-    box-shadow: 0 4px 12px rgba(15, 15, 30, 0.06), 0 16px 40px rgba(15, 15, 30, 0.08);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.26);
   }
   .shadow-glow {
-    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.30);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.28), 0 8px 24px rgba(15, 23, 42, 0.24);
   }
 
   .text-brand-pink { color: #ec4899; }
@@ -157,17 +199,18 @@
   .bg-brand-blue { background-color: #3b82f6; }
 
   .glass {
-    background: rgba(255, 255, 255, 0.70);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    background: rgba(24, 24, 32, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   .glass-dark {
-    background: rgba(0, 0, 0, 0.40);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
 
   .ring-brand {
-    --tw-ring-color: rgba(168, 85, 247, 0.35);
+    --tw-ring-color: rgba(59, 130, 246, 0.35);
   }
 }

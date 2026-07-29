@@ -2,11 +2,11 @@ import type { Platform } from '../types/discovery';
 import { cn } from '@/lib/utils';
 
 const platformConfig: Record<Platform, { label: string; className: string }> = {
-  instagram: { label: 'Instagram', className: 'bg-gradient-to-tr from-purple-500 via-pink-500 to-orange-400 text-white' },
-  tiktok: { label: 'TikTok', className: 'bg-black text-white' },
-  youtube: { label: 'YouTube', className: 'bg-red-600 text-white' },
-  x: { label: 'X', className: 'bg-black text-white' },
-  facebook: { label: 'Facebook', className: 'bg-blue-600 text-white' },
+  instagram: { label: 'Instagram', className: 'border-brand-pink/25 bg-brand-pink/10 text-brand-pink' },
+  tiktok: { label: 'TikTok', className: 'border-divider bg-surface-raised text-foreground' },
+  youtube: { label: 'YouTube', className: 'border-destructive/25 bg-destructive/10 text-destructive' },
+  x: { label: 'X', className: 'border-divider bg-surface-raised text-foreground' },
+  facebook: { label: 'Facebook', className: 'border-info/25 bg-info/10 text-info' },
 };
 
 interface PlatformBadgeProps {
@@ -21,7 +21,7 @@ export function PlatformBadge({ platform, size = 'sm', className }: PlatformBadg
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md font-medium',
+        'inline-flex items-center rounded border font-medium',
         size === 'xs' ? 'px-1 py-px text-[9px]' : size === 'sm' ? 'px-1.5 py-0.5 text-[10px]' : 'px-2 py-1 text-xs',
         config.className,
         className,

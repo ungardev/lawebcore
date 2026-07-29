@@ -47,6 +47,16 @@ export default {
           DEFAULT: 'hsl(var(--hover))',
           foreground: 'hsl(var(--hover-foreground))',
         },
+        surface: {
+          DEFAULT: 'hsl(var(--surface-1))',
+          raised: 'hsl(var(--surface-2))',
+          sunken: 'hsl(var(--surface-0))',
+        },
+        divider: 'hsl(var(--divider))',
+        focus: 'hsl(var(--focus))',
+        success: 'hsl(var(--success))',
+        warning: 'hsl(var(--warning))',
+        info: 'hsl(var(--info))',
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar))',
           foreground: 'hsl(var(--sidebar-foreground))',

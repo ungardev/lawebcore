@@ -134,9 +134,7 @@ export const lensApi = {
       brief: BriefStructured;
       file_name: string;
       text_length: number;
-    }>('/lens/discovery/upload-brief', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    }>('/lens/discovery/upload-brief', formData);
     return data;
   },
 

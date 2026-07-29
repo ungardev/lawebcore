@@ -1,15 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Sparkles, Play } from 'lucide-react';
-import { useDiscoveryRun } from '../hooks/useDiscoveryRun';
-import { CandidateList } from '../components/CandidateList';
-import { MatchScoreCircle } from '../components/MatchScoreCircle';
-import { Card } from '@/components/ui/card';
+import { ArrowLeft, CheckCircle2, Play, Search, Sparkles } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import type { Platform } from '../types/discovery';
+import { CandidateList } from '../components/CandidateList';
+import { SearchProgress } from '../components/SearchProgress';
+import { useDiscoveryRun } from '../hooks/useDiscoveryRun';
 
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'youtube', 'x', 'facebook'];
 
@@ -17,47 +21,27 @@ export function LensSearchPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { run, candidates, isLoading, error, createRun, pollRun, loadRun, saveCandidate, dismissCandidate } = useDiscoveryRun();
-
-  const [form, setForm] = useState({
-    product_name: '',
-    industry: '',
-    niches: '',
-    audience_gender: 'all',
-    audience_age_min: 18,
-    audience_age_max: 45,
-    audience_countries: '',
-    platforms: [] as Platform[],
-  });
+  const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 45, audience_countries: '', platforms: [] as Platform[] });
 
   useEffect(() => {
     const runId = searchParams.get('runId');
-    if (runId) {
-      loadRun(runId).catch(() => toast.error('No se pudo cargar la búsqueda'));
-    }
-  }, [searchParams]);
+    if (runId) loadRun(runId).catch(() => toast.error('No se pudo cargar la búsqueda'));
+  }, [loadRun, searchParams]);
 
-  const setPlatform = (p: Platform) => {
-    setForm((f) => ({
-      ...f,
-      platforms: f.platforms.includes(p)
-        ? f.platforms.filter((x) => x !== p)
-        : [...f.platforms, p],
-    }));
-  };
+  const setPlatform = (platform: Platform) => setForm((previous) => ({ ...previous, platforms: previous.platforms.includes(platform) ? previous.platforms.filter((item) => item !== platform) : [...previous.platforms, platform] }));
 
   const handleSearch = async () => {
     try {
       const brief = {
         product_name: form.product_name || undefined,
         industry: form.industry || undefined,
-        niches: form.niches ? form.niches.split(',').map((s) => s.trim()) : [],
+        niches: form.niches ? form.niches.split(',').map((item) => item.trim()).filter(Boolean) : [],
         audience_gender: form.audience_gender,
         audience_age_min: form.audience_age_min,
         audience_age_max: form.audience_age_max,
-        audience_countries: form.audience_countries ? form.audience_countries.split(',').map((s) => s.trim()) : [],
+        audience_countries: form.audience_countries ? form.audience_countries.split(',').map((item) => item.trim()).filter(Boolean) : [],
         platforms: form.platforms.length > 0 ? form.platforms : undefined,
       };
-
       const newRun = await createRun(brief);
       toast.success('Búsqueda iniciada');
       await pollRun(newRun.id);
@@ -67,153 +51,50 @@ export function LensSearchPage() {
     }
   };
 
+  const isComplete = run?.status === 'completed';
+  const statusLabel = run?.status === 'running' ? 'Discovery en curso' : run?.status === 'pending' ? 'En cola' : isComplete ? 'Resultados listos' : run?.status ? `Estado: ${run.status}` : 'Sin ejecución';
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Sparkles className="w-6 text-primary" />
-          Búsqueda Directa
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Define los parámetros y ejecuta una búsqueda de influencers
-        </p>
-      </div>
-
-      <Card className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label>Producto / Marca</Label>
-            <Input
-              value={form.product_name}
-              onChange={(e) => setForm((f) => ({ ...f, product_name: e.target.value }))}
-              placeholder="Ej: Protector solar Nivea"
-            />
-          </div>
-          <div>
-            <Label>Industria</Label>
-            <Input
-              value={form.industry}
-              onChange={(e) => setForm((f) => ({ ...f, industry: e.target.value }))}
-              placeholder="Ej: Beauty, Fitness, Travel"
-            />
-          </div>
-          <div>
-            <Label> Nichos (separados por coma)</Label>
-            <Input
-              value={form.niches}
-              onChange={(e) => setForm((f) => ({ ...f, niches: e.target.value }))}
-              placeholder="Ej: skincare, makeup, belleza natural"
-            />
-          </div>
-          <div>
-            <Label>Países (separados por coma)</Label>
-            <Input
-              value={form.audience_countries}
-              onChange={(e) => setForm((f) => ({ ...f, audience_countries: e.target.value }))}
-              placeholder="Ej: Colombia, México, España"
-            />
-          </div>
-          <div>
-            <Label>Género audiencia</Label>
-            <select
-              value={form.audience_gender}
-              onChange={(e) => setForm((f) => ({ ...f, audience_gender: e.target.value }))}
-              className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
-            >
-              <option value="all">Todos</option>
-              <option value="female">Femenino</option>
-              <option value="male">Masculino</option>
-            </select>
-          </div>
-          <div>
-            <Label>Edad mínima: {form.audience_age_min}</Label>
-            <input
-              type="range"
-              min={13}
-              max={65}
-              value={form.audience_age_min}
-              onChange={(e) => setForm((f) => ({ ...f, audience_age_min: parseInt(e.target.value) }))}
-              className="w-full"
-            />
-          </div>
-          <div>
-            <Label>Edad máxima: {form.audience_age_max}</Label>
-            <input
-              type="range"
-              min={13}
-              max={65}
-              value={form.audience_age_max}
-              onChange={(e) => setForm((f) => ({ ...f, audience_age_max: parseInt(e.target.value) }))}
-              className="w-full"
-            />
-          </div>
+      <header className="flex flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
+        <div>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/influencer-lens')} className="mb-3 -ml-2 gap-1 text-xs text-muted-foreground"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />Volver a Lens</Button>
+          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Search className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Influencer Lens / ejecución</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Nueva búsqueda</h1></div></div>
+          <p className="mt-3 max-w-2xl text-sm text-muted-foreground">Define el contexto mínimo y ejecuta un discovery run trazable.</p>
         </div>
+        <Button variant="outline" onClick={() => navigate('/influencer-lens/runs')} className="gap-2"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />Ver historial</Button>
+      </header>
 
-        <div className="mt-4">
-          <Label>Plataformas</Label>
-          <div className="flex flex-wrap gap-2 mt-2">
-            {PLATFORMS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPlatform(p)}
-                className={`px-3 py-1.5 rounded-md text-xs border transition-colors ${
-                  form.platforms.includes(p)
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'border-border hover:bg-muted'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <Card className="border-divider bg-panel p-5 shadow-none">
+          <div className="mb-5"><p className="text-eyebrow text-muted-foreground">Brief directo</p><h2 className="mt-1 text-sm font-semibold text-foreground">Parámetros de búsqueda</h2></div>
+          <div className="space-y-4">
+            <Field label="Producto / marca"><Input value={form.product_name} onChange={(event) => setForm((previous) => ({ ...previous, product_name: event.target.value }))} placeholder="Ej: Protector solar Nivea" /></Field>
+            <Field label="Industria"><Input value={form.industry} onChange={(event) => setForm((previous) => ({ ...previous, industry: event.target.value }))} placeholder="Ej: belleza, fitness, travel" /></Field>
+            <Field label="Nichos"><Textarea rows={2} value={form.niches} onChange={(event) => setForm((previous) => ({ ...previous, niches: event.target.value }))} placeholder="skincare, makeup, belleza natural" className="min-h-16 resize-none" /><p className="mt-1 text-[10px] text-muted-foreground">Separa varios nichos con coma.</p></Field>
+            <Field label="Países y ciudades"><Input value={form.audience_countries} onChange={(event) => setForm((previous) => ({ ...previous, audience_countries: event.target.value }))} placeholder="Venezuela, Caracas, Valencia" /></Field>
+            <Field label="Género de audiencia"><Select value={form.audience_gender} onValueChange={(value) => setForm((previous) => ({ ...previous, audience_gender: value }))}><SelectTrigger><SelectValue placeholder="Selecciona un género" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="female">Femenino</SelectItem><SelectItem value="male">Masculino</SelectItem></SelectContent></Select></Field>
+            <div><Label className="flex items-center justify-between text-xs font-medium">Rango de edad <span className="font-mono text-muted-foreground">{form.audience_age_min}–{form.audience_age_max}</span></Label><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><span className="mb-1.5 block text-[10px] text-muted-foreground">Mínima</span><Slider min={13} max={64} value={form.audience_age_min} onChange={(event) => setForm((previous) => ({ ...previous, audience_age_min: Math.min(Number(event.target.value), previous.audience_age_max - 1) }))} aria-label="Edad mínima" /></div><div><span className="mb-1.5 block text-[10px] text-muted-foreground">Máxima</span><Slider min={14} max={65} value={form.audience_age_max} onChange={(event) => setForm((previous) => ({ ...previous, audience_age_max: Math.max(Number(event.target.value), previous.audience_age_min + 1) }))} aria-label="Edad máxima" /></div></div></div>
+            <div><Label className="text-xs font-medium">Plataformas</Label><div className="mt-2 flex flex-wrap gap-2">{PLATFORMS.map((platform) => <Button key={platform} type="button" variant={form.platforms.includes(platform) ? 'default' : 'outline'} size="sm" onClick={() => setPlatform(platform)} className="capitalize">{platform}</Button>)}</div></div>
+            <Button onClick={handleSearch} disabled={isLoading} className="mt-2 w-full gap-2">{isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}{isLoading ? 'Ejecutando discovery…' : 'Ejecutar búsqueda'}</Button>
           </div>
-        </div>
-
-        <Button onClick={handleSearch} disabled={isLoading} className="mt-6 gap-2 w-full md:w-auto">
-          {isLoading ? (
-            <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Play className="w-4 h-4" />
-          )}
-          {isLoading ? 'Buscando...' : 'Ejecutar búsqueda'}
-        </Button>
-      </Card>
-
-      {error && (
-        <p className="text-sm text-red-400">Error: {error}</p>
-      )}
-
-      {run && (
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-lg font-semibold">Resultados</h2>
-              <p className="text-sm text-muted-foreground">
-                {run.status === 'completed'
-                  ? `${run.total_candidates} candidatos encontrados`
-                  : run.status === 'running'
-                  ? 'Búsqueda en progreso...'
-                  : `Estado: ${run.status}`}
-              </p>
-            </div>
-            {run.actual_cost_usd != null && (
-              <span className="text-xs font-mono bg-emerald-500/10 text-emerald-600 px-2 py-1 rounded">
-                ${run.actual_cost_usd.toFixed(4)} gastado
-              </span>
-            )}
-          </div>
-
-          {run.status === 'completed' && (
-            <CandidateList
-              candidates={candidates}
-              onSave={saveCandidate}
-              onDismiss={dismissCandidate}
-              isLoading={isLoading}
-              runId={run.id}
-            />
-          )}
         </Card>
-      )}
+
+        <section className="min-w-0 space-y-5" aria-live="polite">
+          <div className="rounded-lg border border-divider bg-panel p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-eyebrow text-muted-foreground">Estado de ejecución</p><h2 className="mt-1 text-lg font-semibold text-foreground">{statusLabel}</h2></div>{run && <Badge variant="outline" className="font-mono text-[10px]">{run.id.slice(0, 8)}</Badge>}</div>
+            {!run && <div className="mt-8 flex flex-col items-center justify-center border-t border-divider pt-8 text-center"><Sparkles className="h-5 w-5 text-primary" aria-hidden="true" /><p className="mt-3 text-sm font-medium text-foreground">Configura una búsqueda</p><p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Los resultados, el progreso y el costo aparecerán aquí sin perder el contexto del brief.</p></div>}
+            {run && !isComplete && <div className="mt-5"><SearchProgress progress={{ current_step: run.status, completed_steps: [], candidates_found: run.total_candidates }} /></div>}
+            {error && <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
+          </div>
+
+          {run && isComplete && <Card className="border-divider bg-panel p-5 shadow-none"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-eyebrow text-muted-foreground">Salida del run</p><h2 className="mt-1 text-lg font-semibold text-foreground">{run.total_candidates} candidatos encontrados</h2></div>{run.actual_cost_usd != null && <Badge variant="outline" className="border-success/30 bg-success/10 font-mono text-success">${run.actual_cost_usd.toFixed(4)} gastado</Badge>}</div><CandidateList candidates={candidates} onSave={saveCandidate} onDismiss={dismissCandidate} isLoading={isLoading} runId={run.id} /></Card>}
+        </section>
+      </div>
     </div>
   );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return <div><Label className="mb-1.5 block text-xs font-medium">{label}</Label>{children}</div>;
 }

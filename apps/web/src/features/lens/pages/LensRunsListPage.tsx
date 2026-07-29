@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
+import { CheckCircle, Clock, History, Loader2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { discoveryRunsApi } from '@/lib/api';
 import type { DiscoveryRun, DiscoveryRunStatus } from '../types/discovery';
 
 const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: React.ReactNode; className: string }> = {
-  pending: { label: 'Pendiente', icon: <Clock className="w-4 h-4" />, className: 'bg-yellow-500/10 text-yellow-600' },
-  running: { label: 'En curso', icon: <Loader2 className="w-4 h-4 animate-spin" />, className: 'bg-blue-500/10 text-blue-600' },
-  completed: { label: 'Completado', icon: <CheckCircle className="w-4 h-4" />, className: 'bg-emerald-500/10 text-emerald-600' },
-  failed: { label: 'Fallido', icon: <XCircle className="w-4 h-4" />, className: 'bg-red-500/10 text-red-600' },
-  cancelled: { label: 'Cancelado', icon: <XCircle className="w-4 h-4" />, className: 'bg-muted text-muted-foreground' },
+  pending: { label: 'Pendiente', icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-warning/30 bg-warning/10 text-warning' },
+  running: { label: 'En curso', icon: <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />, className: 'border-info/30 bg-info/10 text-info' },
+  completed: { label: 'Completado', icon: <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-success/30 bg-success/10 text-success' },
+  failed: { label: 'Fallido', icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-destructive/30 bg-destructive/10 text-destructive' },
+  cancelled: { label: 'Cancelado', icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-divider bg-surface-raised text-muted-foreground' },
 };
 
 export function LensRunsListPage() {
@@ -27,103 +29,36 @@ export function LensRunsListPage() {
     try {
       const data = await discoveryRunsApi.list({ limit, offset: (pageNum - 1) * limit });
       if (pageNum === 1) setRuns(Array.isArray(data) ? data : []);
-      else setRuns((prev) => [...prev, ...(Array.isArray(data) ? data : [])]);
-    } catch (e) {
-      console.error(e);
+      else setRuns((previous) => [...previous, ...(Array.isArray(data) ? data : [])]);
+    } catch (error) {
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  useEffect(() => { fetchRuns(1); }, []);
+  useEffect(() => { void fetchRuns(1); }, []);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Sparkles className="w-6 text-primary" />
-            Historial de búsquedas
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Todas las ejecuciones de Influencer Lens
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => navigate('/influencer-lens/search')}>
-          Nueva búsqueda
-        </Button>
-      </div>
+      <header className="flex flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
+        <div className="flex items-start gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><History className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Influencer Lens / operaciones</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Historial de búsquedas</h1><p className="mt-2 text-sm text-muted-foreground">Ejecuciones, resultados y costos de discovery.</p></div></div>
+        <Button onClick={() => navigate('/influencer-lens/search')} className="w-full md:w-auto">Nueva búsqueda</Button>
+      </header>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Brief</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Estado</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Candidatos</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Guardados</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">Costo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {runs.map((run) => {
-                const cfg = STATUS_CONFIG[run.status];
-                return (
-                  <tr
-                    key={run.id}
-                    className="border-b hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/influencer-lens/search?runId=${run.id}`)}
-                  >
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {run.created_at ? new Date(run.created_at).toLocaleDateString('es-ES', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      }) : '—'}
-                    </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <p className="truncate">{run.brief_text}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium', cfg.className)}>
-                        {cfg.icon}
-                        {cfg.label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">{run.total_candidates}</td>
-                    <td className="px-4 py-3 text-right">{run.accepted}</td>
-                    <td className="px-4 py-3 text-right font-mono text-xs">
-                      {run.actual_cost_usd != null ? `$${run.actual_cost_usd.toFixed(4)}` : run.estimated_cost_usd ? `~$${run.estimated_cost_usd.toFixed(4)}` : '—'}
-                    </td>
-                  </tr>
-                );
-              })}
-              {runs.length === 0 && !isLoading && (
-                <tr>
-                  <td colSpan={6} className="text-center py-12 text-muted-foreground">
-                    Sin búsquedas ejecutadas aún
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {runs.length > 0 && (
-          <div className="p-4 border-t flex justify-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => { const next = page + 1; setPage(next); fetchRuns(next); }}
-              disabled={isLoading}
-            >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Cargar más'}
-            </Button>
-          </div>
-        )}
+      <Card className="overflow-hidden border-divider bg-panel shadow-none">
+        <Table>
+          <TableHeader><TableRow className="bg-surface-sunken hover:bg-surface-sunken"><TableHead>Fecha</TableHead><TableHead>Brief</TableHead><TableHead>Estado</TableHead><TableHead className="text-right">Candidatos</TableHead><TableHead className="text-right">Guardados</TableHead><TableHead className="text-right">Costo</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {runs.map((run) => {
+              const config = STATUS_CONFIG[run.status];
+              return <TableRow key={run.id} className="cursor-pointer" onClick={() => navigate(`/influencer-lens/search?runId=${run.id}`)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(`/influencer-lens/search?runId=${run.id}`); } }}><TableCell className="whitespace-nowrap text-xs text-muted-foreground">{run.created_at ? new Date(run.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}</TableCell><TableCell className="max-w-xs"><span className="block truncate text-sm text-foreground">{run.brief_text || 'Nueva búsqueda'}</span><span className="mt-1 block font-mono text-[10px] text-muted-foreground">RUN-{run.id.slice(0, 8)}</span></TableCell><TableCell><Badge variant="outline" className={cn('gap-1.5', config.className)}>{config.icon}{config.label}</Badge></TableCell><TableCell className="text-right font-mono text-sm tabular-nums text-foreground">{run.total_candidates}</TableCell><TableCell className="text-right font-mono text-sm tabular-nums text-foreground">{run.accepted}</TableCell><TableCell className="text-right font-mono text-xs text-muted-foreground">{run.actual_cost_usd != null ? `$${run.actual_cost_usd.toFixed(4)}` : run.estimated_cost_usd ? `~$${run.estimated_cost_usd.toFixed(4)}` : '—'}</TableCell></TableRow>;
+            })}
+            {runs.length === 0 && !isLoading && <TableRow><TableCell colSpan={6} className="h-48 text-center text-sm text-muted-foreground">Sin búsquedas ejecutadas aún.</TableCell></TableRow>}
+            {isLoading && <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-primary" aria-label="Cargando búsquedas" /></TableCell></TableRow>}
+          </TableBody>
+        </Table>
+        {runs.length > 0 && <div className="flex justify-center border-t border-divider p-4"><Button variant="outline" size="sm" onClick={() => { const next = page + 1; setPage(next); void fetchRuns(next); }} disabled={isLoading}>{isLoading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : 'Cargar más'}</Button></div>}
       </Card>
     </div>
   );

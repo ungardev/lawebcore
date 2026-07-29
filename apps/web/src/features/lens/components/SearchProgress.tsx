@@ -69,20 +69,20 @@ export function SearchProgress({ progress, className }: SearchProgressProps) {
     : Math.max(5, Math.round((completedCount / totalSteps) * 100));
 
   return (
-    <Card className={cn("p-4 bg-muted/60 border-muted", className)}>
+    <Card className={cn("border-divider bg-surface-sunken p-4 shadow-none", className)}>
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           {!isComplete ? (
-            <Loader2 className="w-4 h-4 animate-spin text-primary flex-shrink-0" />
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" aria-hidden="true" />
           ) : (
-            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
           )}
           <span className="text-sm font-medium text-foreground">
             {currentLabel}
           </span>
         </div>
 
-        <Progress value={pct} className="h-1.5" />
+        <Progress value={pct} className="h-1.5" aria-label={`Progreso de búsqueda: ${pct}%`} />
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 flex-wrap">

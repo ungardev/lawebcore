@@ -9,10 +9,10 @@ interface MatchScoreCircleProps {
 export function MatchScoreCircle({ score, size = 'md', showLabel = false }: MatchScoreCircleProps) {
   const clampedScore = Math.max(0, Math.min(100, score));
   const colorClass =
-    clampedScore >= 80 ? 'text-green-500' :
-    clampedScore >= 60 ? 'text-yellow-500' :
-    clampedScore >= 40 ? 'text-orange-500' :
-    'text-red-500';
+    clampedScore >= 80 ? 'text-success' :
+    clampedScore >= 60 ? 'text-warning' :
+    clampedScore >= 40 ? 'text-brand-pink' :
+    'text-destructive';
 
   const sizeClasses = {
     sm: 'w-10 h-10 text-sm',
