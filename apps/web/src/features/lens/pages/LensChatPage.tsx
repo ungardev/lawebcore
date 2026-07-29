@@ -106,7 +106,7 @@ export function LensChatPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-5">
       <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -129,7 +129,7 @@ export function LensChatPage() {
         </Button>
       </header>
 
-      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversaciones del Lens">
           <div className="flex items-center justify-between border-b border-divider px-4 py-3">
             <div><p className="text-eyebrow text-muted-foreground">Sesiones</p><p className="mt-1 text-xs font-medium text-foreground">Conversaciones</p></div>
@@ -148,7 +148,7 @@ export function LensChatPage() {
           </div>
         </aside>
 
-        <section className="flex h-full min-h-0 min-w-0 flex-col rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
+        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
           {!conversation && !isLoading ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />
@@ -160,7 +160,7 @@ export function LensChatPage() {
                 <div className="flex items-center gap-2 text-xs"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /><span className="font-medium text-foreground">Lens operativo</span></div>
                 <span className="font-mono text-[10px] text-muted-foreground">CHAT / DISCOVERY</span>
               </div>
-              <div className="min-h-0 flex-1 h-full space-y-4 overflow-y-auto overscroll-contain p-4 md:p-6">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
                 {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
                 {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
                 {isLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" /></span>Procesando solicitud…</div>}
