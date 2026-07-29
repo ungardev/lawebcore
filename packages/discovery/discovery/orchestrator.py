@@ -1,6 +1,7 @@
 """LangGraph Orchestrator — state machine for conversational discovery."""
 
 import asyncio
+import re
 from typing import Any
 from uuid import UUID
 
@@ -39,6 +40,23 @@ _AFFIRMATIVE_KEYWORDS = {
     "great", "let's do it", "do it", "run it", "launch", "execute",
     "proceed", "ready", "let's go", "lets go",
 }
+
+_MORE_CANDIDATES_PATTERNS = [
+    re.compile(r"dame\s+(otros|15|más|\d+)\s*(perfiles?|candidatos?|resultados?|perfis?)", re.IGNORECASE),
+    re.compile(r"(más|otros|otro)\s+(perfiles?|candidatos?|resultados?|perfis?)", re.IGNORECASE),
+    re.compile(r"dame\s+15\s+(más|de)?", re.IGNORECASE),
+    re.compile(r"perfiles?\s+diferentes", re.IGNORECASE),
+    re.compile(r"busca\s+más", re.IGNORECASE),
+    re.compile(r"más\s+resultados", re.IGNORECASE),
+    re.compile(r"otro\s+set", re.IGNORECASE),
+    re.compile(r"encuentra\s+más", re.IGNORECASE),
+    re.compile(r"búsqueda\s+nueva", re.IGNORECASE),
+    re.compile(r"dame\s+más\s+perfiles?", re.IGNORECASE),
+]
+
+
+def _is_more_candidates_request(content: str) -> bool:
+    return any(p.search(content) for p in _MORE_CANDIDATES_PATTERNS)
 
 
 class ConversationState:
@@ -352,12 +370,57 @@ class DiscoveryOrchestrator:
                 "candidates": [],
             }
 
+        if _is_more_candidates_request(content):
+            exclude_handles = await self._get_delivered_handles(conversation_id)
+            if state.brief_structured:
+                updated_brief = state.brief_structured.model_dump()
+                updated_brief["exclude_handles"] = exclude_handles
+            else:
+                updated_brief = None
+            state.step = ConversationStep.SEARCHING
+            return {
+                "conversation_id": str(conversation_id),
+                "step": state.step.value,
+                "message": f"Buscando 15 candidatos nuevos (excluyendo {len(exclude_handles)} ya entregados)...",
+                "brief": updated_brief,
+                "candidates": [],
+                "pending_discovery": True,
+            }
+
         return {
             "conversation_id": str(conversation_id),
             "step": state.step.value,
             "message": "Revisa los candidatos arriba. ¿Quieres aprobar algunos, buscar más, o empezar una nueva búsqueda?",
             "candidates": [c.model_dump() for c in state.candidates],
         }
+
+    async def _get_delivered_handles(self, conversation_id: UUID) -> list[str]:
+        """Extrae handles ya entregados en mensajes anteriores del assistant."""
+        try:
+            messages = await supabase_rest.select(
+                table="discovery_messages",
+                select="content",
+                filters=[f"conversation_id=eq.{conversation_id}", "role=eq.assistant"],
+                order="created_at.desc",
+                limit=100,
+            )
+        except Exception:
+            return []
+
+        handles: set[str] = set()
+        handle_pattern = re.compile(r"@(\w[\w.]*\w|\w)", re.IGNORECASE)
+        markdown_handle_pattern = re.compile(r"\*\*@?([^*]+)\*\*")
+
+        for msg in messages:
+            content = msg.get("content", "")
+            found = handle_pattern.findall(content)
+            found += markdown_handle_pattern.findall(content)
+            for h in found:
+                clean = h.strip().lstrip("@").lower()
+                if clean and len(clean) >= 3:
+                    handles.add(clean)
+
+        return list(handles)
 
     async def _execute_discovery(
         self, conversation_id: UUID

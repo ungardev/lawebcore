@@ -77,6 +77,7 @@ class BriefStructured(BaseModel):
     additional_context: str = ""
     brief_source: str = Field(default="manual", description="Source of the brief: 'manual', 'file_upload', 'ai_generated'")
     source_document: dict | None = None
+    exclude_handles: list[str] = Field(default_factory=list)
 
 
 class DiscoveryPlan(BaseModel):
@@ -86,6 +87,7 @@ class DiscoveryPlan(BaseModel):
     analytics_top_n: int = 20
     min_followers: int = 1000
     max_followers: int = 10_000_000
+    exclude_handles: list[str] = Field(default_factory=list)
 
 
 class CandidateMetrics(BaseModel):
@@ -186,6 +188,7 @@ class DiscoverySearchRequest(BaseModel):
     tone: list[str] = Field(default_factory=list)
     platforms: list[Platform] = Field(default_factory=[Platform.INSTAGRAM])
     max_candidates: int = Field(default=20, ge=1, le=100)
+    exclude_handles: list[str] = Field(default_factory=list)
 
 
 class DiscoveryRunResponse(BaseModel):

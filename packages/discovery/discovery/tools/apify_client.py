@@ -25,8 +25,8 @@ INSTAGRAM_SEARCH_SCRAPER = "apify~instagram-search-scraper"
 ENGAGEMENT_ANALYTICS_SCRAPER = "easyapi~instagram-profile-engagement-analytics"
 TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
 
-CACHE_TTL_PROFILES = 86400
-CACHE_TTL_SEARCH = 604800
+CACHE_TTL_PROFILES = 3600
+CACHE_TTL_SEARCH = 1800
 
 
 class ApifyClient:
@@ -64,9 +64,10 @@ class ApifyClient:
             await self._redis.aclose()
             self._redis = None
 
-    def _build_cache_key(self, actor_id: str, run_input: dict) -> str:
+    def _build_cache_key(self, actor_id: str, run_input: dict, run_id: str | None = None) -> str:
         stable = json.dumps(run_input, sort_keys=True, default=str)
-        h = hashlib.sha1(f"{actor_id}:{stable}".encode()).hexdigest()
+        salt = f":{run_id}" if run_id else ""
+        h = hashlib.sha1(f"{actor_id}{salt}:{stable}".encode()).hexdigest()
         return f"apify:cache:{actor_id}:{h}"
 
     async def _get_cached(self, cache_key: str) -> list[dict[str, Any]] | None:
@@ -125,16 +126,17 @@ class ApifyClient:
         response.raise_for_status()
         return response.json()
 
-    async def _run_sync(self, actor_id: str, run_input: dict, timeout_s: int = 300) -> list[dict[str, Any]]:
+    async def _run_sync(self, actor_id: str, run_input: dict, timeout_s: int = 300, run_id: str | None = None) -> list[dict[str, Any]]:
         """Sync endpoint — waits for completion and returns dataset items directly.
 
         Mirrors the /run-sync-get-dataset-items endpoint used in extract_purina_real_apify.py v4.
+        run_id is used to namespace the cache key so each discovery run gets fresh data.
         """
         client = await self._get_client()
-        cache_key = self._build_cache_key(actor_id, run_input)
+        cache_key = self._build_cache_key(actor_id, run_input, run_id)
         cached = await self._get_cached(cache_key)
         if cached is not None:
-            logger.info("apify_sync_cache_hit", actor_id=actor_id, cached_count=len(cached))
+            logger.info("apify_sync_cache_hit", actor_id=actor_id, cached_count=len(cached), run_id=run_id)
             return cached
 
         cache_key_for_ttl = cache_key
@@ -156,7 +158,7 @@ class ApifyClient:
         result = items if isinstance(items, list) else []
         if result and cache_key_for_ttl:
             await self._set_cached(cache_key_for_ttl, result, CACHE_TTL_PROFILES)
-        logger.info("apify_sync_done", actor_id=actor_id, items_count=len(result))
+        logger.info("apify_sync_done", actor_id=actor_id, items_count=len(result), run_id=run_id)
         return result
 
     def _build_client_headers(self) -> dict[str, str]:
@@ -495,6 +497,7 @@ class ApifyClient:
         self,
         hashtags: list[str],
         results_limit: int = 50,
+        run_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Single sync call with all hashtags at once (v4 pattern)."""
         clean = [h.lstrip("#") for h in hashtags]
@@ -507,12 +510,13 @@ class ApifyClient:
             "hashtags": clean,
             "resultsLimit": results_limit,
         }
-        return await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input)
+        return await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input, run_id=run_id)
 
     async def search_users_by_keywords_sync(
         self,
         keywords: list[str],
         limit_per_keyword: int = 30,
+        run_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Single sync call with all keywords (v4 pattern)."""
         logger.info(
@@ -525,11 +529,12 @@ class ApifyClient:
             "searchQueries": keywords,
             "resultsLimit": limit_per_keyword,
         }
-        return await self._run_sync(INSTAGRAM_SEARCH_SCRAPER, run_input)
+        return await self._run_sync(INSTAGRAM_SEARCH_SCRAPER, run_input, run_id=run_id)
 
     async def enrich_profiles_sync(
         self,
         usernames: list[str],
+        run_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Single sync call for batch profile enrichment (v4 pattern)."""
         clean = [u.lstrip("@") for u in usernames]
@@ -541,7 +546,7 @@ class ApifyClient:
             "usernames": clean,
             "resultsType": "details",
         }
-        return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input)
+        return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input, run_id=run_id)
 
     async def scrape_hashtags_batch(
         self,

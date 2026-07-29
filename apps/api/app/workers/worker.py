@@ -150,6 +150,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         hashtag_items = await apify_client.scrape_hashtags_all_sync(
             plan.hashtag_queries,
             results_limit=50,
+            run_id=run_id,
         )
         logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
         await _save_progress_message(
@@ -190,6 +191,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         keyword_items = await apify_client.search_users_by_keywords_sync(
             plan.keyword_queries,
             limit_per_keyword=30,
+            run_id=run_id,
         )
         logger.info("step2_keyword_done", keyword_users=len(keyword_items))
 
@@ -241,7 +243,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         if handles_to_enrich:
             try:
-                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
+                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich, run_id=run_id)
                 if not enriched_profiles:
                     step3_degraded = True
                     step3_error = "Apify returned empty result"
@@ -301,6 +303,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         )
 
         print(f"[discovery_run_task] STEP 4: Scoring {len(profiles)} profiles", flush=True)
+
+        exclude_handles = set(h.lower() for h in (plan.exclude_handles or []))
+        if exclude_handles:
+            original_count = len(profiles)
+            profiles = {k: v for k, v in profiles.items() if k.lower() not in exclude_handles}
+            print(f"[discovery_run_task] STEP 4: Excluded {original_count - len(profiles)} handles, scoring {len(profiles)} remaining", flush=True)
 
         scored: list[dict] = []
         for handle, p in profiles.items():

@@ -100,6 +100,7 @@ class QueryBuilder:
             analytics_top_n=20,
             min_followers=min_followers,
             max_followers=10_000_000,
+            exclude_handles=getattr(brief, "exclude_handles", []) or [],
         )
 
     def _is_vertical_mascota(self, brief: BriefStructured) -> bool:

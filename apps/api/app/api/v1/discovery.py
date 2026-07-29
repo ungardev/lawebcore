@@ -303,6 +303,7 @@ async def send_message(
                         audience_cities=brief.audience_cities,
                         tone=brief.tone,
                         platforms=brief.platforms,
+                        exclude_handles=brief.exclude_handles if hasattr(brief, "exclude_handles") else [],
                     ),
                     created_by=user.id,
                 )
