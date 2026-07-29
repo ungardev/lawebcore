@@ -7,7 +7,8 @@ interface ToolCallBlockProps {
   tool_results?: ToolResult[] | null;
 }
 
-function formatArgs(args: Record<string, unknown>): string {
+function formatArgs(args: Record<string, unknown> | null | undefined): string {
+  if (!args || typeof args !== 'object') return '{}';
   const entries = Object.entries(args).filter(([, v]) => v !== undefined && v !== null);
   if (entries.length === 0) return '{}';
   if (entries.length <= 2 && entries.every(([, v]) => typeof v !== 'object')) {
@@ -39,6 +40,7 @@ export function ToolCallBlock({ tool_calls, tool_results }: ToolCallBlockProps) 
             )}>
               <ArrowRight className="w-3 h-3 text-primary flex-shrink-0" />
               <span className="text-primary font-semibold">{tc.name}</span>
+              {tc.status && <span className="text-[10px] font-normal text-muted-foreground ml-1">({tc.status})</span>}
               <span className="text-muted-foreground flex-1 truncate">
                 {formatArgs(tc.arguments)}
               </span>

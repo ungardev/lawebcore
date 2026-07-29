@@ -85,12 +85,9 @@ export function LensChatPage() {
       const briefJson = JSON.stringify(brief);
       const briefMessage = `Brief: ${briefJson}. Buscar ahora.`;
 
-      if (!conversation) {
-        const newConversation = await startConversation(briefMessage);
-        navigate(`/influencer-lens/${newConversation.id}`);
-      } else {
-        await sendMessage(briefMessage);
-      }
+      const newConversation = await startConversation(briefMessage);
+      setConversations((previous) => [newConversation, ...previous]);
+      navigate(`/influencer-lens/${newConversation.id}`);
 
       toast.success('Búsqueda iniciada');
       setShowWizard(false);

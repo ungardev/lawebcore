@@ -155,9 +155,10 @@ export interface DiscoveryRunSummary {
 }
 
 export interface ToolCall {
-  id: string;
+  id?: string;
   name: string;
-  arguments: Record<string, unknown>;
+  arguments?: Record<string, unknown>;
+  status?: string;
 }
 
 export interface ToolResult {
