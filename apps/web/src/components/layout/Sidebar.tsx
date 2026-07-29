@@ -69,7 +69,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         className={({ isActive }) =>
           cn(
             'group relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-ring',
-            collapsed && 'md:justify-center md:px-2',
+            collapsed && 'md:justify-center md:px-1',
             isActive
               ? 'bg-sidebar-accent text-sidebar-foreground'
               : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
@@ -87,7 +87,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
               </>
             )}
             {collapsed && (
-              <span className="pointer-events-none absolute left-full z-30 ml-2 hidden whitespace-nowrap rounded border border-divider bg-panel-raised px-2 py-1 text-xs font-medium text-foreground opacity-0 shadow-elevated transition-opacity group-hover:opacity-100 md:block">
+              <span className="pointer-events-none absolute right-full z-30 mr-2 hidden whitespace-nowrap rounded border border-divider bg-panel-raised px-2 py-1 text-xs font-medium text-foreground opacity-0 shadow-elevated transition-opacity group-hover:opacity-100 md:block">
                 {item.label}
               </span>
             )}
@@ -98,11 +98,11 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   return (
-    <aside className={cn('flex h-full flex-col overflow-hidden bg-sidebar transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
+    <aside className={cn('flex h-full flex-col overflow-hidden overflow-x-hidden bg-sidebar transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
       <div className={cn('flex h-16 shrink-0 items-center border-b border-sidebar-border', collapsed ? 'justify-center px-2' : 'px-4')}>
         <NavLink to="/home" onClick={onNavigate} className="focus-ring rounded-md" aria-label="Ir al resumen">
           {collapsed ? (
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-sidebar-primary text-sm font-bold text-sidebar-primary-foreground">W</span>
+            <img src="/logo-laweb-collapsed.png" alt="La Web" className="h-8 w-8 object-contain" />
           ) : (
             <img src="/logo-laweb.png" alt="La Web" className="h-11 w-auto object-contain" />
           )}
