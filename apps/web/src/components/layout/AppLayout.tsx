@@ -17,7 +17,7 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-[100dvh] overflow-hidden bg-background text-foreground">
-      <div className="relative z-20 hidden shrink-0 border-r border-divider md:block">
+      <div className="relative z-20 hidden shrink-0 overflow-hidden border-r border-divider md:block">
         <Sidebar collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
@@ -30,7 +30,7 @@ export function AppLayout() {
       >
         <div className="absolute inset-0 bg-black/70" />
         <div
-          className={`absolute inset-y-0 left-0 w-[min(20rem,88vw)] border-r border-divider bg-sidebar shadow-elevated transition-transform duration-200 ${
+          className={`absolute inset-y-0 left-0 w-[min(20rem,88vw)] overflow-hidden border-r border-divider bg-sidebar shadow-elevated transition-transform duration-200 ${
             mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
           onClick={(event) => event.stopPropagation()}
@@ -45,7 +45,7 @@ export function AppLayout() {
           onToggleCollapse={toggleCollapsed}
           onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto min-h-full w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
             <Outlet />
           </div>

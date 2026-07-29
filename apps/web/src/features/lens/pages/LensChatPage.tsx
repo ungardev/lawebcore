@@ -106,8 +106,8 @@ export function LensChatPage() {
   };
 
   return (
-    <div className="flex min-h-[calc(100dvh-7rem)] flex-col gap-5">
-      <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
@@ -129,13 +129,13 @@ export function LensChatPage() {
         </Button>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversaciones del Lens">
           <div className="flex items-center justify-between border-b border-divider px-4 py-3">
             <div><p className="text-eyebrow text-muted-foreground">Sesiones</p><p className="mt-1 text-xs font-medium text-foreground">Conversaciones</p></div>
             <span className="font-mono text-[10px] text-muted-foreground">{conversations.length}</span>
           </div>
-          <div className="min-h-28 flex-1 space-y-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
             {conversations.length === 0 ? <p className="px-3 py-5 text-center text-xs text-muted-foreground">Sin conversaciones guardadas.</p> : conversations.map((item) => (
               <button key={item.id} type="button" onClick={() => navigate(`/influencer-lens/${item.id}`)} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
                 <span className="block truncate text-xs font-medium text-foreground">{item.accumulated_brief?.slice(0, 42) || 'Nueva búsqueda'}</span>
@@ -148,7 +148,7 @@ export function LensChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
+        <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
           {!conversation && !isLoading ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />
@@ -160,7 +160,7 @@ export function LensChatPage() {
                 <div className="flex items-center gap-2 text-xs"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /><span className="font-medium text-foreground">Lens operativo</span></div>
                 <span className="font-mono text-[10px] text-muted-foreground">CHAT / DISCOVERY</span>
               </div>
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 md:p-6">
                 {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
                 {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
                 {isLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" /></span>Procesando solicitud…</div>}
