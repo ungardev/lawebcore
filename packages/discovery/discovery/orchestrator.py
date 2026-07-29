@@ -65,7 +65,15 @@ class DiscoveryOrchestrator:
             return None
 
         state = ConversationState()
-        state.step = ConversationStep(conv.get("current_step", "start"))
+        try:
+            state.step = ConversationStep(conv.get("current_step", "start"))
+        except ValueError:
+            logger.warning(
+                "invalid_conversation_step_fallback",
+                conversation_id=str(conversation_id),
+                invalid_value=conv.get("current_step"),
+            )
+            state.step = ConversationStep.START
         state.accumulated_brief = conv.get("accumulated_brief", "") or ""
         state.discovery_run_id = UUID(conv["discovery_run_id"]) if conv.get("discovery_run_id") else None
 
@@ -162,6 +170,15 @@ class DiscoveryOrchestrator:
                 "message": "La búsqueda está en curso. Te avisaré cuando tenga los candidatos listos.",
                 "candidates": [],
             }
+
+        elif state.step == ConversationStep.COMPLETED:
+            state.step = ConversationStep.START
+            state.brief_structured = None
+            state.accumulated_brief = ""
+            state.candidates = []
+            state.discovery_run_id = None
+            state.pending_refinements = []
+            return await self._step_start(conversation_id, content)
 
         elif state.step == ConversationStep.RANKING:
             return {

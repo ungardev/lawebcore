@@ -34,6 +34,7 @@ class ConversationStep(str, Enum):
     RANKING = "ranking"
     CANDIDATES_REVIEW = "candidates_review"
     DONE = "done"
+    COMPLETED = "completed"
 
 
 class Platform(str, Enum):
