@@ -17,7 +17,7 @@ export function AppLayout() {
 
   return (
     <div className="flex min-h-[100dvh] overflow-hidden bg-background text-foreground">
-      <div className="relative z-20 hidden shrink-0 border-r border-divider md:block">
+      <div className="relative z-20 hidden h-full shrink-0 border-r border-divider md:block">
         <Sidebar collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
 
