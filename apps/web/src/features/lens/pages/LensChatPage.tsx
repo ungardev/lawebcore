@@ -129,7 +129,7 @@ export function LensChatPage() {
         </Button>
       </header>
 
-      <div className="grid h-full min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
+      <div className="flex min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[15rem_minmax(0,1fr)] xl:grid-cols-[17rem_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversaciones del Lens">
           <div className="flex items-center justify-between border-b border-divider px-4 py-3">
             <div><p className="text-eyebrow text-muted-foreground">Sesiones</p><p className="mt-1 text-xs font-medium text-foreground">Conversaciones</p></div>

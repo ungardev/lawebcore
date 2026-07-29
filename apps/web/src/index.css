@@ -125,7 +125,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground;

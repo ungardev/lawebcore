@@ -98,7 +98,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   };
 
   return (
-    <aside className={cn('flex h-full flex-col overflow-hidden overflow-x-hidden bg-sidebar transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
+    <aside className={cn('flex h-full flex-col overflow-hidden overflow-x-hidden border-r border-divider bg-sidebar transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
       <div className={cn('flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border', collapsed ? 'px-2' : 'px-4')}>
         <NavLink to="/home" onClick={onNavigate} className="focus-ring rounded-md" aria-label="Ir al resumen">
           {collapsed ? (
