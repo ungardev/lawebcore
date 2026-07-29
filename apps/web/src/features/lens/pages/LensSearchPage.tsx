@@ -55,8 +55,8 @@ export function LensSearchPage() {
   const statusLabel = run?.status === 'running' ? 'Discovery en curso' : run?.status === 'pending' ? 'En cola' : isComplete ? 'Resultados listos' : run?.status ? `Estado: ${run.status}` : 'Sin ejecución';
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <header className="flex flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between shrink-0">
         <div>
           <Button variant="ghost" size="sm" onClick={() => navigate('/influencer-lens')} className="mb-3 -ml-2 gap-1 text-xs text-muted-foreground"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />Volver a Lens</Button>
           <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Search className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Influencer Lens / ejecución</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Nueva búsqueda</h1></div></div>
@@ -65,8 +65,8 @@ export function LensSearchPage() {
         <Button variant="outline" onClick={() => navigate('/influencer-lens/runs')} className="gap-2"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />Ver historial</Button>
       </header>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-        <Card className="border-divider bg-panel p-5 shadow-none">
+      <div className="flex min-h-0 flex-1 gap-5 overflow-hidden xl:flex-row flex-col">
+        <Card className="xl:w-80 xl:shrink-0 xl:overflow-y-auto border-divider bg-panel p-5 shadow-none">
           <div className="mb-5"><p className="text-eyebrow text-muted-foreground">Brief directo</p><h2 className="mt-1 text-sm font-semibold text-foreground">Parámetros de búsqueda</h2></div>
           <div className="space-y-4">
             <Field label="Producto / marca"><Input value={form.product_name} onChange={(event) => setForm((previous) => ({ ...previous, product_name: event.target.value }))} placeholder="Ej: Protector solar Nivea" /></Field>
@@ -80,7 +80,7 @@ export function LensSearchPage() {
           </div>
         </Card>
 
-        <section className="min-w-0 space-y-5" aria-live="polite">
+        <section className="min-w-0 min-h-0 flex-1 overflow-y-auto space-y-5" aria-live="polite">
           <div className="rounded-lg border border-divider bg-panel p-5">
             <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-eyebrow text-muted-foreground">Estado de ejecución</p><h2 className="mt-1 text-lg font-semibold text-foreground">{statusLabel}</h2></div>{run && <Badge variant="outline" className="font-mono text-[10px]">{run.id.slice(0, 8)}</Badge>}</div>
             {!run && <div className="mt-8 flex flex-col items-center justify-center border-t border-divider pt-8 text-center"><Sparkles className="h-5 w-5 text-primary" aria-hidden="true" /><p className="mt-3 text-sm font-medium text-foreground">Configura una búsqueda</p><p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Los resultados, el progreso y el costo aparecerán aquí sin perder el contexto del brief.</p></div>}
