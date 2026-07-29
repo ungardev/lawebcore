@@ -127,6 +127,19 @@ export const lensApi = {
     return data;
   },
 
+  uploadBrief: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post<{
+      brief: BriefStructured;
+      file_name: string;
+      text_length: number;
+    }>('/lens/discovery/upload-brief', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data;
+  },
+
   preloadDemo: async () => {
     const { data } = await api.post<{ success: boolean; message: string; conversations: number }>(
       '/admin/preload-demo',

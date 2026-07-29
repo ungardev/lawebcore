@@ -16,7 +16,7 @@ from discovery.schemas import (
     DiscoverySearchRequest,
     MessageCreate,
 )
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from shared_core import supabase_rest
 
@@ -319,6 +319,112 @@ async def send_message(
         "candidates": ai_response.get("candidates", []),
         "run_summary": ai_response.get("run_summary"),
         "discovery_run_id": discovery_run_id,
+    }
+
+
+# ---- Brief Upload (PDF/TXT/CSV → Super Brief) ----
+
+@router.post("/lens/discovery/upload-brief")
+async def upload_brief_from_file(user: CurrentUserDep, file: UploadFile = File(...)):
+    """Parse a PDF, TXT or CSV file and extract a super-enriched BriefStructured JSON."""
+    import csv
+    import io
+    import json as jsonlib
+
+    from pypdf import PdfReader
+
+    ALLOWED_TYPES = {
+        "application/pdf": "pdf",
+        "text/plain": "txt",
+        "text/csv": "csv",
+        "text/markdown": "md",
+        "application/json": "json",
+    }
+    MAX_SIZE = 5 * 1024 * 1024
+
+    content_type = file.content_type or ""
+    file_ext = ALLOWED_TYPES.get(content_type)
+    if not file_ext and file.filename:
+        ext = file.filename.lower().split(".")[-1]
+        file_ext = {"pdf": "pdf", "txt": "txt", "csv": "csv", "md": "md", "json": "json"}.get(ext)
+
+    if not file_ext:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Tipo de archivo no soportado: {content_type}. Usa PDF, TXT o CSV.",
+        )
+
+    contents = await file.read()
+    if len(contents) > MAX_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Archivo demasiado grande. Máximo 5MB. Recibido: {len(contents) / 1024 / 1024:.1f}MB",
+        )
+
+    text = ""
+    file_meta = {
+        "file_name": file.filename or "unknown",
+        "file_size_bytes": len(contents),
+        "mime_type": content_type or "application/octet-stream",
+    }
+
+    if file_ext == "pdf":
+        try:
+            reader = PdfReader(io.BytesIO(contents))
+            file_meta["pages"] = len(reader.pages)
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+        except Exception as e:
+            raise HTTPException(status_code=422, detail=f"Error leyendo PDF: {e}")
+        if not text.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="No se pudo extraer texto del PDF. Si tiene imágenes escaneadas, conviértelas a texto primero.",
+            )
+
+    elif file_ext == "csv":
+        try:
+            decoded = contents.decode("utf-8")
+            reader = csv.reader(io.StringIO(decoded))
+            for row in reader:
+                text += " ".join(row) + "\n"
+            file_meta["rows"] = len(text.splitlines())
+        except UnicodeDecodeError:
+            contents = await file.read()
+            decoded = contents.decode("latin-1")
+            reader = csv.reader(io.StringIO(decoded))
+            for row in reader:
+                text += " ".join(row) + "\n"
+        if not text.strip():
+            raise HTTPException(status_code=422, detail="CSV vacío o no pudo leerse.")
+
+    elif file_ext in ("txt", "md", "json"):
+        try:
+            text = contents.decode("utf-8")
+        except UnicodeDecodeError:
+            text = contents.decode("latin-1")
+        if file_ext == "json":
+            try:
+                data = jsonlib.loads(text)
+                text = jsonlib.dumps(data, indent=2, ensure_ascii=False)
+            except jsonlib.JSONDecodeError:
+                pass
+
+    if not text.strip():
+        raise HTTPException(status_code=422, detail="No se pudo extraer texto del archivo.")
+
+    text = text[:50000]
+
+    from discovery.brief_parser import brief_parser_agent
+
+    brief = await brief_parser_agent.parse_from_document(text=text, file_meta=file_meta)
+
+    return {
+        "brief": brief.model_dump(mode="json"),
+        "file_name": file_meta["file_name"],
+        "text_length": len(text),
     }
 
 

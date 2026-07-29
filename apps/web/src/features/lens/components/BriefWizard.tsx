@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { HashtagChips } from './HashtagChips';
+import { FileUploadZone } from './FileUploadZone';
 import type { BriefStructured, AudienceGender, Platform } from '../types/discovery';
 
 const INDUSTRIES = [
@@ -71,8 +72,9 @@ const STEPS = [
   { id: 6, label: 'Revisar' },
 ];
 
+type SubmitCallback = (_: Partial<BriefStructured>) => void;
 interface BriefWizardProps {
-  onSubmit: (brief: Partial<BriefStructured>) => void;
+  onSubmit: SubmitCallback;
   onCancel: () => void;
   initialBrief?: Partial<BriefStructured>;
 }
@@ -100,9 +102,40 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
     initialBrief ?? createEmptyBrief()
   );
   const [customNiche, setCustomNiche] = useState('');
+  const [extractedBrief, setExtractedBrief] = useState<BriefStructured | null>(null);
+  const [extractedFileName, setExtractedFileName] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const update = (patch: Partial<BriefStructured>) =>
     setBrief((prev) => ({ ...prev, ...patch }));
+
+  const handleBriefExtracted = (extracted: BriefStructured, fileName: string) => {
+    setExtractedBrief(extracted);
+    setExtractedFileName(fileName);
+    setIsUploading(false);
+    const mapped: Partial<BriefStructured> = {
+      product_name: extracted.product_name,
+      brand_name: extracted.brand_name,
+      industry: extracted.industry,
+      niches: extracted.niches ?? [],
+      hashtags: extracted.hashtags ?? [],
+      audience_gender: extracted.audience_gender ?? 'all',
+      audience_age_min: extracted.audience_age_min ?? 25,
+      audience_age_max: extracted.audience_age_max ?? 45,
+      audience_countries: extracted.audience_countries ?? ['VE'],
+      audience_cities: extracted.audience_cities ?? [],
+      platforms: extracted.platforms ?? ['instagram'],
+      tone: extracted.tone ?? [],
+      additional_context: extracted.additional_context ?? '',
+    };
+    setBrief((prev) => ({ ...prev, ...mapped }));
+  };
+
+  const handleClearUpload = () => {
+    setExtractedBrief(null);
+    setExtractedFileName(null);
+    setIsUploading(false);
+  };
 
   const canNext = () => {
     switch (step) {
@@ -119,6 +152,18 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
   const handleSubmit = () => {
     onSubmit({
       ...brief,
+      ...(extractedBrief ? {
+        campaign_objective: extractedBrief.campaign_objective,
+        budget_usd: extractedBrief.budget_usd,
+        budget_currency: extractedBrief.budget_currency,
+        kpis: extractedBrief.kpis,
+        campaign_dates: extractedBrief.campaign_dates,
+        key_themes: extractedBrief.key_themes,
+        competitor_brands: extractedBrief.competitor_brands,
+        influencer_preferences: extractedBrief.influencer_preferences,
+        brief_source: extractedBrief.brief_source,
+        source_document: extractedBrief.source_document,
+      } : {}),
       platforms: (brief.platforms?.length ?? 0) > 0 ? brief.platforms : ['instagram'],
     });
   };
@@ -193,6 +238,24 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
       <Card className="p-5">
         {step === 1 && (
           <div className="space-y-4">
+            <div>
+              <Label className="mb-1.5 block">Sube tu brief (PDF/TXT/CSV)</Label>
+              <FileUploadZone
+                onBriefExtracted={handleBriefExtracted}
+                onClear={handleClearUpload}
+                isLoading={isUploading}
+                extractedBrief={extractedBrief}
+                extractedFileName={extractedFileName}
+              />
+            </div>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">o completa manualmente</span>
+              </div>
+            </div>
             <div>
               <Label className="mb-1.5 block">Producto o marca *</Label>
               <Input
@@ -445,6 +508,11 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-brand-purple" />
               <span className="text-sm font-semibold text-foreground">Resumen del Brief</span>
+              {extractedBrief && (
+                <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                  {extractedFileName}
+                </span>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
               {brief.product_name && (
@@ -471,6 +539,35 @@ export function BriefWizard({ onSubmit, onCancel, initialBrief }: BriefWizardPro
               )}
               {brief.platforms && brief.platforms.length > 0 && (
                 <div><span className="text-muted-foreground">Plataformas:</span> <span className="font-medium">{brief.platforms.join(', ')}</span></div>
+              )}
+              {extractedBrief && extractedBrief.campaign_objective && (
+                <div><span className="text-muted-foreground">Objetivo:</span> <span className="font-medium">{extractedBrief.campaign_objective}</span></div>
+              )}
+              {extractedBrief && extractedBrief.budget_usd && (
+                <div><span className="text-muted-foreground">Budget:</span> <span className="font-medium">${extractedBrief.budget_usd.toLocaleString()} {extractedBrief.budget_currency ?? 'USD'}</span></div>
+              )}
+              {extractedBrief && extractedBrief.kpis && extractedBrief.kpis.length > 0 && (
+                <div><span className="text-muted-foreground">KPIs:</span> <span className="font-medium">{extractedBrief.kpis.join(', ')}</span></div>
+              )}
+              {extractedBrief && extractedBrief.key_themes && extractedBrief.key_themes.length > 0 && (
+                <div><span className="text-muted-foreground">Temas clave:</span> <span className="font-medium">{extractedBrief.key_themes.slice(0, 3).join(', ')}</span></div>
+              )}
+              {extractedBrief && extractedBrief.competitor_brands && extractedBrief.competitor_brands.length > 0 && (
+                <div><span className="text-muted-foreground">Competencia:</span> <span className="font-medium">{extractedBrief.competitor_brands.slice(0, 2).join(', ')}</span></div>
+              )}
+              {extractedBrief && extractedBrief.influencer_preferences && (
+                (() => {
+                  const pref = extractedBrief.influencer_preferences as Record<string, unknown>;
+                  const tiers = pref?.tiers;
+                  return (
+                    <div>
+                      <span className="text-muted-foreground">Tiers:</span>{' '}
+                      <span className="font-medium">
+                        {Array.isArray(tiers) ? tiers.join(', ') : null}
+                      </span>
+                    </div>
+                  );
+                })()
               )}
             </div>
             {brief.additional_context && (

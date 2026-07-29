@@ -7,6 +7,7 @@ export type AudienceGender = 'female' | 'male' | 'all';
 export interface BriefStructured {
   product_name: string | null;
   brand_id: string | null;
+  brand_name: string | null;
   industry: string | null;
   niches: string[];
   hashtags: string[];
@@ -17,7 +18,18 @@ export interface BriefStructured {
   audience_cities: string[];
   tone: string[];
   platforms: Platform[];
+  campaign_objective: string | null;
+  campaign_name: string | null;
+  budget_usd: number | null;
+  budget_currency: string | null;
+  kpis: string[];
+  campaign_dates: Record<string, string> | null;
+  key_themes: string[];
+  competitor_brands: string[];
+  influencer_preferences: Record<string, unknown> | null;
   additional_context: string;
+  brief_source: string;
+  source_document: Record<string, unknown> | null;
 }
 
 export interface CandidateMetrics {

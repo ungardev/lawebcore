@@ -53,6 +53,7 @@ class AudienceGender(str, Enum):
 class BriefStructured(BaseModel):
     product_name: str | None = None
     brand_id: UUID | None = None
+    brand_name: str | None = None
     industry: str | None = None
     niches: list[str] = Field(default_factory=list)
     hashtags: list[str] = Field(default_factory=list, description="Custom hashtags for discovery search")
@@ -63,7 +64,18 @@ class BriefStructured(BaseModel):
     audience_cities: list[str] = Field(default_factory=list)
     tone: list[str] = Field(default_factory=list)
     platforms: list[Platform] = Field(default_factory=list)
+    campaign_objective: str | None = None
+    campaign_name: str | None = None
+    budget_usd: float | None = None
+    budget_currency: str | None = None
+    kpis: list[str] = Field(default_factory=list)
+    campaign_dates: dict | None = None
+    key_themes: list[str] = Field(default_factory=list)
+    competitor_brands: list[str] = Field(default_factory=list)
+    influencer_preferences: dict | None = None
     additional_context: str = ""
+    brief_source: str = Field(default="manual", description="Source of the brief: 'manual', 'file_upload', 'ai_generated'")
+    source_document: dict | None = None
 
 
 class DiscoveryPlan(BaseModel):

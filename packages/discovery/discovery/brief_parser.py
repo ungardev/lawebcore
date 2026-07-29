@@ -110,6 +110,63 @@ _TONE_NORMALIZATION_MAP = {
     "mincio": "mincioso",
 }
 
+_DOCUMENT_PARSER_SYSTEM_PROMPT = """Eres un estratega senior de influencer marketing en Latam con 15 años de experiencia. Recibirás un brief de campaña (puede ser PDF, TXT, CSV o texto libre). Extrae TODA la información relevante y devuélvela como JSON estructurado.
+
+REGLAS ABSOLUTAS:
+- Si el documento NO contiene un campo específico, usa null o [] (NUNCA inventes datos)
+- Si el documento es ambiguo, incluye la info textual en `additional_context`
+- `audience_countries` SIEMPRE en códigos ISO-2 (VE, CO, MX, AR, CL, PE, EC, BO, UY, PY, PA, DO, PR, CR, GT)
+- `platforms` SIEMPRE minúsculas (instagram, tiktok, youtube, x, facebook)
+- `tone` en español, minúsculas, sin acentos en valores enum
+- `niches`: máximo 5, los más específicos al producto
+- `hashtags`: máximo 10, los más relevantes para el nicho
+- `kpis`: máximo 5 KPIs específicos (reach, engagement_rate, conversions, impressions, ctr, etc.)
+- `campaign_objective`: solo uno de: awareness, consideration, conversion, retention, advocacy
+- `budget_currency`: código ISO 4217 (USD, EUR, COP, MXN, etc.)
+- `competitor_brands`: máximo 5 competidores mencionados
+- `influencer_preferences.tiers`: array de [NANO, MICRO, MID, MACRO, MEGA]
+- `campaign_dates`: objeto con start/end en formato YYYY-MM-DD o null si no se especifica
+- `brief_source`: siempre "file_upload"
+- `source_document`: incluye solo {file_name, file_size_bytes, mime_type, pages} si disponibles"""
+
+_DOCUMENT_PARSER_USER_TEMPLATE = """Analiza el siguiente brief de campaña y extrae TODOS los campos posibles:
+
+---
+
+{document_text}
+
+---
+
+Responde SOLO con JSON válido, sin texto adicional:
+
+{{
+  "product_name": "nombre del producto o null",
+  "brand_id": null,
+  "brand_name": "nombre de marca o null",
+  "industry": "industria inferida o null",
+  "niches": ["nicho1", "nicho2"],
+  "hashtags": ["#hashtag1", "#hashtag2"],
+  "audience_gender": "female|male|all",
+  "audience_age_min": número,
+  "audience_age_max": número,
+  "audience_countries": ["VE", "CO"],
+  "audience_cities": ["ciudad1"],
+  "tone": ["tono1"],
+  "platforms": ["instagram", "tiktok"],
+  "campaign_objective": "awareness|consideration|conversion|retention|advocacy|null",
+  "campaign_name": "nombre de campaña o null",
+  "budget_usd": número o null,
+  "budget_currency": "USD|EUR|COP|MXN|null",
+  "kpis": ["kpi1", "kpi2"],
+  "campaign_dates": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} },
+  "key_themes": ["tema1", "tema2"],
+  "competitor_brands": ["competidor1"],
+  "influencer_preferences": {{"tiers": ["MICRO", "MID"], "min_er": 0.04}},
+  "additional_context": "resumen del documento o vacío",
+  "brief_source": "file_upload",
+  "source_document": {{"file_name": "nombre.pdf", "file_size_bytes": 0, "mime_type": "application/pdf", "pages": 1}}
+}}"""
+
 
 
 
@@ -279,6 +336,31 @@ class BriefParserAgent:
             return BriefStructured(
                 additional_context=f"Error parsing: {str(e)[:200]}. Original: {original_text[:200]}"
             )
+
+    async def parse_from_document(self, text: str, file_meta: dict[str, Any]) -> BriefStructured:
+        logger.info("document_brief_parser_started", file_meta=file_meta, text_length=len(text))
+
+        user_prompt = _DOCUMENT_PARSER_USER_TEMPLATE.format(document_text=text)
+
+        response = await deepseek_client.complete(
+            prompt=user_prompt,
+            system=_DOCUMENT_PARSER_SYSTEM_PROMPT,
+            temperature=0.2,
+            max_tokens=800,
+        )
+
+        logger.info(
+            "document_brief_deepseek_response",
+            content_preview=response.content[:500],
+            content_length=len(response.content),
+            model=response.model,
+        )
+
+        brief = self._parse_response(response.content, text)
+        if file_meta:
+            brief.source_document = file_meta
+        brief.brief_source = "file_upload"
+        return brief
 
 
 brief_parser_agent = BriefParserAgent()
