@@ -27,10 +27,21 @@ export function HashtagChips({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionGroups = getSuggestionsForIndustry(industry ?? null);
 
-  const addHashtag = (tag: string) => {
-    const clean = tag.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, '');
-    if (!clean || hashtags.includes(clean) || hashtags.length >= max) return;
-    onChange([...hashtags, clean]);
+  const addHashtags = (raw: string) => {
+    const newTags = raw
+      .split(/[,\n;]+/)
+      .map((t) => t.trim().toLowerCase().replace(/^#/, '').replace(/\s+/g, ''))
+      .filter(Boolean);
+
+    if (newTags.length === 0) return;
+
+    const merged = [...hashtags];
+    for (const tag of newTags) {
+      if (!merged.includes(tag) && merged.length < max) {
+        merged.push(tag);
+      }
+    }
+    onChange(merged);
     setInputValue('');
     setShowSuggestions(false);
   };
@@ -42,10 +53,18 @@ export function HashtagChips({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
       e.preventDefault();
-      if (inputValue.trim()) addHashtag(inputValue);
+      if (inputValue.trim()) addHashtags(inputValue);
     }
     if (e.key === 'Backspace' && !inputValue && hashtags.length > 0) {
       removeHashtag(hashtags[hashtags.length - 1]);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = e.clipboardData.getData('text');
+    if (/[,\n;]/.test(pasted)) {
+      e.preventDefault();
+      addHashtags(inputValue + pasted);
     }
   };
 
@@ -83,6 +102,7 @@ export function HashtagChips({
                 setShowSuggestions(true);
               }}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onFocus={() => setShowSuggestions(true)}
               onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
               placeholder={hashtags.length === 0 ? placeholder : '+'}
@@ -103,7 +123,7 @@ export function HashtagChips({
                   type="button"
                   onMouseDown={(e) => {
                     e.preventDefault();
-                    addHashtag(tag);
+                    addHashtags(tag);
                   }}
                   className="inline-flex items-center gap-1 rounded border border-divider bg-surface-raised px-2 py-1 text-xs text-foreground transition-colors hover:border-primary/30 hover:bg-primary/10 focus-ring"
                 >
@@ -118,7 +138,7 @@ export function HashtagChips({
       </div>
 
       <p className="text-[10px] text-muted-foreground">
-        {hashtags.length}/{max} hashtags · Enter o coma para agregar
+        {hashtags.length}/{max} hashtags · Enter, coma o pegar para agregar
       </p>
     </div>
   );
