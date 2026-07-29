@@ -82,22 +82,18 @@ export function LensChatPage() {
   const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
     setWizardLoading(true);
     try {
-      const run = await lensApi.search.createRun({
-        product_name: brief.product_name ?? undefined,
-        industry: brief.industry ?? undefined,
-        niches: brief.niches ?? [],
-        audience_gender: brief.audience_gender ?? 'all',
-        audience_age_min: brief.audience_age_min ?? 25,
-        audience_age_max: brief.audience_age_max ?? 45,
-        audience_countries: brief.audience_countries ?? ['VE'],
-        audience_cities: brief.audience_cities ?? [],
-        platforms: brief.platforms ?? ['instagram'],
-        tone: brief.tone ?? [],
-        hashtags: brief.hashtags ?? [],
-      });
+      const briefJson = JSON.stringify(brief);
+      const briefMessage = `Brief: ${briefJson}. Buscar ahora.`;
+
+      if (!conversation) {
+        const newConversation = await startConversation(briefMessage);
+        navigate(`/influencer-lens/${newConversation.id}`);
+      } else {
+        await sendMessage(briefMessage);
+      }
+
       toast.success('Búsqueda iniciada');
       setShowWizard(false);
-      navigate(`/influencer-lens/search?runId=${run.id}`);
     } catch {
       toast.error('No se pudo iniciar la búsqueda. Revisa los datos e intenta de nuevo.');
     } finally {
