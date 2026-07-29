@@ -154,6 +154,34 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
     )
 
     orchestrator_step = result.get("step", ConversationStep.START.value)
+    assistant_content = result.get("message", "")
+
+    if body.initial_brief:
+        await supabase_rest.insert(
+            table="discovery_messages",
+            values={
+                "conversation_id": str(conversation_id),
+                "role": "user",
+                "content": body.initial_brief,
+            },
+            returning="representation",
+        )
+
+    if assistant_content:
+        await supabase_rest.insert(
+            table="discovery_messages",
+            values={
+                "conversation_id": str(conversation_id),
+                "role": "assistant",
+                "content": assistant_content,
+                "reasoning": result.get("reasoning"),
+                "tool_calls": result.get("tool_calls"),
+                "tool_results": result.get("tool_results"),
+                "cost_usd": result.get("cost_usd", 0.0),
+                "latency_ms": result.get("latency_ms", 0),
+            },
+            returning="representation",
+        )
 
     await conversation_memory.save_conversation(
         conversation_id=conversation_id,
@@ -162,11 +190,13 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
         step=orchestrator_step,
     )
 
+    msg_count = (1 if body.initial_brief else 0) + (1 if assistant_content else 0)
     await conversation_memory.update_conversation(
         conversation_id=conversation_id,
         updates={
             "accumulated_brief": result.get("accumulated_brief", ""),
             "parsed_brief_json": result.get("brief"),
+            "message_count": msg_count,
         },
     )
 
