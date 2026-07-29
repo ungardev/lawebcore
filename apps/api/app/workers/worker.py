@@ -20,6 +20,7 @@ from shared_core import settings
 from shared_core import supabase_rest
 from discovery.query_builder import query_builder
 from discovery.schemas import BriefStructured, Platform
+from discovery.memory import conversation_memory
 from discovery.tools import (
     apify_client,
     meta_client,
@@ -59,6 +60,44 @@ async def shutdown(ctx):
     await youtube_client.close()
     await metricool_client.close()
     await tiktok_client.close()
+
+
+# ---- Progress reporting helpers ----
+
+async def _get_conversation_id_for_run(run_id: str) -> str | None:
+    """Busca el conversation_id asociado a un discovery_run."""
+    try:
+        conv = await supabase_rest.select_one(
+            table="discovery_conversations",
+            select="id",
+            filters=[f"discovery_run_id=eq.{run_id}"],
+        )
+        return conv.get("id") if conv else None
+    except Exception as e:
+        logger.warning("get_conversation_id_failed", run_id=run_id, error=str(e))
+        return None
+
+
+async def _save_progress_message(
+    run_id: str,
+    content: str,
+    tool: str = "discovery_pipeline",
+) -> None:
+    """Guarda un mensaje de progreso en el conversation asociado al run."""
+    from uuid import UUID as pyUUID
+    try:
+        conv_id = await _get_conversation_id_for_run(run_id)
+        if not conv_id:
+            logger.debug("no_conversation_for_run", run_id=run_id)
+            return
+        await conversation_memory.save_message(
+            conversation_id=pyUUID(conv_id),
+            role="assistant",
+            content=content,
+            tool_calls=[{"name": tool, "status": "completed"}],
+        )
+    except Exception as e:
+        logger.warning("save_progress_message_failed", run_id=run_id, error=str(e))
 
 
 # ---- Discovery tasks ----
@@ -113,6 +152,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             results_limit=50,
         )
         logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
+        await _save_progress_message(
+            run_id,
+            f"✅ **Step 1/4 completado**: Escaneé **{len(hashtag_items)} posts** de "
+            f"**{len(plan.hashtag_queries)} hashtags** relevantes. "
+            f"Sigamos con búsqueda por keywords...",
+        )
 
         for item in hashtag_items:
             handle = item.get("ownerUsername") or item.get("username")
@@ -174,6 +219,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         unique_handles = list(profiles.keys())
         logger.info("step2_merge_done", unique_profiles=len(unique_handles))
+        await _save_progress_message(
+            run_id,
+            f"✅ **Step 2/4 completado**: Encontré **{len(unique_handles)} perfiles únicos** "
+            f"({len(keyword_items)} via keywords + {len(hashtag_items)} via hashtags). "
+            f"Enriqueciendo los top {min(MAX_HANDLES_TO_ENRICH, len(unique_handles))} con datos de Instagram...",
+        )
 
         await _run_update_metadata(run_id, {
             "completed_steps": ["step1_hashtag_search", "step2_keyword_search"],
@@ -185,8 +236,36 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         print(f"[discovery_run_task] STEP 3: Profile enrichment ({len(handles_to_enrich)} profiles)", flush=True)
 
         enriched_profiles: list[dict] = []
+        step3_degraded = False
+        step3_error: str | None = None
+
         if handles_to_enrich:
-            enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
+            try:
+                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
+                if not enriched_profiles:
+                    step3_degraded = True
+                    step3_error = "Apify returned empty result"
+                    await _save_progress_message(
+                        run_id,
+                        f"⚠️ **Step 3/4 degradado**: Apify no devolvió datos enriquecidos "
+                        f"({len(handles_to_enrich)} perfiles intentados). "
+                        f"Continuando con datos básicos...",
+                    )
+                else:
+                    await _save_progress_message(
+                        run_id,
+                        f"✅ **Step 3/4 completado**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
+                        f"con datos reales de Instagram (followers, ER, bio, etc.)",
+                    )
+            except Exception as e:
+                step3_degraded = True
+                step3_error = str(e)
+                logger.warning("step3_enrichment_failed", run_id=run_id, error=str(e))
+                await _save_progress_message(
+                    run_id,
+                    f"⚠️ **Step 3/4 degradado**: Error enriqueciendo perfiles con Apify. "
+                    f"Continuando con datos básicos. Detalle: {str(e)[:100]}",
+                )
 
         for e in enriched_profiles:
             handle = e.get("username", "")
@@ -310,12 +389,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 ve_filtered=len(scored),
             )
 
+        await _save_progress_message(
+            run_id,
+            f"✅ **Step 4/4 completado**: {len(scored)} candidatos pasaron el filtro VE. "
+            f"Insertando top {len(qualified)} en la base de datos...",
+        )
+
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
         total = inserted_count
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
+        final_status = "partial" if step3_degraded else "completed"
         await _run_update(run_id, {
-            "status": "completed",
+            "status": final_status,
             "total_candidates": total,
             "completed_at": datetime.now(timezone.utc),
         })
@@ -323,6 +409,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "current_step": "completed",
             "candidates_found": total,
             "completed_at": datetime.now(timezone.utc),
+            "step3_degraded": step3_degraded,
+            "step3_error": step3_error,
         })
 
         conv = await supabase_rest.select_one(
