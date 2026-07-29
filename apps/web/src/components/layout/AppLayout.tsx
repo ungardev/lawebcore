@@ -45,8 +45,8 @@ export function AppLayout() {
           onToggleCollapse={toggleCollapsed}
           onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto flex h-full w-full max-w-[1680px] flex-col px-4 py-5 md:px-6 md:py-7 xl:px-8">
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto h-full w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
             <Outlet />
           </div>
         </main>

@@ -99,7 +99,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
   return (
     <aside className={cn('flex h-full flex-col overflow-hidden overflow-x-hidden bg-sidebar transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
-      <div className={cn('flex h-16 shrink-0 items-center border-b border-sidebar-border', collapsed ? 'justify-center px-2' : 'px-4')}>
+      <div className={cn('flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border', collapsed ? 'px-2' : 'px-4')}>
         <NavLink to="/home" onClick={onNavigate} className="focus-ring rounded-md" aria-label="Ir al resumen">
           {collapsed ? (
             <img src="/logo-laweb-collapsed.png" alt="La Web" className="h-8 w-8 object-contain" />
@@ -109,7 +109,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         </NavLink>
       </div>
 
-      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-5" aria-label="Navegación principal">
+      <nav className="shrink-0 overflow-y-auto px-2 py-5" aria-label="Navegación principal">
         <NavGroup label="Workspace" items={NAV_MAIN} collapsed={collapsed} renderItem={renderItem} />
         <NavGroup label="Inteligencia" items={NAV_INTELLIGENCE} collapsed={collapsed} renderItem={renderItem} />
       </nav>
