@@ -18,55 +18,36 @@ interface SearchProgressProps {
   className?: string;
 }
 
-const STEP_LABELS: Record<string, string> = {
-  parsing_brief: "Parseando brief...",
-  building_queries: "Construyendo queries...",
-  step1_hashtag_search: "Buscando hashtags...",
-  step2_keyword_search: "Buscando por keywords...",
-  step3_profile_enrichment: "Enriqueciendo perfiles...",
-  step4_engagement_analytics: "Analizando engagement...",
-  step5_scoring: "Rankeando candidatos...",
-  querying_instagram_hashtag_search: "Buscando en Instagram...",
-  querying_tiktok_hashtag_search: "Buscando en TikTok...",
-  querying_youtube_channel_search: "Buscando en YouTube...",
-  inserting_candidates: "Guardando candidatos...",
-  completed: "Completado",
-};
-
-const ALL_STEPS = [
-  "parsing_brief",
-  "building_queries",
-  "querying_instagram_hashtag_search",
-  "querying_tiktok_hashtag_search",
-  "querying_youtube_channel_search",
-  "inserting_candidates",
-  "completed",
+const PHASES = [
+  { id: "step1_hashtag_search", label: "Buscar candidatos por hashtags" },
+  { id: "step2_keyword_search", label: "Buscar por keywords" },
+  { id: "step3_profile_enrichment", label: "Enriquecer perfiles con datos reales" },
+  { id: "step4_scoring", label: "Puntuar y filtrar candidatos" },
 ];
 
-function getStepLabel(step: string, hashtag?: string): string {
-  if (STEP_LABELS[step]) return STEP_LABELS[step];
-  if (step.startsWith("querying_instagram")) {
-    return `Buscando en Instagram${hashtag ? ` (${hashtag})` : ""}...`;
-  }
-  if (step.startsWith("querying_tiktok")) {
-    return `Buscando en TikTok${hashtag ? ` (${hashtag})` : ""}...`;
-  }
-  if (step.startsWith("querying_youtube")) {
-    return `Buscando en YouTube${hashtag ? ` (${hashtag})` : ""}...`;
-  }
-  return step;
+function getStepStatus(
+  phaseId: string,
+  currentStep: string,
+  completedSteps: string[],
+  isComplete: boolean,
+): "completed" | "running" | "waiting" {
+  if (isComplete || completedSteps.includes(phaseId)) return "completed";
+  if (currentStep === phaseId) return "running";
+  return "waiting";
 }
 
 export function SearchProgress({ progress, className }: SearchProgressProps) {
-  const currentLabel = getStepLabel(progress.current_step, progress.current_hashtag);
-  const completedSet = new Set(progress.completed_steps || []);
   const isComplete = progress.current_step === "completed";
-
-  const completedCount = completedSet.size;
-  const totalSteps = ALL_STEPS.length;
+  const completedSet = new Set(progress.completed_steps || []);
   const pct = isComplete
     ? 100
-    : Math.max(5, Math.round((completedCount / totalSteps) * 100));
+    : Math.max(
+        5,
+        Math.round((completedSet.size / PHASES.length) * 100),
+      );
+
+  const runningPhase = PHASES.find((p) => p.id === progress.current_step);
+  const runningLabel = runningPhase?.label ?? "Procesando...";
 
   return (
     <Card className={cn("border-divider bg-surface-sunken p-4 shadow-none", className)}>
@@ -78,7 +59,7 @@ export function SearchProgress({ progress, className }: SearchProgressProps) {
             <CheckCircle2 className="h-4 w-4 shrink-0 text-success" aria-hidden="true" />
           )}
           <span className="text-sm font-medium text-foreground">
-            {currentLabel}
+            {isComplete ? "Búsqueda completada" : runningLabel}
           </span>
         </div>
 
@@ -86,21 +67,29 @@ export function SearchProgress({ progress, className }: SearchProgressProps) {
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {ALL_STEPS.slice(0, -1).map((step) => {
-              const done = completedSet.has(step) || isComplete;
-              const active = progress.current_step === step && !isComplete;
+            {PHASES.map((phase) => {
+              const status = getStepStatus(
+                phase.id,
+                progress.current_step,
+                progress.completed_steps || [],
+                isComplete,
+              );
               return (
                 <div
-                  key={step}
+                  key={phase.id}
                   className={cn(
-                    "flex items-center gap-0.5",
-                    active ? "text-primary" : done ? "text-green-600" : "text-muted-foreground",
+                    "flex items-center gap-1",
+                    status === "running"
+                      ? "text-primary"
+                      : status === "completed"
+                      ? "text-green-600"
+                      : "text-muted-foreground",
                   )}
-                  title={getStepLabel(step)}
+                  title={phase.label}
                 >
-                  {done ? (
+                  {status === "completed" ? (
                     <CheckCircle2 className="w-3 h-3" />
-                  ) : active ? (
+                  ) : status === "running" ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
                   ) : (
                     <Circle className="w-3 h-3" />

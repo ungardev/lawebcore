@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DollarSign, MessageSquare, Send, Sparkles, TrendingUp, Wand2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { BriefWizard } from '../components/BriefWizard';
 import { ChatMessage } from '../components/ChatMessage';
 import { LensEmptyState } from '../components/LensEmptyState';
+import { SearchProgress } from '../components/SearchProgress';
 import type { BriefStructured, DiscoveryConversation } from '../types/discovery';
 
 const WELCOME = `Puedo ayudarte a descubrir creadores, revisar campañas y preparar una búsqueda con datos reales de la agencia.
@@ -22,8 +24,8 @@ Describe el producto, la audiencia y el territorio que quieres analizar. Cuando 
 export function LensChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [input, setInput] = useState('');
-  const [conversations, setConversations] = useState<DiscoveryConversation[]>([]);
   const [totalCost, setTotalCost] = useState(0);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardBrief, setWizardBrief] = useState<Partial<BriefStructured> | undefined>();
@@ -44,9 +46,10 @@ export function LensChatPage() {
     dismissCandidate,
   } = useDiscoveryConversation();
 
-  useEffect(() => {
-    lensApi.conversations.list({ limit: 20 }).then((data) => setConversations(Array.isArray(data) ? data : [])).catch(() => setConversations([]));
-  }, []);
+  const { data: conversations = [] } = useQuery({
+    queryKey: ['lens-conversations'],
+    queryFn: () => lensApi.conversations.list({ limit: 20 }),
+  });
 
   useEffect(() => {
     if (id) {
@@ -65,6 +68,9 @@ export function LensChatPage() {
     if (!message || isLoading) return;
     if (!conversation) {
       const newConversation = await startConversation(message);
+      queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
+        [newConversation, ...(Array.isArray(old) ? old : [])],
+      );
       navigate(`/influencer-lens/${newConversation.id}`);
       setInput('');
       return;
@@ -75,7 +81,9 @@ export function LensChatPage() {
 
   const handleNewConversation = async () => {
     const newConversation = await startConversation();
-    setConversations((previous) => [newConversation, ...previous]);
+    queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
+      [newConversation, ...(Array.isArray(old) ? old : [])],
+    );
     navigate(`/influencer-lens/${newConversation.id}`);
   };
 
@@ -86,7 +94,9 @@ export function LensChatPage() {
       const briefMessage = `Brief: ${briefJson}. Buscar ahora.`;
 
       const newConversation = await startConversation(briefMessage);
-      setConversations((previous) => [newConversation, ...previous]);
+      queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
+        [newConversation, ...(Array.isArray(old) ? old : [])],
+      );
       navigate(`/influencer-lens/${newConversation.id}`);
 
       toast.success('Búsqueda iniciada');
@@ -156,6 +166,7 @@ export function LensChatPage() {
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
                 {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
                 {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
+                {turns.some((t) => t.progress && t.isLoading) && <SearchProgress progress={turns.find((t) => t.progress && t.isLoading)!.progress!} />}
                 {isLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" /></span>Procesando solicitud…</div>}
                 {error && <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
                 <div ref={bottomRef} />

@@ -160,6 +160,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             f"Sigamos con búsqueda por keywords...",
         )
 
+        await _run_update_metadata(run_id, {
+            "current_step": "step2_keyword_search",
+            "completed_steps": ["step1_hashtag_search"],
+        })
+
         for item in hashtag_items:
             handle = item.get("ownerUsername") or item.get("username")
             if not handle or handle in profiles:
@@ -301,6 +306,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             enriched=len(enriched_profiles),
             total_profiles=len(profiles),
         )
+
+        await _run_update_metadata(run_id, {
+            "current_step": "step4_scoring",
+            "completed_steps": ["step1_hashtag_search", "step2_keyword_search", "step3_profile_enrichment"],
+        })
 
         print(f"[discovery_run_task] STEP 4: Scoring {len(profiles)} profiles", flush=True)
 

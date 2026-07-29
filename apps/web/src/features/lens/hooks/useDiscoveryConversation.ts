@@ -9,6 +9,7 @@ export function useDiscoveryConversation() {
   const [error, setError] = useState<string | null>(null);
   const [pendingBrief, setPendingBrief] = useState<BriefStructured | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const pollGenerationRef = useRef<number>(0);
 
   const startConversation = useCallback(async (initialBrief?: string) => {
     setIsLoading(true);
@@ -93,7 +94,7 @@ export function useDiscoveryConversation() {
       const result = await lensApi.conversations.sendMessage(conversation.id, content);
 
       if (result.discovery_run_id) {
-        pollRunStatus(result.discovery_run_id, conversation.id);
+        pollRunStatus(result.discovery_run_id);
       } else if (result.candidates && result.candidates.length > 0) {
         const assistantMsgId = result.assistant_message?.id;
         const latestMsg = await lensApi.conversations.get(conversation.id);
@@ -137,12 +138,15 @@ export function useDiscoveryConversation() {
     }
   }, [conversation]);
 
-  async function pollRunStatus(runId: string, conversationId: string) {
-    const maxAttempts = 120;
-    const interval = 5000;
+  async function pollRunStatus(runId: string) {
+    const maxAttempts = 240;
+    const interval = 2500;
+    const gen = ++pollGenerationRef.current;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (gen !== pollGenerationRef.current) return;
       await new Promise((r) => setTimeout(r, interval));
+      if (gen !== pollGenerationRef.current) return;
       try {
         const run = await lensApi.search.getRun(runId);
         const metadata = (run.metadata || {}) as Record<string, unknown>;
@@ -155,6 +159,7 @@ export function useDiscoveryConversation() {
         };
 
         if ((run.status as string) === 'completed' || (run.status as string) === 'failed' || (run.status as string) === 'partial') {
+          if (gen !== pollGenerationRef.current) return;
           if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
             try {
               const candidates = await lensApi.search.getCandidates(runId, { limit: 20 });
