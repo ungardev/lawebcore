@@ -109,7 +109,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         </NavLink>
       </div>
 
-      <nav className="shrink-0 overflow-y-auto px-2 py-5" aria-label="Navegación principal">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-5" aria-label="Navegación principal">
         <NavGroup label="Workspace" items={NAV_MAIN} collapsed={collapsed} renderItem={renderItem} />
         <NavGroup label="Inteligencia" items={NAV_INTELLIGENCE} collapsed={collapsed} renderItem={renderItem} />
       </nav>
