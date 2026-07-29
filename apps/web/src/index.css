@@ -6,61 +6,66 @@
 
 @layer base {
   :root {
-    /* Command Center: charcoal/zinc base */
-    --background: 240 12% 6%;
-    --foreground: 0 0% 98%;
-    --card: 240 12% 9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 12% 9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
+    /* Light mode: white + pink */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 271 91% 65%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 10% 13%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 10% 13%;
-    --muted-foreground: 240 5% 65%;
-    --accent: 240 10% 16%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62% 48%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 10% 16%;
-    --input: 240 10% 20%;
-    --ring: 217 91% 60%;
-    --radius: 0.625rem;
+    --secondary: 240 10% 96%;
+    --secondary-foreground: 240 10% 10%;
+    --muted: 240 10% 96%;
+    --muted-foreground: 240 5% 46%;
+    --accent: 240 10% 92%;
+    --accent-foreground: 240 10% 10%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
+    --ring: 271 91% 65%;
+    --radius: 0.75rem;
 
     /* Semantic surfaces */
-    --surface-0: 240 12% 6%;
-    --surface-1: 240 12% 9%;
-    --surface-2: 240 10% 12%;
-    --surface-3: 240 9% 15%;
-    --divider: 240 8% 20%;
-    --focus: 217 91% 60%;
+    --surface-0: 240 10% 98%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 240 10% 97%;
+    --surface-3: 240 10% 95%;
+    --divider: 240 10% 88%;
+    --focus: 271 91% 65%;
     --success: 151 64% 45%;
     --warning: 38 92% 50%;
     --info: 217 91% 60%;
 
-    /* Brand accents — reserved for signals and visualizations */
+    /* Brand accents */
     --brand-pink: 330 81% 60%;
     --brand-purple: 271 91% 65%;
     --brand-blue: 217 91% 60%;
-    --brand-accent: 217 91% 60%;
+    --brand-accent: 271 91% 65%;
 
     --color-brand-pink: #ec4899;
     --color-brand-purple: #a855f7;
     --color-brand-blue: #3b82f6;
 
-    /* Sidebar tokens */
-    --sidebar: 240 12% 8%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 217 91% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 13%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 10% 16%;
-    --sidebar-ring: 217 91% 60%;
+    /* Brand hover variants */
+    --brand-pink-hover: 330 81% 50%;
+    --brand-purple-hover: 271 91% 55%;
+    --brand-blue-hover: 217 91% 50%;
 
-    --hover: 240 10% 16%;
-    --hover-foreground: 0 0% 98%;
+    /* Sidebar tokens */
+    --sidebar: 240 10% 97%;
+    --sidebar-foreground: 240 10% 10%;
+    --sidebar-primary: 271 91% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 92%;
+    --sidebar-accent-foreground: 240 10% 10%;
+    --sidebar-border: 240 10% 88%;
+    --sidebar-ring: 271 91% 65%;
+
+    --hover: 240 10% 94%;
+    --hover-foreground: 240 10% 10%;
   }
 
   .dark {

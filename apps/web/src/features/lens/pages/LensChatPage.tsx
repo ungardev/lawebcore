@@ -60,10 +60,6 @@ export function LensChatPage() {
     setTotalCost(turns.reduce((sum, turn) => sum + (turn.cost_usd ?? 0), 0));
   }, [turns]);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [turns]);
-
   const handleSend = async (text?: string) => {
     const message = (text ?? input).trim();
     if (!message || isLoading) return;
