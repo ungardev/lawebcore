@@ -155,7 +155,7 @@ export function LoginPage({
 
             <div className="space-y-2">
               <Label htmlFor="password" style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                Contrasena
+                Contraseña
               </Label>
               <div className="relative">
                 <Input
