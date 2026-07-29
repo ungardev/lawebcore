@@ -25,7 +25,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           {!compact && candidate.bio && <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">{candidate.bio}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground"><span>{formatFollowers(candidate.followers)} seguidores</span><span>{formatEngagement(candidate.engagement_rate)} engagement</span>{candidate.city && <span>{candidate.city}</span>}</div>
         </div>
-        <div className="shrink-0 text-center"><MatchScoreCircle score={candidate.match_score ?? candidate.niche_relevance ?? 0} size="sm" /><span className="mt-1 block text-[9px] uppercase tracking-wide text-muted-foreground">match</span></div>
+        <div className="shrink-0 text-center"><MatchScoreCircle score={candidate.match_score ?? candidate.niche_relevance ?? 0} size="sm" /><span className="mt-1 block text-[9px] uppercase tracking-wide text-muted-foreground">afinidad</span></div>
       </div>
       {candidate.rationale && !compact && <p className="mt-3 border-t border-divider pt-3 text-xs leading-5 text-muted-foreground">{candidate.rationale}</p>}
       {(onSave || onDismiss) && <div className="mt-3 flex gap-2 border-t border-divider pt-3">{onSave && <Button type="button" size="sm" onClick={() => onSave(candidate.id)} className="flex-1 text-xs">Guardar</Button>}{onDismiss && <Button type="button" size="sm" variant="outline" onClick={() => onDismiss(candidate.id)} className="flex-1 text-xs">Descartar</Button>}</div>}
