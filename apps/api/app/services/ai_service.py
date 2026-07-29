@@ -82,6 +82,7 @@ class AIService:
             {"cid": str(conv_id), "content": message},
         )
         await db.commit()
+        await db.rollback()
 
         # 3. Embed the message and search relevant chunks
         try:
@@ -118,6 +119,7 @@ class AIService:
                     })
             except Exception as e:
                 logger.warning("vector_search_failed", error=str(e))
+        await db.rollback()
 
         # 4. Build prompt and call LLM
         _SYSTEM_PROMPT_FALLBACK = (
@@ -181,24 +183,30 @@ class AIService:
             latency_ms = 0
 
         # 5. Persist assistant message
-        await db.execute(
-            text("""
-            INSERT INTO ai_messages (conversation_id, role, content, model_provider, model_name,
-                                      tokens_input, tokens_output, cost_usd, latency_ms)
-            VALUES (:cid, 'assistant', :content, :prov, :model, :tin, :tout, :cost, :lat)
-            """),
-            {
-                "cid": str(conv_id),
-                "content": answer_text,
-                "prov": "deepseek",
-                "model": settings.DEEPSEEK_MODEL,
-                "tin": tokens_input,
-                "tout": tokens_output,
-                "cost": cost_usd,
-                "lat": latency_ms,
-            },
-        )
-        await db.commit()
+        await db.rollback()
+        try:
+            await db.execute(
+                text("""
+                INSERT INTO ai_messages (conversation_id, role, content, model_provider, model_name,
+                                          tokens_input, tokens_output, cost_usd, latency_ms)
+                VALUES (:cid, 'assistant', :content, :prov, :model, :tin, :tout, :cost, :lat)
+                """),
+                {
+                    "cid": str(conv_id),
+                    "content": answer_text,
+                    "prov": "deepseek",
+                    "model": settings.DEEPSEEK_MODEL,
+                    "tin": tokens_input,
+                    "tout": tokens_output,
+                    "cost": cost_usd,
+                    "lat": latency_ms,
+                },
+            )
+        except Exception as e:
+            logger.error("persist_assistant_message_failed", error=str(e))
+            await db.rollback()
+        else:
+            await db.commit()
 
         return {
             "conversation_id": conv_id,
