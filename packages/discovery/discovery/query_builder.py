@@ -1,147 +1,85 @@
-"""QueryBuilder — transforms BriefStructured into DiscoveryPlan for Apify pipeline."""
+"""QueryBuilder — transforms BriefStructured into DiscoveryPlan using DiscoveryProfile."""
 
 from typing import Any
 
-from discovery.schemas import BriefStructured, DiscoveryPlan, Platform
+from discovery.schemas import BriefStructured, DiscoveryPlan
+from discovery.profile_generator import get_or_create_profile, compute_fingerprint
 
 
-DEFAULT_VE_HASHTAGS = [
-    "purinaVE", "dogchowVE", "amorporruno", "mascotasVE", "perrosVE",
-    "mascotasVenezuela", "dogChow", "purina", "petlovers", "doglover",
-    "vzla", "venezuela", "adopcionvzla", "rescateanimalvzla",
-    "mascotasvzla", "perrosdevzla",
-    "cachorrosVE", "perrosVenezuela", "tiendademascotasVE",
-    "veterinariaVenezuela", "adoptaVE", "perritosVE",
-    "amigosde4patasVE", "petloversVE",
-]
-
-DEFAULT_VE_KEYWORDS = [
-    "PurinaVE", "DogChowVE", "purina dog chow venezuela",
-    "mascotasVE", "perrosVenezuela", "amantesdelosperros",
-    "mascotas caracas", "perrosvzla",
-]
-
-DISCOVERY_KEYWORDS = {
-    "brand_competition": [
-        "DogChow",
-        "Purina",
-        "PurinaDogChow",
-        "Pedigree Venezuela",
-        "Ganador premium perros",
-        "Dogui alimento perros",
-        "RoyalCanin Venezuela",
-        "ProPlan Venezuela",
-    ],
-    "lifecycle_health": [
-        "cachorros",
-        "cachorro perros",
-        "nutricion canina",
-        "veterinaria venezuela",
-        "perro senior",
-        "salud canina",
-        "veterinario perros",
-        "pelaje perro sano",
-        "digestion perros",
-        "alimento premium perros",
-    ],
-    "consumer_personas": [
-        "dog mom",
-        "dog dad",
-        "amor perruno",
-        "adopcion perros venezuela",
-        "rescate animal venezuela",
-        "adopta no compres",
-        "vida con perros",
-        "paseo canino",
-        "perrosdevzla",
-        "mascotasvzla",
-    ],
-    "market_trends": [
-        "comida barf perros",
-        "alimento natural perros",
-        "sin grano perros",
-        "grain free dogs",
-        "dieta cruda perros",
-        "alimento casero perros",
-    ],
-    "nicho_ve": [
-        "mascotasvzla",
-        "perrosdevzla",
-        "vzla",
-        "caracas",
-        "maracaibo",
-        "valencia venezuela",
-        "perros caracas",
-        "mascotas caracas",
-    ],
+TIER_MIN_FOLLOWERS = {
+    "nano": 500,
+    "micro": 5_000,
+    "micro_high": 20_000,
+    "mid": 100_000,
 }
-
-VE_GEO_KEYWORDS = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "san cristobal"]
-
-
-_MASCOTA_TRIGGERS = [
-    "purina", "dog chow", "dogchow", "mascota", "mascotas",
-    "perro", "perros", "dog", "dogs", "pet", "pets",
-    "cachorro", "cachorros", "canino", "canina",
-]
 
 
 class QueryBuilder:
-    def build(self, brief: BriefStructured) -> DiscoveryPlan:
-        keywords = self._build_keywords(brief)
-        hashtags = self._build_hashtags(brief)
+    async def build(self, brief: BriefStructured) -> DiscoveryPlan:
+        profile = await get_or_create_profile(brief)
+
         tier = self._get_tier(brief)
         min_followers = self._tier_to_min_followers(tier)
+        if brief.influencer_preferences:
+            tier_pref = brief.influencer_preferences.get("tier")
+            if tier_pref and tier_pref in TIER_MIN_FOLLOWERS:
+                min_followers = TIER_MIN_FOLLOWERS[tier_pref]
+            explicit_min = brief.influencer_preferences.get("min_followers")
+            if explicit_min and isinstance(explicit_min, int) and explicit_min > 0:
+                min_followers = explicit_min
+
+        keyword_queries = self._build_keyword_queries(profile, brief)
+        hashtag_queries = self._build_hashtag_queries(profile)
 
         return DiscoveryPlan(
-            keyword_queries=keywords,
-            hashtag_queries=hashtags,
+            keyword_queries=keyword_queries,
+            hashtag_queries=hashtag_queries,
             enrichment_batch_size=10,
             analytics_top_n=20,
             min_followers=min_followers,
             max_followers=10_000_000,
-            exclude_handles=getattr(brief, "exclude_handles", []) or [],
+            exclude_handles=brief.exclude_handles or [],
         )
 
-    def _is_vertical_mascota(self, brief: BriefStructured) -> bool:
-        """Detecta si el brief es de la vertical mascotas/perros."""
-        product = (brief.product_name or "").lower()
-        additional = (brief.additional_context or "").lower()
-        niches_text = " ".join(brief.niches or []).lower()
-        combined = f"{product} {additional} {niches_text}"
-        return any(trigger in combined for trigger in _MASCOTA_TRIGGERS)
+    def _build_keyword_queries(self, profile: dict[str, Any], brief: BriefStructured) -> list[str]:
+        queries: list[str] = []
 
-    def _build_keywords(self, brief: BriefStructured) -> list[str]:
-        if self._is_vertical_mascota(brief):
-            return DEFAULT_VE_KEYWORDS
+        queries.extend(profile.get("keywords", []))
+        queries.extend(profile.get("niche_keywords", []))
+        queries.extend(profile.get("geo_indicators", []))
+        queries.extend(profile.get("buy_intent_keywords", []))
 
-        keywords: list[str] = []
+        if brief.competitor_brands:
+            queries.extend(brief.competitor_brands)
+
         for niche in brief.niches:
-            keywords.append(niche)
-            for country in (brief.audience_countries or []):
-                if country == "VE":
-                    keywords.extend(VE_GEO_KEYWORDS)
-        return list(set(keywords))[:40]
+            if niche.lower() not in " ".join(queries).lower():
+                queries.append(niche)
 
-    def _build_hashtags(self, brief: BriefStructured) -> list[str]:
-        if brief.hashtags:
-            return [f"#{tag.lstrip('#')}" for tag in brief.hashtags]
-        if self._is_vertical_mascota(brief):
-            return [f"#{tag}" for tag in DEFAULT_VE_HASHTAGS]
+        seen = set()
+        deduped = []
+        for q in queries:
+            q = q.strip()
+            if q and q.lower() not in seen:
+                seen.add(q.lower())
+                deduped.append(q)
 
-        return [f"#{n.lower().replace(' ', '')}" for n in brief.niches[:15]]
+        return deduped[:80]
+
+    def _build_hashtag_queries(self, profile: dict[str, Any]) -> list[str]:
+        raw = profile.get("hashtags", [])
+        hashtags = [f"#{tag.lstrip('#').strip()}" for tag in raw if tag and tag.strip()]
+        return hashtags[:50]
 
     def _get_tier(self, brief: BriefStructured) -> str:
+        if brief.influencer_preferences:
+            tier = brief.influencer_preferences.get("tier")
+            if tier in TIER_MIN_FOLLOWERS:
+                return tier
         return "micro"
 
     def _tier_to_min_followers(self, tier: str) -> int:
-        tier_map = {
-            "nano": 500,
-            "micro": 5_000,
-            "micro_high": 20_000,
-            "mid": 100_000,
-        }
-        return tier_map.get(tier, 1_000)
+        return TIER_MIN_FOLLOWERS.get(tier, 5_000)
 
 
 query_builder = QueryBuilder()

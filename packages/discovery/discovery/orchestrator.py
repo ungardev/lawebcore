@@ -11,7 +11,6 @@ logger = structlog.get_logger(__name__)
 
 from discovery.brief_parser import brief_parser_agent
 from discovery.query_builder import query_builder
-from discovery.result_ranker import result_ranker
 from discovery.schemas import (
     BriefStructured,
     CandidateMetrics,

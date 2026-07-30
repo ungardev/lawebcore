@@ -28,11 +28,12 @@ from discovery.tools import (
     multi_actor_instagram_client,
     tiktok_client,
     youtube_client,
-    composite_score,
-    country_boost,
     classify_tier,
     build_rationale,
 )
+from discovery.scoring.lens_score import lens_score
+from discovery.tools.geo_boost import geo_score
+from discovery.profile_generator import get_or_create_profile
 
 logger = structlog.get_logger(__name__)
 
@@ -109,7 +110,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     STEP 1: Hashtag search (single sync call — all hashtags at once)
     STEP 2: Keyword search (single sync call — all keywords at once)
     STEP 3: Profile enrichment (single sync call — up to 80 profiles)
-    STEP 4: Scoring con country_boost + composite_score
+    STEP 4: Scoring con geo_score + lens_score + cross_ref
     """
     try:
         await _run_set_status(run_id, "running")
@@ -134,7 +135,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             brief_parsed = json.loads(brief_parsed)
 
         brief = BriefStructured(**brief_parsed)
-        plan = query_builder.build(brief)
+        plan = await query_builder.build(brief)
+        profile_data = await get_or_create_profile(brief)
 
         await _run_update_metadata(run_id, {
             "current_step": "step1_hashtag_search",
@@ -145,6 +147,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         })
 
         profiles: dict[str, dict] = {}
+        step1_handles: set[str] = set()
+        step2_handles: set[str] = set()
 
         print(f"[discovery_run_task] STEP 1: Hashtag search ({len(plan.hashtag_queries)} hashtags)", flush=True)
         hashtag_items = await apify_client.scrape_hashtags_all_sync(
@@ -167,7 +171,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         for item in hashtag_items:
             handle = item.get("ownerUsername") or item.get("username")
-            if not handle or handle in profiles:
+            if not handle:
+                continue
+            step1_handles.add(handle)
+            if handle in profiles:
                 continue
             profiles[handle] = {
                 "username": handle,
@@ -201,7 +208,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         for item in keyword_items:
             handle = item.get("username", "")
-            if not handle or handle in profiles:
+            if not handle:
+                continue
+            step2_handles.add(handle)
+            if handle in profiles:
                 continue
             profiles[handle] = {
                 "username": handle,
@@ -319,6 +329,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             profiles = {k: v for k, v in profiles.items() if k.lower() not in exclude_handles}
             print(f"[discovery_run_task] STEP 4: Excluded {original_count - len(profiles)} handles, scoring {len(profiles)} remaining", flush=True)
 
+        cross_ref_handles = step1_handles & step2_handles
         scored: list[dict] = []
         bots_filtered = 0
         for handle, p in profiles.items():
@@ -342,8 +353,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 bots_filtered += 1
                 continue
 
-            geo = country_boost(p)
-            score_val = composite_score(p)
+            geo_indicators = profile_data.get("geo_indicators", [])
+            geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
+            cross_referenced = handle in cross_ref_handles
+            score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
             if geo >= 1.0:
@@ -354,6 +367,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                "mayor y detal", "envíos", "mercado libre", "delivery",
                                "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
                 )
+                country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
                 scored.append({
                     "run_id": run_id,
                     "platform": "instagram",
@@ -361,7 +375,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "full_name": p.get("fullName") or p.get("full_name"),
                     "bio": bio,
                     "avatar_url": p.get("profilePicUrl") or p.get("avatar_url"),
-                    "country": "VE",
+                    "country": country_val,
                     "city": p.get("locationName") or p.get("location") or "",
                     "followers": followers,
                     "following": p.get("followsCount") or p.get("following_count") or 0,
@@ -387,10 +401,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "is_tienda": is_tienda,
                     "status": "new",
                     "raw_payload": {
-                        "composite_score": round(score_val, 2),
+                        "lens_score": round(score_val, 2),
                         "tier": tier,
                         "er_calculated": round(er, 6),
                         "geo_score": geo,
+                        "cross_referenced": cross_referenced,
                     },
                     "fetched_at": datetime.now(timezone.utc),
                 })
@@ -741,7 +756,6 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
             failed=failed,
             batch=False,
         )
-    )
     return inserted
 
 

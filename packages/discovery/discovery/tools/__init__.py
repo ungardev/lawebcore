@@ -2,10 +2,8 @@
 
 from discovery.tools.apify_client import apify_client
 from discovery.tools.geo_boost import (
-    country_boost,
+    geo_score,
     classify_tier,
-    composite_score,
-    is_venezuelan,
     build_rationale,
 )
 from discovery.tools.meta_client import meta_client
@@ -16,10 +14,8 @@ from discovery.tools.tiktok_client import tiktok_client
 
 __all__ = [
     "apify_client",
-    "country_boost",
+    "geo_score",
     "classify_tier",
-    "composite_score",
-    "is_venezuelan",
     "build_rationale",
     "meta_client",
     "multi_actor_instagram_client",

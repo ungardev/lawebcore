@@ -1,35 +1,21 @@
-"""Geographic & tier filtering for Venezuela-priority discovery.
+"""Geographic & tier scoring for universal discovery.
 
-Replicates the geo-boost logic from extract_purina_real_apify.py v4.
-Used to rank and filter Instagram profiles for VE campaigns.
+Geo scoring is now parameterized — pass geo_indicators from DiscoveryProfile
+instead of hardcoding VE/LATAM constants.
 """
 
-VE_KEYWORDS = (
-    "venezuela", "vzla", "caracas", "maracaibo", "valencia",
-    "san cristobal", "maturin", "barquisimeto", "puerto la cruz",
-    "maracay", "merida", "ciudad guayana", "ciudad bolivar",
-    "vzlatex", "vzlan", "venezolano", "venezolana",
-    "🇻🇪", "anzoategui", "zulia", "lara", "yaracuy",
-    "carabobo", "aragua", "portuguesa", "trujillo", "cojedes",
-    "monagas", "sucre", "nueva esparta", "guarico", "apure", "barinas", "falcon",
-    "amazonas", "bolivariano", "vzlano",
-    "anzoátegui", "guatire", "los teques", "baruta", "chacao", "el hatillo",
-    "petare", "catia", "cabudare",
-    "villa de cura",
-)
-
-LATAM_KEYWORDS = (
+_LATAM_KEYWORDS = (
     "colombia", "medellin", "bogota", "panama", "ecuador",
     "latinoamerica", "latam", "peru", "chile", "argentina",
     "costarica", "guatemala", "mexico", "mx",
 )
 
 
-def country_boost(profile: dict) -> float:
-    """Returns 1.0 for VE, 0.5 for Latam, 0.0 for rest.
+def geo_score(profile: dict, geo_indicators: list[str]) -> float:
+    """Universal geographic relevance score (0.0 – 1.0).
 
-    Matches _country_boost from extract_purina_real_apify.py v4.
     Checks: biography, country, username, full_name, locationName.
+    Uses the geo_indicators list from the DiscoveryProfile.
     """
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
     country = (profile.get("country") or "").lower()
@@ -40,17 +26,42 @@ def country_boost(profile: dict) -> float:
     is_business = profile.get("is_business") or profile.get("isBusinessAccount") or False
     er = profile.get("engagement_rate") or 0.0
 
-    if any(k in bio + full_name + username + location for k in VE_KEYWORDS):
+    search_text = bio + " " + full_name + " " + username + " " + location
+
+    if any(k.lower() in search_text for k in geo_indicators):
         return 1.0
-    if country in ("ve", "venezuela"):
+    if country and any(country == c.lower() for c in geo_indicators if len(c) == 2):
         return 1.0
-    if any(k in bio + full_name + username + location for k in LATAM_KEYWORDS):
+    if any(k.lower() in search_text for k in _LATAM_KEYWORDS):
         return 0.5
     if is_business and followers > 5000 and er > 0.01:
         return 0.4
     if followers > 20000 and er > 0.02:
         return 0.3
     return 0.0
+
+
+def country_boost(profile: dict) -> float:
+    """Deprecated: use geo_score(profile, geo_indicators) instead.
+
+    Kept for backward compatibility during migration.
+    Hardcodes VE geo indicators.
+    """
+    import warnings
+    warnings.warn("country_boost is deprecated — use geo_score(profile, geo_indicators)", DeprecationWarning, stacklevel=2)
+    return geo_score(profile, [
+        "venezuela", "vzla", "caracas", "maracaibo", "valencia",
+        "san cristobal", "maturin", "barquisimeto", "puerto la cruz",
+        "maracay", "merida", "ciudad guayana", "ciudad bolivar",
+        "vzlatex", "vzlan", "venezolano", "venezolana",
+        "🇻🇪", "anzoategui", "zulia", "lara", "yaracuy",
+        "carabobo", "aragua", "portuguesa", "trujillo", "cojedes",
+        "monagas", "sucre", "nueva esparta", "guarico", "apure", "barinas", "falcon",
+        "amazonas", "bolivariano", "vzlano",
+        "anzoátegui", "guatire", "los teques", "baruta", "chacao", "el hatillo",
+        "petare", "catia", "cabudare",
+        "villa de cura",
+    ])
 
 
 def classify_tier(followers: int) -> str:
