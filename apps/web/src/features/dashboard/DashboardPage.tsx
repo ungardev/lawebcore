@@ -139,7 +139,7 @@ export function DashboardPage() {
               ))}
             </div>
           ) : (
-            <EmptyPanel icon={<History className="h-5 w-5" />} title="Todavía no hay búsquedas" description="Inicia una búsqueda para comenzar a construir tu historial operativo." actionLabel="Abrir Influencer Lens" onAction={() => navigate('/influencer-lens')} />
+            <EmptyPanel icon={<History className="h-5 w-5" />} title="Todavía no hay búsquedas" description="Inicia una búsqueda para comenzar a construir tu historial operativo."             actionLabel="Abrir Lens" onAction={() => navigate('/influencer-lens')} />
           )}
         </div>
 

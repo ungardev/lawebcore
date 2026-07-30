@@ -43,7 +43,7 @@ export function LensRunsListPage() {
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
-        <div className="flex items-start gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><History className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Influencer Lens / operaciones</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Historial de búsquedas</h1><p className="mt-2 text-sm text-muted-foreground">Ejecuciones, resultados y costos de discovery.</p></div></div>
+        <div className="flex items-start gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><History className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Lens / operaciones</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Historial de búsquedas</h1><p className="mt-2 text-sm text-muted-foreground">Ejecuciones, resultados y costos de discovery.</p></div></div>
         <Button onClick={() => navigate('/influencer-lens/search')} className="w-full md:w-auto">Nueva búsqueda</Button>
       </header>
 

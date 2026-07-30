@@ -23,7 +23,7 @@ const DESTINATIONS: SearchDestination[] = [
     keywords: ['home', 'dashboard', 'resumen', 'kpi'],
   },
   {
-    label: 'Influencer Lens',
+    label: 'Lens',
     description: 'Descubre y evalúa creadores con datos propios',
     path: '/influencer-lens',
     keywords: ['lens', 'ia', 'influencers', 'creadores', 'buscar'],
@@ -158,7 +158,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
             <div className="px-4 py-10 text-center">
               <Command className="mx-auto h-5 w-5 text-muted-foreground" aria-hidden="true" />
               <p className="mt-3 text-sm font-medium text-foreground">Sin coincidencias</p>
-              <p className="mt-1 text-xs text-muted-foreground">Prueba con otra palabra o abre Influencer Lens.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Prueba con otra palabra o abre Lens.</p>
             </div>
           )}
         </div>

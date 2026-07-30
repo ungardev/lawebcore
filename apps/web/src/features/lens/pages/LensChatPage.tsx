@@ -116,7 +116,7 @@ export function LensChatPage() {
             <span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
             <div>
               <p className="text-eyebrow text-muted-foreground">Inteligencia / discovery</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Influencer Lens</h1>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Lens</h1>
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -151,7 +151,7 @@ export function LensChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Influencer Lens">
+        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Lens">
           {!conversation && !isLoading ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />
@@ -175,7 +175,7 @@ export function LensChatPage() {
               <div className="border-t border-divider bg-surface-sunken p-4">
                 <ActionChips onSend={handleSend} disabled={isLoading} />
                 <div className="flex items-end gap-2 rounded-md border border-divider bg-background p-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10">
-                  <Textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); } }} placeholder="Describe el producto, audiencia o campaña…" rows={2} className="min-h-12 resize-none border-0 bg-transparent px-2 py-1 shadow-none focus-visible:ring-0" disabled={isLoading} aria-label="Mensaje para Influencer Lens" />
+                  <Textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); } }} placeholder="Describe el producto, audiencia o campaña…" rows={2} className="min-h-12 resize-none border-0 bg-transparent px-2 py-1 shadow-none focus-visible:ring-0" disabled={isLoading} aria-label="Mensaje para Lens" />
                   <Button onClick={() => handleSend()} disabled={isLoading || !input.trim()} size="icon" className="mb-0.5 shrink-0" aria-label="Enviar mensaje"><Send className="h-4 w-4" aria-hidden="true" /></Button>
                 </div>
                 <p className="mt-2 px-1 text-[10px] text-muted-foreground">Enter para enviar · Shift+Enter para una nueva línea</p>
