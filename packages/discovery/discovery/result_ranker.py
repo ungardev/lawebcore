@@ -1,5 +1,7 @@
 """ResultRanker — scoring constants and helper functions for discovery candidates."""
 
+from discovery.schemas import Platform
+
 
 TIER_BENCHMARKS = {
     "NANO_BAJO": {"followers_min": 500, "followers_max": 2_000, "er_min": 0.08, "er_max": 0.15},
