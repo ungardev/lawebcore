@@ -688,4 +688,4 @@ mascotas (62 keywords), mascotas_viral, hogar
 ---
 
 *Document generated: 2026-07-30*
-*Maintained by: Dainer Ungar (CEO)*
+*Maintained by: Ungar Villamizar (CEO)*

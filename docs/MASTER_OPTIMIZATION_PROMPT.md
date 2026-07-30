@@ -1,6 +1,6 @@
 # MASTER OPTIMIZATION PROMPT — LENS BY LAWEBCORE
 > **For:** Claude Code Opus 5 (Anthropic)
-> **From:** La Web Figital Agency — Dainer Ungar, CEO
+> **From:** La Web Figital Agency — Ungar Villamizar, CEO
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
@@ -9,7 +9,7 @@
 
 ## MISSION
 
-You are optimizing **La Web Core** — the internal platform of **La Web Figital Agency** (Venezuela). The flagship module is **Lens** (renamed from "Influencer Lens" by CEO Dainer Ungar on 2026-07-30).
+You are optimizing **La Web Core** — the internal platform of **La Web Figital Agency** (Venezuela). The flagship module is **Lens** (renamed from "Influencer Lens" by CEO Ungar Villamizar on 2026-07-30).
 
 **The vision:** A super elite top-tier tool that appears to be made by Apple. Help clients perfect their sales processes and campaign management with surgical precision. Exploit every tool (Apify, Meta Graph API, TikTok Research API) for maximum data quality at minimum cost.
 
@@ -713,7 +713,7 @@ When you complete the analysis and planning, deliver:
 
 ---
 
-**The goal:** When Dainer Ungar (CEO) shows Lens to a client, the client says:
+**The goal:** When Ungar Villamizar (CEO) shows Lens to a client, the client says:
 > "Esto parece hecho por Apple. ¿Cómo es posible que una agencia en Venezuela haya construido algo así?"
 
 Execute accordingly.
