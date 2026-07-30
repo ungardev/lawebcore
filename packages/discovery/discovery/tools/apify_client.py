@@ -25,8 +25,8 @@ INSTAGRAM_SEARCH_SCRAPER = "apify~instagram-search-scraper"
 ENGAGEMENT_ANALYTICS_SCRAPER = "easyapi~instagram-profile-engagement-analytics"
 TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
 
-CACHE_TTL_PROFILES = 3600
-CACHE_TTL_SEARCH = 1800
+CACHE_TTL_PROFILES = 86400   # 24 hours — follower counts don't change meaningfully in a day
+CACHE_TTL_SEARCH = 21600     # 6 hours — hashtag/keyword results change more frequently
 
 
 class ApifyClient:
@@ -64,10 +64,9 @@ class ApifyClient:
             await self._redis.aclose()
             self._redis = None
 
-    def _build_cache_key(self, actor_id: str, run_input: dict, run_id: str | None = None) -> str:
+    def _build_cache_key(self, actor_id: str, run_input: dict) -> str:
         stable = json.dumps(run_input, sort_keys=True, default=str)
-        salt = f":{run_id}" if run_id else ""
-        h = hashlib.sha1(f"{actor_id}{salt}:{stable}".encode()).hexdigest()
+        h = hashlib.sha1(f"{actor_id}:{stable}".encode()).hexdigest()
         return f"apify:cache:{actor_id}:{h}"
 
     async def _get_cached(self, cache_key: str) -> list[dict[str, Any]] | None:
@@ -76,11 +75,28 @@ class ApifyClient:
             data = await r.get(cache_key)
             if data:
                 logger.info("apify_cache_hit", key=cache_key)
+                self._inc_cache_hit()
                 return json.loads(data)
             logger.info("apify_cache_miss", key=cache_key)
+            self._inc_cache_miss()
             return None
         except Exception as e:
             logger.warning("apify_cache_error", key=cache_key, error=str(e))
+            return None
+
+    def _inc_cache_hit(self) -> None:
+        try:
+            from app.core.metrics import lens_cache_hits_total
+            lens_cache_hits_total.labels(layer="apify", result="hit").inc()
+        except Exception:
+            pass
+
+    def _inc_cache_miss(self) -> None:
+        try:
+            from app.core.metrics import lens_cache_hits_total
+            lens_cache_hits_total.labels(layer="apify", result="miss").inc()
+        except Exception:
+            pass
             return None
 
     async def _set_cached(self, cache_key: str, items: list[dict[str, Any]], ttl: int) -> None:
@@ -126,20 +142,27 @@ class ApifyClient:
         response.raise_for_status()
         return response.json()
 
-    async def _run_sync(self, actor_id: str, run_input: dict, timeout_s: int = 300, run_id: str | None = None) -> list[dict[str, Any]]:
+    async def _run_sync(
+        self,
+        actor_id: str,
+        run_input: dict,
+        timeout_s: int = 300,
+        force_fresh: bool = False,
+    ) -> list[dict[str, Any]]:
         """Sync endpoint — waits for completion and returns dataset items directly.
 
-        Mirrors the /run-sync-get-dataset-items endpoint used in extract_purina_real_apify.py v4.
-        run_id is used to namespace the cache key so each discovery run gets fresh data.
+        Cache key is deterministic (actor_id + run_input only, no run_id).
+        Use force_fresh=True to bypass cache read (e.g., "dame otros 15").
         """
         client = await self._get_client()
-        cache_key = self._build_cache_key(actor_id, run_input, run_id)
-        cached = await self._get_cached(cache_key)
-        if cached is not None:
-            logger.info("apify_sync_cache_hit", actor_id=actor_id, cached_count=len(cached), run_id=run_id)
-            return cached
+        cache_key = self._build_cache_key(actor_id, run_input)
 
-        cache_key_for_ttl = cache_key
+        if not force_fresh:
+            cached = await self._get_cached(cache_key)
+            if cached is not None:
+                logger.info("apify_sync_cache_hit", actor_id=actor_id, cached_count=len(cached))
+                return cached
+
         response = await client.post(
             f"/acts/{actor_id}/run-sync-get-dataset-items",
             json=run_input,
@@ -156,10 +179,30 @@ class ApifyClient:
         response.raise_for_status()
         items = response.json()
         result = items if isinstance(items, list) else []
-        if result and cache_key_for_ttl:
-            await self._set_cached(cache_key_for_ttl, result, CACHE_TTL_PROFILES)
-        logger.info("apify_sync_done", actor_id=actor_id, items_count=len(result), run_id=run_id)
+        if result:
+            ttl = CACHE_TTL_PROFILES if actor_id == INSTAGRAM_PROFILE_SCRAPER else CACHE_TTL_SEARCH
+            await self._set_cached(cache_key, result, ttl)
+
+        cost_usd = await self._fetch_run_cost(client, actor_id)
+        if cost_usd and self.discovery_run_id:
+            self.record_cost(self.discovery_run_id, cost_usd)
+            logger.info("apify_cost_recorded", run_id=self.discovery_run_id, actor_id=actor_id, cost_usd=cost_usd)
+
+        logger.info("apify_sync_done", actor_id=actor_id, items_count=len(result))
         return result
+
+    async def _fetch_run_cost(self, client: httpx.AsyncClient, actor_id: str) -> float | None:
+        """Fetch usageTotalUsd from the last run of an actor."""
+        try:
+            resp = await client.get(f"/acts/{actor_id}/runs/last")
+            if resp.status_code == 200:
+                data = resp.json().get("data", {})
+                cost = data.get("usageTotalUsd")
+                if cost is not None:
+                    return float(cost)
+        except Exception as exc:
+            logger.warning("apify_cost_fetch_failed", actor_id=actor_id, error=str(exc))
+        return None
 
     def _build_client_headers(self) -> dict[str, str]:
         return {
@@ -497,7 +540,7 @@ class ApifyClient:
         self,
         hashtags: list[str],
         results_limit: int = 50,
-        run_id: str | None = None,
+        force_fresh: bool = False,
     ) -> list[dict[str, Any]]:
         """Single sync call with all hashtags at once (v4 pattern)."""
         clean = [h.lstrip("#") for h in hashtags]
@@ -510,13 +553,13 @@ class ApifyClient:
             "hashtags": clean,
             "resultsLimit": results_limit,
         }
-        return await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input, run_id=run_id)
+        return await self._run_sync(INSTAGRAM_HASHTAG_SCRAPER, run_input, force_fresh=force_fresh)
 
     async def search_users_by_keywords_sync(
         self,
         keywords: list[str],
         limit_per_keyword: int = 30,
-        run_id: str | None = None,
+        force_fresh: bool = False,
     ) -> list[dict[str, Any]]:
         """Single sync call with all keywords (v4 pattern)."""
         logger.info(
@@ -529,12 +572,12 @@ class ApifyClient:
             "searchQueries": keywords,
             "resultsLimit": limit_per_keyword,
         }
-        return await self._run_sync(INSTAGRAM_SEARCH_SCRAPER, run_input, run_id=run_id)
+        return await self._run_sync(INSTAGRAM_SEARCH_SCRAPER, run_input, force_fresh=force_fresh)
 
     async def enrich_profiles_sync(
         self,
         usernames: list[str],
-        run_id: str | None = None,
+        force_fresh: bool = False,
     ) -> list[dict[str, Any]]:
         """Single sync call for batch profile enrichment (v4 pattern)."""
         clean = [u.lstrip("@") for u in usernames]
@@ -547,7 +590,7 @@ class ApifyClient:
             "resultsType": "details",
             "includeAboutSection": True,
         }
-        return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input, run_id=run_id)
+        return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input, force_fresh=force_fresh)
 
     async def scrape_hashtags_batch(
         self,

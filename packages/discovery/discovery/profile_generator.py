@@ -215,6 +215,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
             cached = await redis_client.get(f"lens:profile:{fingerprint}")
             if cached:
                 logger.info("profile_cache_hit", fingerprint=fingerprint)
+                _inc_profile_metric("cache")
                 return json.loads(cached)
         except Exception as exc:
             logger.warning("profile_cache_read_error", error=str(exc))
@@ -232,6 +233,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
             if rows:
                 profile = rows[0]
                 logger.info("profile_db_hit", fingerprint=fingerprint, source=profile.get("source"))
+                _inc_profile_metric(profile.get("source", "unknown"))
                 # Update times_used
                 await supabase_rest.update(
                     table="discovery_profiles",
@@ -309,4 +311,13 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
         except Exception:
             pass
 
+    _inc_profile_metric(profile.get("source", "unknown"))
     return profile
+
+
+def _inc_profile_metric(source: str) -> None:
+    try:
+        from app.core.metrics import lens_profile_generation_total
+        lens_profile_generation_total.labels(source=source).inc()
+    except Exception:
+        pass

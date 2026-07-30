@@ -82,6 +82,28 @@ class DiscoveryOrchestrator:
             return None
 
         state = ConversationState()
+
+        stored_state = conv.get("state") or {}
+        if stored_state and isinstance(stored_state, dict) and stored_state.get("step"):
+            try:
+                state.step = ConversationStep(stored_state["step"])
+            except ValueError:
+                logger.warning("invalid_step_from_state", step=stored_state.get("step"))
+                state.step = ConversationStep.START
+            state.accumulated_brief = stored_state.get("accumulated_brief", "")
+            if stored_state.get("discovery_run_id"):
+                try:
+                    state.discovery_run_id = UUID(stored_state["discovery_run_id"])
+                except Exception:
+                    state.discovery_run_id = None
+            if stored_state.get("brief_structured"):
+                try:
+                    state.brief_structured = BriefStructured(**stored_state["brief_structured"])
+                except Exception:
+                    state.brief_structured = None
+            state.pending_refinements = stored_state.get("pending_refinements", []) or []
+            return state
+
         try:
             state.step = ConversationStep(conv.get("current_step", "start"))
         except ValueError:
@@ -93,7 +115,6 @@ class DiscoveryOrchestrator:
             state.step = ConversationStep.START
         state.accumulated_brief = conv.get("accumulated_brief", "") or ""
         state.discovery_run_id = UUID(conv["discovery_run_id"]) if conv.get("discovery_run_id") else None
-
         if conv.get("parsed_brief_json"):
             try:
                 state.brief_structured = BriefStructured(**conv["parsed_brief_json"])
@@ -113,6 +134,19 @@ class DiscoveryOrchestrator:
         import json as _json
         from discovery.memory import conversation_memory
 
+        state_json = {
+            "step": state.step.value,
+            "accumulated_brief": state.accumulated_brief,
+            "discovery_run_id": str(state.discovery_run_id) if state.discovery_run_id else None,
+            "brief_structured": (
+                state.brief_structured.model_dump(mode="json")
+                if state.brief_structured else None
+            ),
+            "pending_refinements": state.pending_refinements,
+            "candidates": [c.model_dump(mode="json") for c in state.candidates],
+            "messages": [m.model_dump(mode="json") for m in state.messages],
+        }
+
         await conversation_memory.update_conversation(
             conversation_id=conversation_id,
             updates={
@@ -127,6 +161,7 @@ class DiscoveryOrchestrator:
                     _json.dumps(state.pending_refinements)
                     if state.pending_refinements else None
                 ),
+                "state": state_json,
             },
         )
 

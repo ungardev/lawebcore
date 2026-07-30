@@ -63,7 +63,16 @@ export function InfluencerTable({ candidates, onSave, onDismiss }: InfluencerCar
                 <p className="text-[10px] text-muted-foreground">ER</p>
               </div>
               {c.match_score != null && (
-                <MatchScoreCircle score={c.match_score} size="sm" />
+                <MatchScoreCircle
+                  score={c.match_score}
+                  size="sm"
+                  breakdown={{
+                    niche: c.niche_relevance,
+                    geo: c.geo_relevance,
+                    engagement: c.audience_relevance,
+                    commercial: c.content_quality,
+                  }}
+                />
               )}
               <div className="text-right">
                 <p className="text-xs font-medium">{formatFollowers(c.followers)}</p>

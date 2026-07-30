@@ -18,6 +18,12 @@ from arq.connections import RedisSettings
 
 from shared_core import settings
 from shared_core import supabase_rest
+
+from app.core.metrics import (
+    lens_active_runs,
+    lens_candidates_total,
+    lens_pipeline_duration_seconds,
+)
 from discovery.query_builder import query_builder
 from discovery.schemas import BriefStructured, Platform
 from discovery.memory import conversation_memory
@@ -37,8 +43,8 @@ from discovery.profile_generator import get_or_create_profile
 
 logger = structlog.get_logger(__name__)
 
-APIFY_SEMAPHORE = asyncio.Semaphore(3)
-MAX_HANDLES_TO_ENRICH = 150
+APIFY_SEMAPHORE = asyncio.Semaphore(5)
+MAX_HANDLES_TO_ENRICH = 60
 MAX_POSTS_PER_HASHTAG = 50
 
 
@@ -114,6 +120,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     """
     try:
         await _run_set_status(run_id, "running")
+        lens_active_runs.inc()
 
         print(f"[discovery_run_task] START run_id={run_id}", flush=True)
 
@@ -150,24 +157,37 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step1_handles: set[str] = set()
         step2_handles: set[str] = set()
 
-        print(f"[discovery_run_task] STEP 1: Hashtag search ({len(plan.hashtag_queries)} hashtags)", flush=True)
-        hashtag_items = await apify_client.scrape_hashtags_all_sync(
-            plan.hashtag_queries,
-            results_limit=50,
-            run_id=run_id,
-        )
-        logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
-        await _save_progress_message(
-            run_id,
-            f"✅ **Step 1/4 completado**: Escaneé **{len(hashtag_items)} posts** de "
-            f"**{len(plan.hashtag_queries)} hashtags** relevantes. "
-            f"Sigamos con búsqueda por keywords...",
+        async def _fetch_step1():
+            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=50)
+
+        async def _fetch_step2():
+            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=30)
+
+        print(f"[discovery_run_task] STEP 1+2: Running hashtag + keyword search in parallel", flush=True)
+        step1_result, step2_result = await asyncio.gather(
+            _fetch_step1(),
+            _fetch_step2(),
+            return_exceptions=True,
         )
 
-        await _run_update_metadata(run_id, {
-            "current_step": "step2_keyword_search",
-            "completed_steps": ["step1_hashtag_search"],
-        })
+        hashtag_items: list[dict] = []
+        keyword_items: list[dict] = []
+        step1_failed = False
+        step2_failed = False
+
+        if isinstance(step1_result, Exception):
+            logger.error("step1_hashtag_failed", error=str(step1_result))
+            step1_failed = True
+        else:
+            hashtag_items = step1_result
+            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
+
+        if isinstance(step2_result, Exception):
+            logger.error("step2_keyword_failed", error=str(step2_result))
+            step2_failed = True
+        else:
+            keyword_items = step2_result
+            logger.info("step2_keyword_done", keyword_users=len(keyword_items))
 
         for item in hashtag_items:
             handle = item.get("ownerUsername") or item.get("username")
@@ -198,13 +218,32 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "location": item.get("locationName", "") or "",
             }
 
-        print(f"[discovery_run_task] STEP 2: Keyword search ({len(plan.keyword_queries)} keywords)", flush=True)
-        keyword_items = await apify_client.search_users_by_keywords_sync(
-            plan.keyword_queries,
-            limit_per_keyword=30,
-            run_id=run_id,
-        )
-        logger.info("step2_keyword_done", keyword_users=len(keyword_items))
+        for item in keyword_items:
+            handle = item.get("username", "")
+            if not handle:
+                continue
+            step2_handles.add(handle)
+            if handle in profiles:
+                continue
+            profiles[handle] = {
+                "username": handle,
+                "full_name": item.get("fullName", ""),
+                "fullName": item.get("fullName", ""),
+                "bio": item.get("biography", ""),
+                "biography": item.get("biography", ""),
+                "avatar_url": item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", ""),
+                "follower_count": 0,
+                "followersCount": 0,
+                "following_count": 0,
+                "followsCount": 0,
+                "posts_count": 0,
+                "postsCount": 0,
+                "is_business": item.get("isBusinessAccount", False),
+                "isBusinessAccount": item.get("isBusinessAccount", False),
+                "is_verified": item.get("verified", False),
+                "verified": item.get("verified", False),
+            }
 
         for item in keyword_items:
             handle = item.get("username", "")
@@ -234,11 +273,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             }
 
         unique_handles = list(profiles.keys())
-        logger.info("step2_merge_done", unique_profiles=len(unique_handles))
+        logger.info("step1_and_2_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items))
+        step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
         await _save_progress_message(
             run_id,
-            f"✅ **Step 2/4 completado**: Encontré **{len(unique_handles)} perfiles únicos** "
-            f"({len(keyword_items)} via keywords + {len(hashtag_items)} via hashtags). "
+            f"✅ **Steps 1+2 {step_status}**: Encontré **{len(unique_handles)} perfiles únicos** "
+            f"({len(hashtag_items)} via hashtags + {len(keyword_items)} via keywords). "
             f"Enriqueciendo los top {min(MAX_HANDLES_TO_ENRICH, len(unique_handles))} con datos de Instagram...",
         )
 
@@ -251,13 +291,55 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         handles_to_enrich = unique_handles[:MAX_HANDLES_TO_ENRICH]
         print(f"[discovery_run_task] STEP 3: Profile enrichment ({len(handles_to_enrich)} profiles)", flush=True)
 
+        async def _prefilter_profiles(
+            profiles: dict[str, dict],
+            geo_indicators: list[str],
+            niche_keywords: list[str],
+            top_n: int,
+        ) -> list[tuple[str, float]]:
+            from discovery.scoring.niche import niche_relevance
+            from discovery.tools.geo_boost import geo_score
+
+            scored: list[tuple[str, float]] = []
+            for handle, p in profiles.items():
+                text_bio = p.get("biography") or p.get("bio") or ""
+                geo = geo_score(
+                    {"biography": text_bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
+                    geo_indicators,
+                )
+                niche = niche_relevance(
+                    {"biography": text_bio, "username": handle, "full_name": p.get("full_name", "")},
+                    {"niche_keywords": niche_keywords, "hashtags": [], "keywords": niche_keywords},
+                )
+                rough = 0.5 * geo + 0.5 * niche
+                scored.append((handle, rough))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            return scored[:top_n]
+
+        prefilter_before = len(unique_handles)
+        prefilter_handles = await _prefilter_profiles(
+            profiles,
+            profile_data.get("geo_indicators", []),
+            profile_data.get("niche_keywords", []),
+            MAX_HANDLES_TO_ENRICH,
+        )
+        handles_to_enrich = [h for h, _ in prefilter_handles]
+        logger.info(
+            "prefilter_stats",
+            run_id=run_id,
+            before=prefilter_before,
+            after=len(handles_to_enrich),
+            top_score=prefilter_handles[0][1] if prefilter_handles else None,
+        )
+
         enriched_profiles: list[dict] = []
         step3_degraded = False
         step3_error: str | None = None
 
         if handles_to_enrich:
             try:
-                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich, run_id=run_id)
+                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
                 if not enriched_profiles:
                     step3_degraded = True
                     step3_error = "Apify returned empty result"
@@ -389,10 +471,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "audience_gender_split": {},
                     "audience_age_buckets": {},
                     "match_score": round(score_val, 2),
-                    "niche_relevance": 0.9 if tier in ("MICRO", "MID") else 0.7,
-                    "geo_relevance": 1.0,
-                    "audience_relevance": 0.8,
-                    "content_quality": 0.8,
+                    "niche_relevance": 90 if tier in ("MICRO", "MID") else 70,
+                    "geo_relevance": 100,
+                    "audience_relevance": 80,
+                    "content_quality": 80,
                     "expected_reach": int(followers * 0.7),
                     "expected_engagement": int(followers * er),
                     "roi_estimate": None,
@@ -497,11 +579,31 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
 
         logger.info("discovery_run_completed", run_id=run_id, candidates=total)
+
+        apify_cost = apify_client.get_and_clear_cost(run_id)
+        if apify_cost > 0:
+            await supabase_rest.update(
+                table="discovery_runs",
+                values={"actual_cost_usd": apify_cost},
+                filters=[f"id=eq.{run_id}"],
+            )
+            await supabase_rest.insert("api_costs", {
+                "provider": "apify",
+                "operation": "discovery_pipeline",
+                "entity_id": run_id,
+                "cost_usd": apify_cost,
+                "request_count": 3,
+                "metadata": {"run_id": run_id},
+            })
+
+        lens_active_runs.dec()
+        lens_candidates_total.labels(status="inserted").inc(total)
         return {"run_id": run_id, "candidates": total}
 
     except Exception as e:
         logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
         await _run_set_status(run_id, "failed", error=str(e))
+        lens_active_runs.dec()
         raise
 
 
