@@ -173,7 +173,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "username": handle,
                 "full_name": item.get("ownerFullName", "") or item.get("fullName", ""),
                 "fullName": item.get("ownerFullName", "") or item.get("fullName", ""),
-                "full_name": item.get("ownerFullName", "") or item.get("fullName", ""),
                 "bio": item.get("caption", "") or item.get("biography", ""),
                 "biography": item.get("caption", "") or item.get("biography", ""),
                 "avatar_url": item.get("displayUrl", "") or item.get("profilePicUrl", ""),
@@ -321,6 +320,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[discovery_run_task] STEP 4: Excluded {original_count - len(profiles)} handles, scoring {len(profiles)} remaining", flush=True)
 
         scored: list[dict] = []
+        bots_filtered = 0
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
             if followers < 1000:
@@ -334,6 +334,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 er = (likes_avg + comments_avg) / followers
 
             p["engagement_rate"] = er
+
+            if er > 0.30:
+                bots_filtered += 1
+                continue
+            if er < 0.005 and followers > 5000:
+                bots_filtered += 1
+                continue
+
             geo = country_boost(p)
             score_val = composite_score(p)
             tier = classify_tier(followers)
@@ -396,6 +404,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             total_profiles=len(profiles),
             ve_candidates=len(scored),
             qualified=len(qualified),
+            bots_filtered=bots_filtered,
             top_score=qualified[0].get("match_score") if qualified else None,
         )
 
@@ -673,7 +682,7 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
 
 
 async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str) -> int:
-    """Inserta candidatos. Datos ya vienen deduplicados por (platform, handle) upstream.
+    """Inserta candidatos en lote. Fallback individual si el lote falla.
     Returns the number of successfully inserted candidates."""
     import uuid as _uuid
 
@@ -683,31 +692,55 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
 
     inserted = 0
     failed = 0
-    for c in candidates:
-        try:
-            await supabase_rest.insert(
-                table="discovery_candidates",
-                values=c,
-                returning="minimal",
-            )
-            inserted += 1
-        except Exception as exc:
-            failed += 1
-            logger.error(
-                "candidate_insert_failed",
-                run_id=run_id,
-                handle=c.get("handle"),
-                platform=c.get("platform"),
-                error=str(exc),
-                exc_info=True,
-            )
 
-    logger.info(
-        "candidates_insert_summary",
-        run_id=run_id,
-        attempted=len(candidates),
-        inserted=inserted,
-        failed=failed,
+    try:
+        result = await supabase_rest.upsert_many(
+            table="discovery_candidates",
+            records=candidates,
+            on_conflict=["run_id", "platform", "handle"],
+            returning="minimal",
+        )
+        inserted = len(result)
+        logger.info(
+            "candidates_insert_summary",
+            run_id=run_id,
+            attempted=len(candidates),
+            inserted=inserted,
+            failed=0,
+            batch=True,
+        )
+    except Exception as batch_exc:
+        logger.warning(
+            "candidate_batch_insert_failed_falling_back_to_individual",
+            run_id=run_id,
+            error=str(batch_exc),
+        )
+        for c in candidates:
+            try:
+                await supabase_rest.insert(
+                    table="discovery_candidates",
+                    values=c,
+                    returning="minimal",
+                )
+                inserted += 1
+            except Exception as exc:
+                failed += 1
+                logger.error(
+                    "candidate_insert_failed",
+                    run_id=run_id,
+                    handle=c.get("handle"),
+                    platform=c.get("platform"),
+                    error=str(exc),
+                    exc_info=True,
+                )
+        logger.info(
+            "candidates_insert_summary",
+            run_id=run_id,
+            attempted=len(candidates),
+            inserted=inserted,
+            failed=failed,
+            batch=False,
+        )
     )
     return inserted
 

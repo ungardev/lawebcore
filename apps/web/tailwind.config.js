@@ -73,15 +73,12 @@ export default {
           purple: 'hsl(var(--brand-purple))',
           blue: 'hsl(var(--brand-blue))',
           'blue-hover': 'hsl(var(--brand-blue-hover))',
-          orange: '#F97316',
-        },
-        success: '#22C55E',
-        warning: '#F59E0B',
-        info: '#3B82F6',
+        orange: '#F97316',
       },
+    },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        display: ['Montserrat', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        display: ['Instrument Serif', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {

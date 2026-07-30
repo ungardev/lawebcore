@@ -259,6 +259,52 @@ class RailwayPg:
             logger.error("[supabase_rest.insert] FAILED: %s | sql=%s vals=%s", e, sql, vals, exc_info=True)
             raise
 
+    async def upsert_many(
+        self,
+        table: str,
+        records: list[dict],
+        on_conflict: list[str],
+        returning: str = "representation",
+    ) -> list[dict]:
+        """Batch upsert. All records must have the same keys. Uses ON CONFLICT DO UPDATE."""
+        if not records:
+            return []
+        pool = await self._ensure_pool()
+        cols = list(records[0].keys())
+        conflict_cols = ",".join(on_conflict)
+        set_parts = [f"{c}=EXCLUDED.{c}" for c in cols if c not in on_conflict]
+
+        rows: list[list[Any]] = []
+        placeholder_lists: list[str] = []
+        param_offset = 0
+        for record in records:
+            row_vals = [self._val_to_pg(record.get(c)) for c in cols]
+            rows.append(row_vals)
+            phs = [f"${param_offset + i + 1}" for i in range(len(cols))]
+            placeholder_lists.append(f"({','.join(phs)})")
+            param_offset += len(cols)
+
+        all_vals: list[Any] = []
+        for row in rows:
+            all_vals.extend(row)
+
+        sql = (
+            f"INSERT INTO {table} ({','.join(cols)}) "
+            f"VALUES {','.join(placeholder_lists)} "
+            f"ON CONFLICT ({conflict_cols}) DO UPDATE SET {','.join(set_parts)}"
+        )
+        if returning != "minimal":
+            sql += " RETURNING id"
+        logger.info("[supabase_rest.upsert_many] EXEC: %s", sql)
+        try:
+            async with pool.acquire() as conn:
+                result = await conn.fetch(sql, *all_vals)
+            logger.info("[supabase_rest.upsert_many] OK: %d rows", len(result))
+            return [dict(r) for r in result]
+        except Exception as e:
+            logger.error("[supabase_rest.upsert_many] FAILED: %s | sql=%s", e, sql, exc_info=True)
+            raise
+
     async def upsert(
         self,
         table: str,

@@ -104,6 +104,6 @@ def build_rationale(profile: dict, tier: str, followers: int, er: float) -> str:
         niches.append("general")
     return (
         f"Perfil {tier} de {', '.join(niches[:2])} en VE. "
-        f"ER {er:.1f}%, {followers:,} seguidores. "
+        f"ER {er * 100:.1f}%, {followers:,} seguidores. "
         f"Perfil relevante para campaña en Venezuela."
     )

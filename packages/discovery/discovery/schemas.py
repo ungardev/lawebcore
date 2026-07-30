@@ -183,10 +183,10 @@ class DiscoverySearchRequest(BaseModel):
     audience_gender: AudienceGender = AudienceGender.ALL
     audience_age_min: int = 18
     audience_age_max: int = 65
-    audience_countries: list[str] = Field(default_factory=["VE"])
+    audience_countries: list[str] = Field(default_factory=list)
     audience_cities: list[str] = Field(default_factory=list)
     tone: list[str] = Field(default_factory=list)
-    platforms: list[Platform] = Field(default_factory=[Platform.INSTAGRAM])
+    platforms: list[Platform] = Field(default_factory=lambda: [Platform.INSTAGRAM])
     max_candidates: int = Field(default=20, ge=1, le=100)
     exclude_handles: list[str] = Field(default_factory=list)
 

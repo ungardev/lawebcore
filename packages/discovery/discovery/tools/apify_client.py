@@ -545,6 +545,7 @@ class ApifyClient:
         run_input = {
             "usernames": clean,
             "resultsType": "details",
+            "includeAboutSection": True,
         }
         return await self._run_sync(INSTAGRAM_PROFILE_SCRAPER, run_input, run_id=run_id)
 
