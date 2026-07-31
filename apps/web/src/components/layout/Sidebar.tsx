@@ -86,7 +86,6 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         )}
       >
         <>
-          <span className={cn('absolute inset-y-2 left-0 w-0.5 rounded-full transition-colors', isActive ? 'bg-sidebar-primary' : 'bg-transparent group-hover:bg-sidebar-primary/40')} />
           <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/50 group-hover:text-sidebar-foreground')} strokeWidth={isActive ? 2.2 : 1.8} aria-hidden="true" />
           {!collapsed && (
             <>
