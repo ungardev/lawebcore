@@ -14,7 +14,7 @@ interface TopbarProps {
 }
 
 const ROUTE_LABELS: Record<string, string> = {
-  '/home': 'Resumen',
+  '/home': 'Home',
   '/campaigns': 'Campañas',
   '/campaigns/kanban': 'Pipeline',
   '/clients': 'Clientes',
