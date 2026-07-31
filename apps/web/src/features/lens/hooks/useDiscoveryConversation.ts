@@ -76,17 +76,21 @@ export function useDiscoveryConversation() {
         }
       }
 
-      const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m: DiscoveryMessage) => ({
-        id: m.id,
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-        reasoning: m.reasoning ?? null,
-        tool_calls: Array.isArray(m.tool_calls) ? (m.tool_calls as unknown as ChatTurn['tool_calls']) : null,
-        tool_results: Array.isArray(m.tool_results) ? (m.tool_results as unknown as ChatTurn['tool_results']) : null,
-        cost_usd: m.cost_usd ?? null,
-        latency_ms: m.latency_ms ?? null,
-        isLoading: false,
-      }));
+      const mappedTurns: ChatTurn[] = (conv.messages ?? []).map((m: DiscoveryMessage) => {
+        const isBriefJson = m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('Brief:');
+        return {
+          id: m.id,
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+          reasoning: m.reasoning ?? null,
+          tool_calls: Array.isArray(m.tool_calls) ? (m.tool_calls as unknown as ChatTurn['tool_calls']) : null,
+          tool_results: Array.isArray(m.tool_results) ? (m.tool_results as unknown as ChatTurn['tool_results']) : null,
+          cost_usd: m.cost_usd ?? null,
+          latency_ms: m.latency_ms ?? null,
+          isLoading: false,
+          brief_hidden: isBriefJson ? true : undefined,
+        };
+      });
 
       if (candidates && candidates.length > 0) {
         const lastAssistantIdx = [...mappedTurns].reverse().findIndex((t) => t.role === 'assistant');

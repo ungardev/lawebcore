@@ -90,8 +90,8 @@ export function LensChatPage() {
   const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
     setWizardLoading(true);
     try {
-      const briefJson = JSON.stringify(brief);
-      const briefMessage = `Brief: ${briefJson}. Buscar ahora.`;
+      const briefJson = JSON.stringify(brief, null, 2);
+      const briefMessage = `Brief: ${briefJson}\n\nBuscar ahora.`;
 
       const newConversation = await startConversation(briefMessage);
       queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>

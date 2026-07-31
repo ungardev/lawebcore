@@ -185,6 +185,7 @@ export interface ChatTurn {
   progress?: RunProgress;
   isLoading?: boolean;
   isError?: boolean;
+  brief_hidden?: boolean;
 }
 
 export interface ApiCostsResponse {

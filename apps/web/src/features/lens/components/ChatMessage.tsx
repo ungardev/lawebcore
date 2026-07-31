@@ -16,6 +16,8 @@ interface ChatMessageProps {
 export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatMessageProps) {
   const isUser = turn.role === 'user';
 
+  if (turn.brief_hidden) return null;
+
   return (
     <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
       <div
@@ -26,13 +28,13 @@ export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatM
       >
         <div className="flex items-start gap-2">
           {!isUser && (
-              <span className="mt-0.5 rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                LENS
-              </span>
+            <span className="mt-0.5 rounded border border-primary/25 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              LENS
+            </span>
           )}
           <div className="flex-1 min-w-0">
             {isUser ? (
-              <p className="text-sm whitespace-pre-wrap">{turn.content}</p>
+              <p className="text-sm break-words whitespace-pre-wrap">{turn.content}</p>
             ) : (
               <>
                 {turn.isLoading && !turn.content && !turn.reasoning ? (
@@ -43,7 +45,7 @@ export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatM
                 ) : (
                   <>
                     {turn.content && (
-                      <p className="text-sm whitespace-pre-wrap">{turn.content}</p>
+                      <p className="text-sm break-words whitespace-pre-wrap">{turn.content}</p>
                     )}
                     {turn.reasoning && (
                       <ThinkingBlock
