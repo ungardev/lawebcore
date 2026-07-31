@@ -23,7 +23,11 @@ interface CandidateCardProps {
 export function CandidateCard({ candidate, onSave, onDismiss, compact }: CandidateCardProps) {
   const [imgFailed, setImgFailed] = useState(false)
   const tier = candidate.tier ?? classifyTier(candidate.followers)
-  const showInitials = !candidate.avatar_url || imgFailed
+  const avatarUrl = candidate.avatar_url
+    || (candidate.platform === 'instagram' && candidate.handle
+      ? `https://instagram.com/${candidate.handle}/profile_picture`
+      : null)
+  const showInitials = !avatarUrl || imgFailed
 
   return (
     <article
@@ -39,7 +43,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           </div>
         ) : (
           <img
-            src={candidate.avatar_url ?? undefined}
+            src={avatarUrl ?? undefined}
             alt={candidate.handle}
             className="h-12 w-12 shrink-0 rounded-md object-cover"
             onError={() => setImgFailed(true)}
