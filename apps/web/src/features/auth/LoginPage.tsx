@@ -173,7 +173,7 @@ export function LoginPage({
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
                   {showPassword ? (
                     <EyeOff className="w-4 h-4" />
@@ -201,7 +201,7 @@ export function LoginPage({
                 className="text-muted-foreground hover:text-foreground transition-colors"
                 style={{ fontWeight: 500 }}
               >
-                ¿Olvidaste tu contrasena?
+                ¿Olvidaste tu contraseña?
               </a>
             </div>
 

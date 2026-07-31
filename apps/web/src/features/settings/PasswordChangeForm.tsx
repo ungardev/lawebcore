@@ -43,7 +43,7 @@ function PasswordInput({
           onClick={() => setVisible(!visible)}
           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           tabIndex={-1}
-          aria-label={visible ? 'Ocultar contrasena' : 'Mostrar contrasena'}
+          aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
         >
           {visible ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </button>
@@ -76,11 +76,11 @@ export function PasswordChangeForm() {
     const newErrors: typeof errors = {};
 
     if (!currentPassword) {
-      newErrors.current = 'Ingresa tu contrasena actual';
+      newErrors.current = 'Ingresa tu contraseña actual';
     }
 
     if (!newPassword) {
-      newErrors.new = 'Ingresa una nueva contrasena';
+      newErrors.new = 'Ingresa una nueva contraseña';
     } else {
       if (newPassword.length < 8) {
         newErrors.new = 'Minimo 8 caracteres';
@@ -97,9 +97,9 @@ export function PasswordChangeForm() {
     }
 
     if (!confirmPassword) {
-      newErrors.confirm = 'Confirma tu nueva contrasena';
+      newErrors.confirm = 'Confirma tu nueva contraseña';
     } else if (confirmPassword !== newPassword) {
-      newErrors.confirm = 'Las contrasenas no coinciden';
+      newErrors.confirm = 'Las contraseñas no coinciden';
     }
 
     setErrors(newErrors);
@@ -114,7 +114,7 @@ export function PasswordChangeForm() {
     setLoading(true);
     try {
       await updatePassword(currentPassword, newPassword);
-      toast.success('Contrasena actualizada correctamente', {
+      toast.success('Contraseña actualizada correctamente', {
         icon: <CheckCircle className="w-4 h-4" />,
       });
       setCurrentPassword('');
@@ -122,7 +122,7 @@ export function PasswordChangeForm() {
       setConfirmPassword('');
       setErrors({});
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error al cambiar la contrasena';
+      const message = err instanceof Error ? err.message : 'Error al cambiar la contraseña';
       toast.error(message, {
         icon: <AlertCircle className="w-4 h-4" />,
       });
@@ -134,34 +134,34 @@ export function PasswordChangeForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Actualiza tu contrasena para mayor seguridad. La nueva contrasena debe tener al menos 8 caracteres.
+        Actualiza tu contraseña para mayor seguridad. La nueva contraseña debe tener al menos 8 caracteres.
       </p>
 
       <PasswordInput
         id="current-password"
-        label="Contrasena actual"
+        label="Contraseña actual"
         value={currentPassword}
         onChange={setCurrentPassword}
         error={errors.current}
-        placeholder="Tu contrasena actual"
+        placeholder="Tu contraseña actual"
       />
 
       <PasswordInput
         id="new-password"
-        label="Nueva contrasena"
+        label="Nueva contraseña"
         value={newPassword}
         onChange={setNewPassword}
         error={errors.new}
-        placeholder="Nueva contrasena (min 8 caracteres)"
+        placeholder="Nueva contraseña (min 8 caracteres)"
       />
 
       <PasswordInput
         id="confirm-password"
-        label="Confirmar nueva contrasena"
+        label="Confirmar nueva contraseña"
         value={confirmPassword}
         onChange={setConfirmPassword}
         error={errors.confirm}
-        placeholder="Repite la nueva contrasena"
+        placeholder="Repite la nueva contraseña"
       />
 
       <Button
@@ -169,7 +169,7 @@ export function PasswordChangeForm() {
         disabled={loading}
         className="w-full"
       >
-        {loading ? 'Cambiando...' : 'Cambiar contrasena'}
+        {loading ? 'Cambiando...' : 'Cambiar contraseña'}
       </Button>
     </form>
   );

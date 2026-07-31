@@ -32,7 +32,7 @@ export function SettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Contrasena</CardTitle></CardHeader>
+        <CardHeader><CardTitle>Contraseña</CardTitle></CardHeader>
         <CardContent>
           <PasswordChangeForm />
         </CardContent>
