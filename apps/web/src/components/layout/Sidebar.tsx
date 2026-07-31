@@ -15,14 +15,14 @@ import { authApi } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const NAV_MAIN = [
-  { to: '/home', label: 'Resumen', description: 'Estado general del negocio', icon: Home, end: true },
+  { to: '/home', label: 'Home', description: 'Estado general del negocio', icon: Home, end: true },
   { to: '/campaigns', label: 'Campañas', description: 'Gestión y ejecución', icon: Megaphone, end: true },
   { to: '/campaigns/kanban', label: 'Pipeline', description: 'Flujo operativo', icon: Activity },
   { to: '/clients', label: 'Clientes', description: 'Marcas y contactos', icon: Building2 },
 ];
 
 const NAV_INTELLIGENCE = [
-  { to: '/influencer-lens', label: 'Lens', description: 'Descubrimiento asistido', icon: Sparkles, badge: 'AI', end: true },
+  { to: '/influencer-lens', label: 'Lens', description: 'Descubrimiento asistido', icon: Sparkles, badge: 'AI' },
   { to: '/influencer-lens/runs', label: 'Historial Lens', description: 'Ejecuciones y resultados', icon: History, end: true },
 ];
 
