@@ -100,10 +100,10 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
             {candidate.city && <span>{candidate.city}</span>}
           </div>
         </div>
-        <div className="shrink-0 text-center">
+        <div className="shrink-0 flex flex-col items-center gap-1">
           <MatchScoreCircle
             score={candidate.match_score ?? candidate.niche_relevance ?? 0}
-            size="sm"
+            size="md"
             breakdown={{
               niche: candidate.niche_relevance,
               geo: candidate.geo_relevance,
@@ -111,7 +111,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
               commercial: candidate.content_quality,
             }}
           />
-          <span className="mt-1 block text-[9px] uppercase tracking-wide text-muted-foreground">
+          <span className="text-[9px] uppercase tracking-widest font-medium text-muted-foreground">
             afinidad
           </span>
         </div>
