@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
@@ -51,48 +51,55 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
     queryFn: () => authApi.me(),
     staleTime: 5 * 60 * 1000,
   });
+  const { pathname } = useLocation();
 
   const displayName = profile?.full_name?.trim() || user?.full_name?.trim() || null;
   const initials = displayName
     ? ((displayName.trim().split(/\s+/)[0]?.[0] ?? '') + (displayName.trim().split(/\s+/)[1]?.[0] ?? '')).toUpperCase()
     : '?';
 
+  const isItemActive = (item: NavigationItem): boolean => {
+    if (item.end) {
+      return pathname === item.to;
+    }
+    if (item.to === '/lens') {
+      return pathname === '/lens' || (pathname.startsWith('/lens/') && !pathname.startsWith('/lens/runs') && !pathname.startsWith('/lens/search'));
+    }
+    return pathname === item.to || pathname.startsWith(item.to + '/');
+  };
+
   const renderItem = (item: NavigationItem) => {
     const Icon = item.icon;
+    const isActive = isItemActive(item);
     return (
       <NavLink
         key={item.to}
         to={item.to}
-        end={item.end}
         onClick={onNavigate}
         title={collapsed ? item.label : undefined}
-        className={({ isActive }) =>
-          cn(
-            'group relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-ring',
-            collapsed && 'md:justify-center md:px-1',
-            isActive
-              ? 'bg-sidebar-accent text-sidebar-foreground'
-              : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
-          )
-        }
-      >
-        {({ isActive }) => (
-          <>
-            <span className={cn('absolute inset-y-2 left-0 w-0.5 rounded-full transition-colors', isActive ? 'bg-sidebar-primary' : 'bg-transparent group-hover:bg-sidebar-primary/40')} />
-            <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/50 group-hover:text-sidebar-foreground')} strokeWidth={isActive ? 2.2 : 1.8} aria-hidden="true" />
-            {!collapsed && (
-              <>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.badge && <span className="rounded border border-sidebar-primary/30 bg-sidebar-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sidebar-primary">{item.badge}</span>}
-              </>
-            )}
-            {collapsed && (
-              <span className="pointer-events-none absolute right-full z-30 mr-2 hidden whitespace-nowrap rounded border border-divider bg-panel-raised px-2 py-1 text-xs font-medium text-foreground opacity-0 shadow-elevated transition-opacity group-hover:opacity-100 md:block">
-                {item.label}
-              </span>
-            )}
-          </>
+        className={cn(
+          'group relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors focus-ring',
+          collapsed && 'md:justify-center md:px-1',
+          isActive
+            ? 'bg-sidebar-accent text-sidebar-foreground'
+            : 'text-sidebar-foreground/60 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
         )}
+      >
+        <>
+          <span className={cn('absolute inset-y-2 left-0 w-0.5 rounded-full transition-colors', isActive ? 'bg-sidebar-primary' : 'bg-transparent group-hover:bg-sidebar-primary/40')} />
+          <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-sidebar-primary' : 'text-sidebar-foreground/50 group-hover:text-sidebar-foreground')} strokeWidth={isActive ? 2.2 : 1.8} aria-hidden="true" />
+          {!collapsed && (
+            <>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {item.badge && <span className="rounded border border-sidebar-primary/30 bg-sidebar-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sidebar-primary">{item.badge}</span>}
+            </>
+          )}
+          {collapsed && (
+            <span className="pointer-events-none absolute right-full z-30 mr-2 hidden whitespace-nowrap rounded border border-divider bg-panel-raised px-2 py-1 text-xs font-medium text-foreground opacity-0 shadow-elevated transition-opacity group-hover:opacity-100 md:block">
+              {item.label}
+            </span>
+          )}
+        </>
       </NavLink>
     );
   };
