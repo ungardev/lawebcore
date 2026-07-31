@@ -23,25 +23,21 @@ export function MatchScoreCircle({
 }: MatchScoreCircleProps) {
   const [showTooltip, setShowTooltip] = useState(false)
   const clampedScore = Math.max(0, Math.min(100, score))
-  const colorClass =
+
+  const scoreColor =
     clampedScore >= 80
-      ? 'text-success'
+      ? 'bg-success'
       : clampedScore >= 60
-        ? 'text-warning'
+        ? 'bg-warning'
         : clampedScore >= 40
-          ? 'text-brand-pink'
-          : 'text-destructive'
+          ? 'bg-brand-pink'
+          : 'bg-destructive'
 
   const sizeClasses = {
-    sm: 'w-10 h-10 text-sm',
+    sm: 'w-11 h-11 text-sm',
     md: 'w-14 h-14 text-lg',
     lg: 'w-20 h-20 text-2xl',
   }
-
-  const strokeWidth = size === 'sm' ? 3 : size === 'md' ? 4 : 5
-  const radius = size === 'sm' ? 16 : size === 'md' ? 22 : 32
-  const circumference = 2 * Math.PI * radius
-  const offset = circumference - (clampedScore / 100) * circumference
 
   return (
     <div className="relative inline-flex items-center justify-center">
@@ -50,33 +46,15 @@ export function MatchScoreCircle({
         onMouseEnter={() => breakdown && setShowTooltip(true)}
         onMouseLeave={() => setShowTooltip(false)}
       >
-        <svg className={sizeClasses[size]} viewBox="0 0 60 60">
-          <circle
-            cx="30"
-            cy="30"
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={strokeWidth}
-            className="text-muted"
-          />
-          <circle
-            cx="30"
-            cy="30"
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={strokeWidth}
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            className={cn('transition-all duration-500', colorClass)}
-            transform="rotate(-90 30 30)"
-          />
-        </svg>
-        <span className={cn('absolute font-bold', sizeClasses[size], colorClass)}>
+        <div
+          className={cn(
+            'rounded-full flex items-center justify-center font-bold text-white ring-2 ring-white/20 shadow-sm',
+            sizeClasses[size],
+            scoreColor,
+          )}
+        >
           {Math.round(clampedScore)}
-        </span>
+        </div>
         {showTooltip && breakdown && (
           <div className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-divider bg-popover p-2 text-xs shadow-lg">
             <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
