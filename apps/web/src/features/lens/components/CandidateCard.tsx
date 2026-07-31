@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -51,9 +50,13 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-base font-semibold text-foreground">
               {candidate.full_name || candidate.handle}
+            </span>
+            <span className="text-muted-foreground/40">·</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              @{candidate.handle}
             </span>
             <PlatformIcon platform={candidate.platform} size="sm" />
             {tier && (
@@ -75,25 +78,12 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
               </span>
             )}
           </div>
-          {candidate.url ? (
-            <a
-              href={candidate.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
-            >
-              @{candidate.handle}
-              <ExternalLink className="h-3 w-3" aria-hidden="true" />
-            </a>
-          ) : (
-            <p className="mt-0.5 text-xs text-muted-foreground">@{candidate.handle}</p>
-          )}
           {!compact && candidate.bio && (
-            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
               {candidate.bio}
             </p>
           )}
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             <span>{formatFollowers(candidate.followers)}</span>
             <span className="text-muted-foreground/40">·</span>
             <span>{formatEngagement(candidate.engagement_rate)}</span>
