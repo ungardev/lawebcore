@@ -119,6 +119,7 @@ export interface DiscoveryConversation {
   status: 'active' | 'completed' | 'abandoned';
   started_at: string;
   last_message_at: string;
+  title?: string | null;
   messages?: DiscoveryMessage[];
 }
 
@@ -135,6 +136,7 @@ export interface DiscoveryRun {
   created_at: string;
   brief_text: string;
   brief_parsed: BriefStructured | null;
+  title?: string | null;
   metadata?: Record<string, unknown>;
 }
 

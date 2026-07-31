@@ -11,6 +11,21 @@ from discovery.schemas import ConversationStep, DiscoverySearchRequest
 
 logger = logging.getLogger(__name__)
 
+
+def _generate_run_title(brief: DiscoverySearchRequest) -> str:
+    parts = []
+    if brief.product_name:
+        parts.append(brief.product_name)
+    elif brief.industry:
+        parts.append(brief.industry)
+    if brief.audience_countries:
+        parts.append(" · " + ", ".join(brief.audience_countries[:3]))
+    if brief.platforms:
+        platforms = ", ".join(p.value for p in brief.platforms[:2])
+        parts.append(f" [{platforms}]")
+    return "".join(parts)[:120] or "Nueva búsqueda"
+
+
 _COLUMNS = {
     "accumulated_brief": "TEXT",
     "parsed_brief_json": "JSONB",
@@ -43,6 +58,7 @@ async def save_conversation(
     bu_id: UUID | None = None,
     step: str = "start",
     state: dict[str, Any] | None = None,
+    title: str | None = None,
 ) -> dict[str, Any]:
     values = {
         "id": str(conversation_id),
@@ -55,6 +71,8 @@ async def save_conversation(
     }
     if bu_id:
         values["bu_id"] = str(bu_id)
+    if title:
+        values["title"] = title
 
     return await supabase_rest.insert(
         table="discovery_conversations",
@@ -66,7 +84,7 @@ async def save_conversation(
 async def get_conversation(conversation_id: UUID) -> dict[str, Any] | None:
     return await supabase_rest.select_one(
         table="discovery_conversations",
-        select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,parsed_brief_json,pending_refinements,status,started_at,last_message_at",
+        select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,parsed_brief_json,pending_refinements,status,started_at,last_message_at,title",
         filters=[f"id=eq.{conversation_id}"],
     )
 
@@ -119,6 +137,7 @@ async def launch_discovery_run(
 
     run_values = {
         "id": str(_uuid.uuid4()),
+        "title": _generate_run_title(brief),
         "brief_text": f"Search: {brief.product_name or brief.industry or 'Influencers'}",
         "brief_parsed": brief.model_dump(),
         "product_name": brief.product_name,

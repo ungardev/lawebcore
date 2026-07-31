@@ -156,11 +156,13 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
     orchestrator_step = result.get("step", ConversationStep.START.value)
     assistant_content = result.get("message", "")
 
+    conv_title = (body.initial_brief or "")[:80] if body.initial_brief else None
     await conversation_memory.save_conversation(
         conversation_id=conversation_id,
         user_id=user.id,
         bu_id=body.bu_id,
         step=orchestrator_step,
+        title=conv_title,
     )
 
     if body.initial_brief:
@@ -224,7 +226,7 @@ async def list_conversations(
 
     result = await supabase_rest.select(
         table="discovery_conversations",
-        select="id,user_id,current_step,status,message_count,started_at,last_message_at",
+        select="id,user_id,current_step,status,message_count,started_at,last_message_at,title",
         filters=filters,
         order="last_message_at.desc",
         limit=limit,

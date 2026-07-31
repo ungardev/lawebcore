@@ -131,7 +131,7 @@ export function DashboardPage() {
                     <MessageSquare className="h-4 w-4" aria-hidden="true" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium text-foreground">{conversation.accumulated_brief?.slice(0, 80) || 'Nueva búsqueda'}</span>
+                    <span className="block truncate text-sm font-medium text-foreground">{conversation.title || conversation.accumulated_brief?.slice(0, 80) || 'Nueva búsqueda'}</span>
                     <span className="mt-1 block text-xs text-muted-foreground">{formatConversationDate(conversation.last_message_at)} · {conversation.message_count} mensajes</span>
                   </span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
