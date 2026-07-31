@@ -18,9 +18,9 @@ const ROUTE_LABELS: Record<string, string> = {
   '/campaigns': 'Campañas',
   '/campaigns/kanban': 'Pipeline',
   '/clients': 'Clientes',
-  '/influencer-lens': 'Lens',
-  '/influencer-lens/runs': 'Historial Lens',
-  '/influencer-lens/search': 'Nueva búsqueda',
+  '/lens': 'Lens',
+  '/lens/runs': 'Historial Lens',
+  '/lens/search': 'Nueva búsqueda',
   '/settings': 'Configuración',
 };
 

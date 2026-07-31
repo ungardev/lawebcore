@@ -22,8 +22,8 @@ const NAV_MAIN = [
 ];
 
 const NAV_INTELLIGENCE = [
-  { to: '/influencer-lens', label: 'Lens', description: 'Descubrimiento asistido', icon: Sparkles, badge: 'AI' },
-  { to: '/influencer-lens/runs', label: 'Historial Lens', description: 'Ejecuciones y resultados', icon: History, end: true },
+  { to: '/lens', label: 'Lens', description: 'Descubrimiento asistido', icon: Sparkles, badge: 'AI' },
+  { to: '/lens/runs', label: 'Historial Lens', description: 'Ejecuciones y resultados', icon: History },
 ];
 
 const NAV_FOOTER = [

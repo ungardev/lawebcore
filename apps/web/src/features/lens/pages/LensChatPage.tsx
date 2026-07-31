@@ -53,9 +53,9 @@ export function LensChatPage() {
 
   useEffect(() => {
     if (id) {
-      loadConversation(id).catch(() => navigate('/influencer-lens'));
+      loadConversation(id).catch(() => navigate('/lens'));
     } else if (conversations.length > 0) {
-      navigate(`/influencer-lens/${conversations[0].id}`, { replace: true });
+      navigate(`/lens/${conversations[0].id}`, { replace: true });
     }
   }, [conversations, id, loadConversation, navigate]);
 
@@ -71,7 +71,7 @@ export function LensChatPage() {
       queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
         [newConversation, ...(Array.isArray(old) ? old : [])],
       );
-      navigate(`/influencer-lens/${newConversation.id}`);
+      navigate(`/lens/${newConversation.id}`);
       setInput('');
       return;
     }
@@ -84,7 +84,7 @@ export function LensChatPage() {
     queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
       [newConversation, ...(Array.isArray(old) ? old : [])],
     );
-    navigate(`/influencer-lens/${newConversation.id}`);
+    navigate(`/lens/${newConversation.id}`);
   };
 
   const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
@@ -97,7 +97,7 @@ export function LensChatPage() {
       queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
         [newConversation, ...(Array.isArray(old) ? old : [])],
       );
-      navigate(`/influencer-lens/${newConversation.id}`);
+      navigate(`/lens/${newConversation.id}`);
 
       toast.success('Búsqueda iniciada');
       setShowWizard(false);
@@ -140,7 +140,7 @@ export function LensChatPage() {
           </div>
           <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
             {conversations.length === 0 ? <p className="px-3 py-5 text-center text-xs text-muted-foreground">Sin conversaciones guardadas.</p> : conversations.map((item) => (
-              <button key={item.id} type="button" onClick={() => navigate(`/influencer-lens/${item.id}`)} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
+              <button key={item.id} type="button" onClick={() => navigate(`/lens/${item.id}`)} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
                 <span className="block truncate text-xs font-medium text-foreground">{item.title || item.accumulated_brief?.slice(0, 42) || 'Nueva búsqueda'}</span>
                 <span className="mt-1 block text-[10px] text-muted-foreground">{formatDate(item.last_message_at)} · {item.message_count} mensajes</span>
               </button>

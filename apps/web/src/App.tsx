@@ -37,15 +37,15 @@ export default function App() {
           <Route path="campaigns/kanban" element={<CampaignKanbanPage />} />
           <Route path="campaigns/:id" element={<CampaignDetailPage />} />
           <Route path="clients" element={<ClientsPage />} />
-          <Route path="influencer-lens" element={<LensChatPage />} />
-          <Route path="influencer-lens/:id" element={<LensChatPage />} />
-          <Route path="influencer-lens/runs" element={<LensRunsListPage />} />
-          <Route path="influencer-lens/search" element={<LensSearchPage />} />
+          <Route path="lens" element={<LensChatPage />} />
+          <Route path="lens/:id" element={<LensChatPage />} />
+          <Route path="lens/runs" element={<LensRunsListPage />} />
+          <Route path="lens/search" element={<LensSearchPage />} />
           <Route path="settings" element={<SettingsPage />} />
 
           <Route path="dashboard" element={<Redirect to="/home" />} />
-          <Route path="influencers" element={<Redirect to="/influencer-lens" />} />
-          <Route path="ai" element={<Redirect to="/influencer-lens" />} />
+          <Route path="influencers" element={<Redirect to="/lens" />} />
+          <Route path="ai" element={<Redirect to="/lens" />} />
           <Route path="brands" element={<Redirect to="/home" />} />
         </Route>
       </Routes>

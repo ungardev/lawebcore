@@ -87,7 +87,7 @@ export function DashboardPage() {
             <Megaphone className="h-4 w-4" aria-hidden="true" />
             Nueva campaña
           </Button>
-          <Button onClick={() => navigate('/influencer-lens')} className="gap-2">
+          <Button onClick={() => navigate('/lens')} className="gap-2">
             <Search className="h-4 w-4" aria-hidden="true" />
             Buscar creadores
           </Button>
@@ -116,7 +116,7 @@ export function DashboardPage() {
             eyebrow="Actividad reciente"
             title="Conversaciones del Lens"
             actionLabel="Ver historial"
-            onAction={() => navigate('/influencer-lens/runs')}
+            onAction={() => navigate('/lens/runs')}
           />
           {conversations.length > 0 ? (
             <div className="divide-y divide-divider">
@@ -124,7 +124,7 @@ export function DashboardPage() {
                 <button
                   key={conversation.id}
                   type="button"
-                  onClick={() => navigate(`/influencer-lens/${conversation.id}`)}
+                  onClick={() => navigate(`/lens/${conversation.id}`)}
                   className="group flex w-full items-center gap-3 px-5 py-4 text-left transition-colors hover:bg-surface-raised focus-ring"
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary/10 text-primary">
@@ -139,7 +139,7 @@ export function DashboardPage() {
               ))}
             </div>
           ) : (
-            <EmptyPanel icon={<History className="h-5 w-5" />} title="Todavía no hay búsquedas" description="Inicia una búsqueda para comenzar a construir tu historial operativo."             actionLabel="Abrir Lens" onAction={() => navigate('/influencer-lens')} />
+            <EmptyPanel icon={<History className="h-5 w-5" />} title="Todavía no hay búsquedas" description="Inicia una búsqueda para comenzar a construir tu historial operativo."             actionLabel="Abrir Lens" onAction={() => navigate('/lens')} />
           )}
         </div>
 
@@ -169,7 +169,7 @@ export function DashboardPage() {
         <div className="rounded-lg border border-divider bg-panel">
           <SectionHeader eyebrow="Atajos operativos" title="Siguiente acción" />
           <div className="grid divide-y divide-divider sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-            <ActionRow icon={<Sparkles className="h-4 w-4" />} title="Descubrir creadores" description="Busca por nicho, audiencia y territorio." onClick={() => navigate('/influencer-lens')} />
+            <ActionRow icon={<Sparkles className="h-4 w-4" />} title="Descubrir creadores" description="Busca por nicho, audiencia y territorio." onClick={() => navigate('/lens')} />
             <ActionRow icon={<Megaphone className="h-4 w-4" />} title="Revisar campañas" description="Comprueba el estado de la ejecución." onClick={() => navigate('/campaigns')} />
             <ActionRow icon={<Building2 className="h-4 w-4" />} title="Ver clientes" description="Accede a marcas y contactos activos." onClick={() => navigate('/clients')} />
           </div>

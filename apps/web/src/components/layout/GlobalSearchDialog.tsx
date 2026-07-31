@@ -25,20 +25,20 @@ const DESTINATIONS: SearchDestination[] = [
   {
     label: 'Lens',
     description: 'Descubre y evalúa creadores con datos propios',
-    path: '/influencer-lens',
+    path: '/lens',
     keywords: ['lens', 'ia', 'influencers', 'creadores', 'buscar'],
     badge: 'AI',
   },
   {
     label: 'Nueva búsqueda',
     description: 'Configura filtros y ejecuta un discovery run',
-    path: '/influencer-lens/search',
+    path: '/lens/search',
     keywords: ['nueva', 'búsqueda', 'search', 'discovery'],
   },
   {
     label: 'Historial de búsquedas',
     description: 'Revisa ejecuciones, candidatos y costos',
-    path: '/influencer-lens/runs',
+    path: '/lens/runs',
     keywords: ['historial', 'runs', 'ejecuciones', 'costo'],
   },
   {
