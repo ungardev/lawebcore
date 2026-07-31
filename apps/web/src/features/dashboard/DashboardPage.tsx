@@ -32,7 +32,7 @@ export function DashboardPage() {
               Operación sincronizada
             </span>
             <span>·</span>
-            <span>P.I.A.R. / Descubrimiento</span>
+            <span>P.I.A.R. / Home</span>
           </div>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             Descubre Influencers con Lens
