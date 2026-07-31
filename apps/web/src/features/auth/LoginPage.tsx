@@ -113,7 +113,7 @@ export function LoginPage({
               className="text-sm text-muted-foreground uppercase"
               style={{ letterSpacing: '0.28em', fontWeight: 600 }}
             >
-              Influencer Strategist & Manager
+              P.I.A.R - LENS
             </p>
           </div>
 
