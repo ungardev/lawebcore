@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from './AuthProvider';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
@@ -65,40 +66,15 @@ export function LoginPage({
     }
   };
 
-  const BRAND_PINK = '#ec4899';
-  const BRAND_PURPLE = '#a855f7';
-  const BRAND_BLUE = '#3b82f6';
-  const GRADIENT = `linear-gradient(135deg, ${BRAND_PINK} 0%, ${BRAND_PURPLE} 50%, ${BRAND_BLUE} 100%)`;
-
   return (
-    <main
-      className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ fontFamily: 'Montserrat, ui-sans-serif, system-ui, sans-serif' }}
-    >
+    <main className="min-h-screen flex items-center justify-center relative overflow-hidden bg-background">
       <div
         aria-hidden="true"
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: `
-            radial-gradient(ellipse 80% 60% at 20% 20%, ${BRAND_PINK}22 0%, transparent 60%),
-            radial-gradient(ellipse 70% 50% at 80% 80%, ${BRAND_BLUE}22 0%, transparent 60%)
-          `,
-          filter: 'blur(120px)',
-        }}
+        className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,hsl(var(--brand-pink)/0.08),transparent_60%)]"
       />
 
-      <Card
-        className="relative w-full max-w-md mx-4 rounded-2xl overflow-hidden"
-        style={{
-          border: '1px solid hsl(var(--border))',
-          boxShadow: '0 20px 60px -20px rgba(15, 23, 42, 0.18)',
-        }}
-      >
-        <div
-          aria-hidden="true"
-          className="w-full h-1"
-          style={{ background: GRADIENT }}
-        />
+      <Card className="relative w-full max-w-md mx-4 overflow-hidden shadow-elevated">
+        <div aria-hidden="true" className="h-1 w-full bg-brand-gradient" />
 
         <div className="px-8 pt-10 pb-8">
           <div className="text-center mb-8">
@@ -109,28 +85,16 @@ export function LoginPage({
                 className="h-16 w-auto object-contain"
               />
             </div>
-            <p
-              className="text-sm text-muted-foreground uppercase"
-              style={{ letterSpacing: '0.28em', fontWeight: 600 }}
-            >
+            <p className="text-eyebrow text-muted-foreground">
               P.I.A.R - LENS
             </p>
           </div>
 
-          <form
-            onSubmit={handleSubmit}
-            noValidate
-            className="space-y-5"
-          >
+          <form onSubmit={handleSubmit} noValidate className="space-y-5">
             {error && (
               <div
                 role="alert"
-                className="flex items-center gap-2.5 rounded-lg px-4 py-3 text-sm"
-                style={{
-                  background: 'hsl(var(--destructive) / 0.12)',
-                  border: '1px solid hsl(var(--destructive) / 0.4)',
-                  color: 'hsl(var(--destructive-foreground))',
-                }}
+                className="flex items-center gap-2.5 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground"
               >
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{error}</span>
@@ -138,7 +102,7 @@ export function LoginPage({
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="email" style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+              <Label htmlFor="email" className="text-sm font-semibold">
                 Email
               </Label>
               <Input
@@ -149,12 +113,11 @@ export function LoginPage({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 aria-invalid={!!error}
-                style={{ borderRadius: '8px' }}
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" style={{ fontWeight: 600, fontSize: '0.875rem' }}>
+              <Label htmlFor="password" className="text-sm font-semibold">
                 Contraseña
               </Label>
               <div className="relative">
@@ -167,7 +130,6 @@ export function LoginPage({
                   onChange={(e) => setPassword(e.target.value)}
                   aria-invalid={!!error}
                   className="pr-10"
-                  style={{ borderRadius: '8px' }}
                 />
                 <button
                   type="button"
@@ -184,53 +146,41 @@ export function LoginPage({
               </div>
             </div>
 
-            <div className="flex items-center justify-between" style={{ fontSize: '0.875rem' }}>
+            <div className="flex items-center justify-between text-sm">
               <label className="flex items-center gap-2 cursor-pointer text-muted-foreground">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="w-4 h-4 rounded"
-                  style={{ accentColor: BRAND_PINK }}
+                  className="w-4 h-4 rounded accent-primary"
                 />
-                <span style={{ fontWeight: 500 }}>Recordarme</span>
+                <span className="font-medium">Recordarme</span>
               </label>
               <a
                 href="#"
                 onClick={(e) => e.preventDefault()}
-                className="text-muted-foreground hover:text-foreground transition-colors"
-                style={{ fontWeight: 500 }}
+                className="text-muted-foreground hover:text-foreground transition-colors font-medium"
               >
                 ¿Olvidaste tu contraseña?
               </a>
             </div>
 
-            <button
+            <Button
               type="submit"
+              variant="gradient"
+              size="lg"
+              className="w-full"
               disabled={isLoading}
-              className="w-full h-11 text-white font-semibold rounded-lg transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              style={{
-                background: GRADIENT,
-                boxShadow: '0 10px 30px -10px rgba(236, 72, 153, 0.5)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 14px 36px -10px rgba(59, 130, 246, 0.55)';
-                e.currentTarget.style.filter = 'brightness(1.08)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 10px 30px -10px rgba(236, 72, 153, 0.5)';
-                e.currentTarget.style.filter = 'none';
-              }}
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Ingresando…</span>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Ingresando…
                 </>
               ) : (
-                <span>Ingresar</span>
+                'Ingresar'
               )}
-            </button>
+            </Button>
           </form>
         </div>
 

@@ -13,7 +13,7 @@
     --card-foreground: 240 10% 10%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 10%;
-    --primary: 271 91% 65%;
+    --primary: 330 81% 60%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 10% 96%;
     --secondary-foreground: 240 10% 10%;
@@ -75,7 +75,7 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 12% 9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 217 91% 60%;
+    --primary: 330 81% 60%;
     --primary-foreground: 0 0% 100%;
     --secondary: 240 10% 13%;
     --secondary-foreground: 0 0% 98%;
@@ -87,7 +87,7 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 10% 16%;
     --input: 240 10% 20%;
-    --ring: 217 91% 60%;
+    --ring: 330 81% 60%;
 
     --surface-0: 240 12% 6%;
     --surface-1: 240 12% 9%;
