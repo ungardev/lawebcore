@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -50,15 +51,29 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-base font-semibold text-foreground">
-              {candidate.full_name || candidate.handle}
-            </span>
-            <span className="text-muted-foreground/40">·</span>
-            <span className="font-mono text-xs text-muted-foreground">
+          {candidate.url ? (
+            <a
+              href={candidate.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-mono font-semibold text-foreground hover:text-primary hover:underline"
+            >
               @{candidate.handle}
+              <PlatformIcon platform={candidate.platform} size="sm" />
+              <ExternalLink className="h-3 w-3 text-muted-foreground" aria-hidden="true" />
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-sm font-mono font-semibold text-foreground">
+              @{candidate.handle}
+              <PlatformIcon platform={candidate.platform} size="sm" />
             </span>
-            <PlatformIcon platform={candidate.platform} size="sm" />
+          )}
+          {candidate.full_name && candidate.full_name !== candidate.handle && (
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {candidate.full_name}
+            </p>
+          )}
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
             {tier && (
               <span
                 className={cn(
@@ -79,7 +94,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
             )}
           </div>
           {!compact && candidate.bio && (
-            <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
+            <p className="mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground">
               {candidate.bio}
             </p>
           )}
