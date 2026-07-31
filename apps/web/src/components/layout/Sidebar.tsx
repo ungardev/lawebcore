@@ -1,11 +1,8 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Activity,
-  Building2,
   History,
   Home,
-  Megaphone,
   Settings,
   Sparkles,
 } from 'lucide-react';
@@ -16,9 +13,6 @@ import { cn } from '@/lib/utils';
 
 const NAV_MAIN = [
   { to: '/home', label: 'Home', description: 'Estado general del negocio', icon: Home, end: true },
-  { to: '/campaigns', label: 'Campañas', description: 'Gestión y ejecución', icon: Megaphone, end: true },
-  { to: '/campaigns/kanban', label: 'Pipeline', description: 'Flujo operativo', icon: Activity },
-  { to: '/clients', label: 'Clientes', description: 'Marcas y contactos', icon: Building2 },
 ];
 
 const NAV_INTELLIGENCE = [
@@ -116,8 +110,8 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 py-5" aria-label="Navegación principal">
-        <NavGroup label="Workspace" items={NAV_MAIN} collapsed={collapsed} renderItem={renderItem} />
-        <NavGroup label="Inteligencia" items={NAV_INTELLIGENCE} collapsed={collapsed} renderItem={renderItem} />
+        <NavGroup label="Navegación" items={NAV_MAIN} collapsed={collapsed} renderItem={renderItem} />
+        <NavGroup label="Lens" items={NAV_INTELLIGENCE} collapsed={collapsed} renderItem={renderItem} />
       </nav>
 
       <div className="shrink-0 border-t border-sidebar-border px-2 py-3">
