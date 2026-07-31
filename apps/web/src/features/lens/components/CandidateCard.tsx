@@ -39,7 +39,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
           </div>
         ) : (
           <img
-            src={candidate.avatar_url}
+            src={candidate.avatar_url ?? undefined}
             alt={candidate.handle}
             className="h-12 w-12 shrink-0 rounded-md object-cover"
             onError={() => setImgFailed(true)}
