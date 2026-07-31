@@ -145,7 +145,7 @@ class InlineAssistantMessage(BaseModel):
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUserDep):
     """Crea una conversación nueva de discovery."""
-    from discovery.memory import conversation_memory
+    from discovery.memory import conversation_memory, _generate_conversation_title
 
     conversation_id = uuidlib.uuid4()
     result = await orchestrator.create_conversation(
@@ -156,7 +156,8 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
     orchestrator_step = result.get("step", ConversationStep.START.value)
     assistant_content = result.get("message", "")
 
-    conv_title = (body.initial_brief or "")[:80] if body.initial_brief else None
+    brief_data = result.get("brief")
+    conv_title = _generate_conversation_title(brief_data) if brief_data else None
     await conversation_memory.save_conversation(
         conversation_id=conversation_id,
         user_id=user.id,

@@ -6,25 +6,25 @@ export interface HashtagSuggestionGroup {
 export const HASHTAG_SUGGESTIONS: Record<string, HashtagSuggestionGroup[]> = {
   mascotas: [
     {
-      label: "🇻🇪 Producto Venezuela",
+      label: "Producto Venezuela",
       hashtags: ["purinaVE", "dogchowVE", "purina", "dogchow"],
     },
     {
-      label: "🐕 Temático perros",
+      label: "Temático perros",
       hashtags: [
         "amorporruno", "perrosVE", "mascotasVE", "mascotasVenezuela",
         "doglover", "petlovers", "doglife", "mascotavzla",
       ],
     },
     {
-      label: "📍 Ciudades VE",
+      label: "Ciudades VE",
       hashtags: [
         "caracas", "maracaibo", "valencia", "vzla",
         "venezuela", "vzlan", "mascotasvzla",
       ],
     },
     {
-      label: "🏠 Adopción y rescate",
+      label: "Adopción y rescate",
       hashtags: [
         "adopcionvzla", "rescateanimalvzla", "adopta",
         "refugioanimal", "mascotasdevzla",
@@ -33,35 +33,35 @@ export const HASHTAG_SUGGESTIONS: Record<string, HashtagSuggestionGroup[]> = {
   ],
   belleza: [
     {
-      label: "🇻🇪 Venezuela",
+      label: "Venezuela",
       hashtags: ["bellezavzla", "makeupve", "skincareve", "vzla"],
     },
     {
-      label: "💄 Makeup",
+      label: "Makeup",
       hashtags: ["makeuplover", "makeupaddict", "beautyblogger", "makeupartist"],
     },
     {
-      label: "✨ Skincare",
+      label: "Skincare",
       hashtags: ["skincare", "skincareregimen", "glowingskin", "skincareaddict"],
     },
   ],
   food: [
     {
-      label: "🇻🇪 Venezuela",
+      label: "Venezuela",
       hashtags: ["foodpornvzla", "gastronomiave", "comidavzla", "vzla"],
     },
     {
-      label: "🍕 Food",
+      label: "Food",
       hashtags: ["foodie", "foodporn", "instafood", "foodlover", "yummy"],
     },
   ],
   default: [
     {
-      label: "🇻🇪 Venezuela",
+      label: "Venezuela",
       hashtags: ["vzla", "venezuela", "caracas"],
     },
     {
-      label: "🔥 Generic",
+      label: "Generic",
       hashtags: ["trending", "viral", "explore"],
     },
   ],

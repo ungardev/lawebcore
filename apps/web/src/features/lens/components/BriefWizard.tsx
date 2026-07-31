@@ -1,5 +1,25 @@
 import { useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Loader2, Sparkles } from 'lucide-react'
+import {
+  Camera,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Dumbbell,
+  Flame,
+  GraduationCap,
+  Heart,
+  Home,
+  Loader2,
+  MapPin,
+  Music2,
+  PlayCircle,
+  PawPrint,
+  Shirt,
+  Sparkles,
+  TrendingUp,
+  UtensilsCrossed,
+  Users,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,18 +33,18 @@ import { FileUploadZone } from './FileUploadZone'
 import type { BriefStructured, AudienceGender, Platform } from '../types/discovery'
 
 const INDUSTRIES = [
-  { value: 'mascotas', label: '🐾 Mascotas' },
-  { value: 'belleza', label: '💄 Belleza' },
-  { value: 'food', label: '🍕 Food & Restaurants' },
-  { value: 'moda', label: '👗 Moda' },
-  { value: 'fitness', label: '💪 Fitness & Health' },
-  { value: 'tecnologia', label: '💻 Tecnología' },
-  { value: 'turismo', label: '✈️ Turismo' },
-  { value: 'entretenimiento', label: '🎬 Entretenimiento' },
-  { value: 'educacion', label: '📚 Educación' },
-  { value: 'finanzas', label: '💰 Finanzas' },
-  { value: 'hogar', label: '🏠 Hogar' },
-  { value: 'deportes', label: '⚽ Deportes' },
+  { value: 'mascotas', label: 'Mascotas' },
+  { value: 'belleza', label: 'Belleza' },
+  { value: 'food', label: 'Food & Restaurants' },
+  { value: 'moda', label: 'Moda' },
+  { value: 'fitness', label: 'Fitness & Health' },
+  { value: 'tecnologia', label: 'Tecnología' },
+  { value: 'turismo', label: 'Turismo' },
+  { value: 'entretenimiento', label: 'Entretenimiento' },
+  { value: 'educacion', label: 'Educación' },
+  { value: 'finanzas', label: 'Finanzas' },
+  { value: 'hogar', label: 'Hogar' },
+  { value: 'deportes', label: 'Deportes' },
 ]
 
 const NICHE_PRESETS: Record<string, string[]> = {
@@ -38,32 +58,32 @@ const NICHE_PRESETS: Record<string, string[]> = {
 }
 
 const COUNTRIES = [
-  { value: 'VE', label: '🇻🇪 Venezuela' },
-  { value: 'CO', label: '🇨🇴 Colombia' },
-  { value: 'MX', label: '🇲🇽 México' },
-  { value: 'AR', label: '🇦🇷 Argentina' },
-  { value: 'CL', label: '🇨🇱 Chile' },
-  { value: 'EC', label: '🇪🇨 Ecuador' },
-  { value: 'PE', label: '🇵🇪 Perú' },
-  { value: 'PA', label: '🇵🇦 Panamá' },
-  { value: 'DO', label: '🇩🇴 Rep. Dominicana' },
-  { value: 'US', label: '🇺🇸 EE.UU. (Hispanos)' },
+  { value: 'VE', label: 'Venezuela' },
+  { value: 'CO', label: 'Colombia' },
+  { value: 'MX', label: 'México' },
+  { value: 'AR', label: 'Argentina' },
+  { value: 'CL', label: 'Chile' },
+  { value: 'EC', label: 'Ecuador' },
+  { value: 'PE', label: 'Perú' },
+  { value: 'PA', label: 'Panamá' },
+  { value: 'DO', label: 'Rep. Dominicana' },
+  { value: 'US', label: 'EE.UU. (Hispanos)' },
 ]
 
-const PLATFORMS: { value: Platform; label: string; emoji: string }[] = [
-  { value: 'instagram', label: 'Instagram', emoji: '📸' },
-  { value: 'tiktok', label: 'TikTok', emoji: '🎵' },
-  { value: 'youtube', label: 'YouTube', emoji: '🎬' },
+const PLATFORMS: { value: Platform; label: string; icon: React.ReactNode }[] = [
+  { value: 'instagram', label: 'Instagram', icon: <Camera className="h-6 w-6" /> },
+  { value: 'tiktok', label: 'TikTok', icon: <Music2 className="h-6 w-6" /> },
+  { value: 'youtube', label: 'YouTube', icon: <PlayCircle className="h-6 w-6" /> },
 ]
 
 const TONES = [
-  { value: 'emocional', label: '💜 Emocional' },
-  { value: 'informativo', label: '📖 Informativo' },
-  { value: 'aspiracional', label: '✨ Aspiracional' },
-  { value: 'humor', label: '😄 Humor' },
-  { value: 'educativo', label: '📚 Educativo' },
-  { value: 'familiar', label: '👨‍👩‍👧 Familiar' },
-  { value: 'auténtico', label: '🤍 Auténtico' },
+  { value: 'emocional', label: 'Emocional' },
+  { value: 'informativo', label: 'Informativo' },
+  { value: 'aspiracional', label: 'Aspiracional' },
+  { value: 'humor', label: 'Humor' },
+  { value: 'educativo', label: 'Educativo' },
+  { value: 'familiar', label: 'Familiar' },
+  { value: 'auténtico', label: 'Auténtico' },
 ]
 
 const STEPS = [
@@ -389,9 +409,9 @@ export function BriefWizard({
               <div className="flex gap-2">
                 {(
                   [
-                    { value: 'female', label: '👩 Female' },
-                    { value: 'male', label: '👨 Male' },
-                    { value: 'all', label: '🌍 Todos' },
+                    { value: 'female', label: 'Female' },
+                    { value: 'male', label: 'Male' },
+                    { value: 'all', label: 'Todos' },
                   ] as { value: AudienceGender; label: string }[]
                 ).map((g) => (
                   <button
@@ -503,8 +523,8 @@ export function BriefWizard({
                         : 'border-border hover:bg-muted',
                     )}
                   >
-                    <span className="text-2xl">{p.emoji}</span>
-                    {p.label}
+                    {p.icon}
+                    <span className="text-xs mt-1">{p.label}</span>
                   </button>
                 ))}
               </div>

@@ -26,6 +26,26 @@ def _generate_run_title(brief: DiscoverySearchRequest) -> str:
     return "".join(parts)[:120] or "Nueva búsqueda"
 
 
+def _generate_conversation_title(brief_data: dict[str, Any] | None) -> str | None:
+    if not brief_data:
+        return None
+    parts = []
+    product_name = brief_data.get("product_name")
+    industry = brief_data.get("industry")
+    if product_name:
+        parts.append(product_name)
+    elif industry:
+        parts.append(industry)
+    countries = brief_data.get("audience_countries") or []
+    if countries:
+        parts.append(" · " + ", ".join(countries[:3]))
+    platforms = brief_data.get("platforms") or []
+    if platforms:
+        platform_vals = [p.value if hasattr(p, "value") else str(p) for p in platforms[:2]]
+        parts.append(f" [{', '.join(platform_vals)}]")
+    return "".join(parts)[:80] or None
+
+
 _COLUMNS = {
     "accumulated_brief": "TEXT",
     "parsed_brief_json": "JSONB",
@@ -64,12 +84,44 @@ async def migrate_discovery_conversations_schema() -> None:
                 logger.warning(f"[migration] Could not add column title to discovery_runs: {e}")
 
         try:
+            await conn.execute("""
+                UPDATE discovery_conversations dc
+                SET title = COALESCE(
+                    (
+                        SELECT title FROM discovery_runs
+                        WHERE id = dc.discovery_run_id AND title IS NOT NULL
+                    ),
+                    'Lens · ' || TO_CHAR(dc.last_message_at, 'DD/MM HH24:MI')
+                )
+                WHERE dc.title IS NULL AND dc.discovery_run_id IS NOT NULL
+            """)
+            logger.info("[migration] Backfilled titles for discovery_conversations from runs")
+        except Exception as e:
+            logger.warning(f"[migration] Could not backfill titles from runs: {e}")
+
+        try:
+            await conn.execute("""
+                UPDATE discovery_conversations
+                SET title = LEFT(
+                    (SELECT content FROM discovery_messages WHERE conversation_id = discovery_conversations.id AND role = 'user' ORDER BY created_at ASC LIMIT 1), 60
+                )
+                WHERE title IS NULL
+                  AND EXISTS (
+                      SELECT 1 FROM discovery_messages
+                      WHERE conversation_id = discovery_conversations.id AND role = 'user'
+                  )
+            """)
+            logger.info("[migration] Backfilled titles for discovery_conversations from first user message")
+        except Exception as e:
+            logger.warning(f"[migration] Could not backfill titles from messages: {e}")
+
+        try:
             await conn.execute(
                 "UPDATE discovery_conversations SET title = 'Lens · ' || TO_CHAR(last_message_at, 'DD/MM HH24:MI') WHERE title IS NULL"
             )
-            logger.info("[migration] Backfilled titles for discovery_conversations")
+            logger.info("[migration] Set timestamp fallback titles for discovery_conversations")
         except Exception as e:
-            logger.warning(f"[migration] Could not backfill titles for discovery_conversations: {e}")
+            logger.warning(f"[migration] Could not backfill timestamp titles: {e}")
 
         try:
             await conn.execute(
