@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,10 @@ interface CandidateCardProps {
 }
 
 export function CandidateCard({ candidate, onSave, onDismiss, compact }: CandidateCardProps) {
+  const [imgFailed, setImgFailed] = useState(false)
   const tier = candidate.tier ?? classifyTier(candidate.followers)
+  const showInitials = !candidate.avatar_url || imgFailed
+
   return (
     <article
       className={cn(
@@ -29,16 +33,17 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
       )}
     >
       <div className="flex items-start gap-3">
-        {candidate.avatar_url ? (
+        {showInitials ? (
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-divider bg-surface-raised text-xs text-muted-foreground">
+            {candidate.handle.slice(0, 2).toUpperCase()}
+          </div>
+        ) : (
           <img
             src={candidate.avatar_url}
             alt={candidate.handle}
             className="h-12 w-12 shrink-0 rounded-md object-cover"
+            onError={() => setImgFailed(true)}
           />
-        ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md border border-divider bg-surface-raised text-xs text-muted-foreground">
-            {candidate.handle.slice(0, 2).toUpperCase()}
-          </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
