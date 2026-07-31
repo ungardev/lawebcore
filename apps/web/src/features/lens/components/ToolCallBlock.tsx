@@ -27,9 +27,10 @@ export function ToolCallBlock({ tool_calls, tool_results }: ToolCallBlockProps) 
         const result = Array.isArray(tool_results)
           ? tool_results.find((r) => r.tool_call_id === tc.id)
           : undefined;
-        const isLoading = !result;
-        const isSuccess = result?.success;
-        const isError = result && !result.success;
+        const isCompleted = tc.status === 'completed';
+        const isLoading = !result && !isCompleted;
+        const isSuccess = result?.success || isCompleted;
+        const isError = result && !result.success && !isCompleted;
 
         return (
           <div key={tc.id || i} className="rounded-lg border bg-muted/40 overflow-hidden text-xs font-mono">
@@ -48,16 +49,20 @@ export function ToolCallBlock({ tool_calls, tool_results }: ToolCallBlockProps) 
               {isSuccess && <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />}
               {isError && <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />}
             </div>
-            {result && isSuccess && (
+            {(result && isSuccess || isCompleted && !result) && (
               <div className="px-3 py-2 text-muted-foreground">
-                {typeof result.output === 'object' ? (
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    ✓ {Array.isArray(result.output)
-                      ? `${(result.output as unknown[]).length} resultados`
-                      : JSON.stringify(result.output).slice(0, 100)}
-                  </span>
+                {result?.output != null ? (
+                  typeof result.output === 'object' ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      ✓ {Array.isArray(result.output)
+                        ? `${(result.output as unknown[]).length} resultados`
+                        : JSON.stringify(result.output).slice(0, 100)}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400">✓ {String(result.output).slice(0, 120)}</span>
+                  )
                 ) : (
-                  <span className="text-emerald-600 dark:text-emerald-400">✓ {String(result.output).slice(0, 120)}</span>
+                  <span className="text-emerald-600 dark:text-emerald-400">✓ completado</span>
                 )}
               </div>
             )}

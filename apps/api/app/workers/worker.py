@@ -91,17 +91,20 @@ async def _save_progress_message(
     tool: str = "discovery_pipeline",
 ) -> None:
     """Guarda un mensaje de progreso en el conversation asociado al run."""
+    import uuid as uuid_lib
     from uuid import UUID as pyUUID
     try:
         conv_id = await _get_conversation_id_for_run(run_id)
         if not conv_id:
             logger.debug("no_conversation_for_run", run_id=run_id)
             return
+        tool_id = str(uuid_lib.uuid4())
         await conversation_memory.save_message(
             conversation_id=pyUUID(conv_id),
             role="assistant",
             content=content,
-            tool_calls=[{"name": tool, "status": "completed"}],
+            tool_calls=[{"id": tool_id, "name": tool, "status": "completed"}],
+            tool_results=[{"tool_call_id": tool_id, "success": True, "output": {}}],
         )
     except Exception as e:
         logger.warning("save_progress_message_failed", run_id=run_id, error=str(e))
