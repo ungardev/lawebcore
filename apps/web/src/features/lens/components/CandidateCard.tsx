@@ -11,7 +11,8 @@ import {
 } from '@/lib/format'
 import type { DiscoveryCandidate } from '../types/discovery'
 import { MatchScoreCircle } from './MatchScoreCircle'
-import { PlatformBadge } from './PlatformBadge'
+import { PlatformIcon } from './PlatformIcon'
+import { CountryFlag } from './CountryFlag'
 
 interface CandidateCardProps {
   candidate: DiscoveryCandidate
@@ -54,7 +55,7 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
             <span className="text-sm font-semibold text-foreground">
               {candidate.full_name || candidate.handle}
             </span>
-            <PlatformBadge platform={candidate.platform} icon />
+            <PlatformIcon platform={candidate.platform} size="sm" />
             {tier && (
               <span
                 className={cn(
@@ -65,10 +66,8 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
                 {tier}
               </span>
             )}
-            {candidate.country === 'VE' && (
-              <span className="text-sm" title="Venezuela" aria-label="Venezuela">
-                🇻🇪
-              </span>
+            {candidate.country && (
+              <CountryFlag countryCode={candidate.country} size="sm" />
             )}
             {isTienda(candidate.bio) && (
               <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
