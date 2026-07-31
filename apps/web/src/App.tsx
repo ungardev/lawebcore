@@ -31,7 +31,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/home" replace />} />
+          <Route index element={<Navigate to="/lens" replace />} />
           <Route path="home" element={<DashboardPage />} />
           <Route path="campaigns" element={<CampaignsListPage />} />
           <Route path="campaigns/kanban" element={<CampaignKanbanPage />} />
@@ -43,10 +43,10 @@ export default function App() {
           <Route path="lens/search" element={<LensSearchPage />} />
           <Route path="settings" element={<SettingsPage />} />
 
-          <Route path="dashboard" element={<Redirect to="/home" />} />
+          <Route path="dashboard" element={<Redirect to="/lens" />} />
           <Route path="influencers" element={<Redirect to="/lens" />} />
           <Route path="ai" element={<Redirect to="/lens" />} />
-          <Route path="brands" element={<Redirect to="/home" />} />
+          <Route path="brands" element={<Redirect to="/lens" />} />
         </Route>
       </Routes>
     </AuthProvider>

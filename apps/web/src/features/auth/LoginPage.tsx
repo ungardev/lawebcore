@@ -35,11 +35,11 @@ export function LoginPage({
   const error = errorProp ?? localError;
 
   if (user) {
-    const fromDashboard =
-      window.location.search.includes('from=dashboard') ||
+    const fromLogin =
+      window.location.search.includes('from=login') ||
       sessionStorage.getItem('auth_error') === 'true';
-    if (!fromDashboard) {
-      return <Navigate to="/dashboard" replace />;
+    if (!fromLogin) {
+      return <Navigate to="/lens" replace />;
     }
   }
 
@@ -55,7 +55,7 @@ export function LoginPage({
     setLocalLoading(true);
     try {
       await signIn(email, password);
-      navigate('/dashboard');
+      navigate('/lens');
       toast.success('Bienvenido');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Error de autenticacion';
