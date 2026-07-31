@@ -30,11 +30,12 @@ _COLUMNS = {
     "accumulated_brief": "TEXT",
     "parsed_brief_json": "JSONB",
     "pending_refinements": "JSONB",
+    "title": "TEXT",
 }
 
 
 async def migrate_discovery_conversations_schema() -> None:
-    """Add missing columns to discovery_conversations if they don't exist."""
+    """Add missing columns to discovery_conversations and discovery_runs if they don't exist."""
     from shared_core.supabase_rest import supabase_rest
 
     pool = await supabase_rest._ensure_pool()
@@ -50,6 +51,33 @@ async def migrate_discovery_conversations_schema() -> None:
                     logger.info(f"[migration] Column {col_name} already exists, skipping")
                 else:
                     logger.warning(f"[migration] Could not add column {col_name}: {e}")
+
+        try:
+            await conn.execute(
+                'ALTER TABLE discovery_runs ADD COLUMN IF NOT EXISTS title TEXT'
+            )
+            logger.info("[migration] Added column title to discovery_runs")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("[migration] Column title already exists in discovery_runs, skipping")
+            else:
+                logger.warning(f"[migration] Could not add column title to discovery_runs: {e}")
+
+        try:
+            await conn.execute(
+                "UPDATE discovery_conversations SET title = 'Lens · ' || TO_CHAR(last_message_at, 'DD/MM HH24:MI') WHERE title IS NULL"
+            )
+            logger.info("[migration] Backfilled titles for discovery_conversations")
+        except Exception as e:
+            logger.warning(f"[migration] Could not backfill titles for discovery_conversations: {e}")
+
+        try:
+            await conn.execute(
+                "UPDATE discovery_runs SET title = 'Búsqueda · ' || TO_CHAR(created_at, 'DD/MM HH24:MI') WHERE title IS NULL"
+            )
+            logger.info("[migration] Backfilled titles for discovery_runs")
+        except Exception as e:
+            logger.warning(f"[migration] Could not backfill titles for discovery_runs: {e}")
 
 
 async def save_conversation(
