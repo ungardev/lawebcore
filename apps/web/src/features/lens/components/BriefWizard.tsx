@@ -4,7 +4,9 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Cpu,
   Dumbbell,
+  Film,
   Flame,
   GraduationCap,
   Heart,
@@ -12,11 +14,13 @@ import {
   Loader2,
   MapPin,
   Music2,
-  PlayCircle,
   PawPrint,
+  Plane,
+  PlayCircle,
   Shirt,
   Sparkles,
   TrendingUp,
+  Trophy,
   UtensilsCrossed,
   Users,
 } from 'lucide-react'
@@ -33,18 +37,18 @@ import { FileUploadZone } from './FileUploadZone'
 import type { BriefStructured, AudienceGender, Platform } from '../types/discovery'
 
 const INDUSTRIES = [
-  { value: 'mascotas', label: 'Mascotas' },
-  { value: 'belleza', label: 'Belleza' },
-  { value: 'food', label: 'Food & Restaurants' },
-  { value: 'moda', label: 'Moda' },
-  { value: 'fitness', label: 'Fitness & Health' },
-  { value: 'tecnologia', label: 'Tecnología' },
-  { value: 'turismo', label: 'Turismo' },
-  { value: 'entretenimiento', label: 'Entretenimiento' },
-  { value: 'educacion', label: 'Educación' },
-  { value: 'finanzas', label: 'Finanzas' },
-  { value: 'hogar', label: 'Hogar' },
-  { value: 'deportes', label: 'Deportes' },
+  { value: 'mascotas', label: 'Mascotas', icon: <PawPrint className="h-4 w-4" /> },
+  { value: 'belleza', label: 'Belleza', icon: <Sparkles className="h-4 w-4" /> },
+  { value: 'food', label: 'Food & Restaurants', icon: <UtensilsCrossed className="h-4 w-4" /> },
+  { value: 'moda', label: 'Moda', icon: <Shirt className="h-4 w-4" /> },
+  { value: 'fitness', label: 'Fitness & Health', icon: <Dumbbell className="h-4 w-4" /> },
+  { value: 'tecnologia', label: 'Tecnología', icon: <Cpu className="h-4 w-4" /> },
+  { value: 'turismo', label: 'Turismo', icon: <Plane className="h-4 w-4" /> },
+  { value: 'entretenimiento', label: 'Entretenimiento', icon: <Film className="h-4 w-4" /> },
+  { value: 'educacion', label: 'Educación', icon: <GraduationCap className="h-4 w-4" /> },
+  { value: 'finanzas', label: 'Finanzas', icon: <TrendingUp className="h-4 w-4" /> },
+  { value: 'hogar', label: 'Hogar', icon: <Home className="h-4 w-4" /> },
+  { value: 'deportes', label: 'Deportes', icon: <Trophy className="h-4 w-4" /> },
 ]
 
 const NICHE_PRESETS: Record<string, string[]> = {
@@ -320,13 +324,14 @@ export function BriefWizard({
                       update({ industry: ind.value, niches: NICHE_PRESETS[ind.value] ?? [] })
                     }
                     className={cn(
-                      'min-h-11 rounded-md border px-3 py-2 text-left text-xs transition-colors focus-ring',
+                      'min-h-11 rounded-md border px-3 py-2 text-left text-xs transition-colors focus-ring flex items-center gap-2',
                       brief.industry === ind.value
                         ? 'border-primary/50 bg-primary/10 font-medium text-primary'
                         : 'border-divider hover:border-primary/40 hover:bg-surface-raised',
                     )}
                   >
-                    {ind.label}
+                    {ind.icon}
+                    <span>{ind.label}</span>
                   </button>
                 ))}
               </div>
