@@ -45,7 +45,7 @@ export function SettingsPage() {
           <p>Stack: FastAPI + Railway Postgres + React + Vite + shadcn/ui</p>
           <p>La Web Figital Agency - Venezuela</p>
           <p className="pt-2 border-t mt-3">
-            Producto interno para gestion integral de campanas de marketing, KPIs, operaciones e IA.
+            Producto interno para gestion integral de campañas de marketing, KPIs, operaciones e IA.
           </p>
         </CardContent>
       </Card>

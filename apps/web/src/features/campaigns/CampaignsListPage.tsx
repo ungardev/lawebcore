@@ -33,8 +33,8 @@ export function CampaignsListPage() {
     <div className="space-y-4 md:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Campanas</h1>
-          <p className="text-sm md:text-base text-muted-foreground">{campaigns?.length ?? 0} campanas registradas</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Campañas</h1>
+          <p className="text-sm md:text-base text-muted-foreground">{campaigns?.length ?? 0} campañas registradas</p>
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <Button variant="outline" asChild className="flex-1 sm:flex-none">
@@ -45,7 +45,7 @@ export function CampaignsListPage() {
           </Button>
           <Button className="flex-1 sm:flex-none" onClick={() => setNewCampaignOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
-            Nueva Campana
+            Nueva Campaña
           </Button>
         </div>
       </div>
@@ -67,7 +67,7 @@ export function CampaignsListPage() {
         <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input placeholder="Buscar campana..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder="Buscar campaña..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <select
             value={statusFilter}
@@ -86,7 +86,7 @@ export function CampaignsListPage() {
           keyExtractor={(c) => c.id}
           onRowClick={(c) => navigate(`/campaigns/${c.id}`)}
           loading={isLoading}
-          emptyMessage="No hay campanas"
+          emptyMessage="No hay campañas"
           columns={[
             { key: 'code', label: 'Codigo', render: (c: any) => <span className="font-mono text-xs">{c.code}</span> },
             { key: 'name', label: 'Nombre', render: (c: any) => <span className="font-medium">{c.name}</span> },

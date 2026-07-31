@@ -229,9 +229,9 @@ export function CampaignKanbanPage() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Pipeline de Campanas</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Pipeline de Campañas</h1>
           <p className="text-sm md:text-base text-muted-foreground">
-            {totalCards} campanas · Manten click y arrastra para mover · Deshacer disponible por 5s
+            {totalCards} campañas · Manten click y arrastra para mover · Deshacer disponible por 5s
           </p>
         </div>
       </div>
