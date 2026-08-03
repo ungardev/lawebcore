@@ -40,6 +40,7 @@ from discovery.tools import (
 from discovery.scoring.lens_score import lens_score
 from discovery.tools.geo_boost import geo_score
 from discovery.profile_generator import get_or_create_profile
+from discovery.candidate_analyzer import candidate_analyzer
 
 logger = structlog.get_logger(__name__)
 
@@ -495,6 +496,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "fetched_at": datetime.now(timezone.utc),
                 })
 
+        print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(scored)} candidates)", flush=True)
+        scored = await candidate_analyzer.analyze_candidates_batch(
+            candidates=scored,
+            brief=brief,
+            profile_data=profile_data,
+        )
+
+        await _run_update_metadata(run_id, {
+            "current_step": "step5_ai_analysis",
+            "completed_steps": [
+                "step1_hashtag_search",
+                "step2_keyword_search",
+                "step3_profile_enrichment",
+                "step4_scoring",
+            ],
+        })
+
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
         TARGET_CANDIDATES = 15
         qualified = scored[:TARGET_CANDIDATES]
@@ -518,7 +536,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         await _save_progress_message(
             run_id,
-            f"✅ **Step 4/4 completado**: {len(scored)} candidatos pasaron el filtro VE. "
+            f"✅ **Step 5/5 completado**: {len(scored)} candidatos pasaron el filtro VE. "
             f"Insertando top {len(qualified)} en la base de datos...",
         )
 
