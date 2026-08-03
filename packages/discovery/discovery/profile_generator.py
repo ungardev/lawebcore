@@ -185,7 +185,7 @@ Devuelve este JSON exacto:
 
 hashtags: 20-30, SIN #, en español si el país es hispanohablante, relevantes al nicho y país
 keywords: 15-25, frases de búsqueda que la gente usa en Instagram (nombre de marca, categoría, hábito)
-niche_keywords: 40-80 términos en español que describen el nicho (productos, actividades, estilos de vida relacionados)
+niche_keywords: 15-25 términos en español que describen el nicho (productos, actividades, estilos de vida relacionados)
 geo_indicators: capital, 5-8 ciudades principales, gentilicio, abreviaturas (vzla, co, mx...), emoji de bandera, variaciones de escritura
 buy_intent_keywords: en el idioma del país, incluye la moneda local y sus variantes (pesos, $, bs, etc.)"""
 
@@ -257,7 +257,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
         async with db_session():
             rows = await supabase_rest.select(
                 table="discovery_profiles",
-                where=[("fingerprint", "eq", fingerprint)],
+                filters=[f"fingerprint=eq.{fingerprint}"],
                 limit=1,
             )
             if rows:
@@ -268,7 +268,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
                 await supabase_rest.update(
                     table="discovery_profiles",
                     values={"times_used": (profile.get("times_used") or 0) + 1},
-                    where=[("id", "eq", profile["id"])],
+                    filters=[f"id=eq.{profile['id']}"],
                 )
                 # Cache in Redis
                 if redis_client:
@@ -295,7 +295,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
             prompt=prompt,
             system=_SYSTEM_PROMPT,
             temperature=0.2,
-            max_tokens=2000,
+            max_tokens=4000,
         )
         raw_profile = _validate_and_fill(result, brief)
         logger.info("profile_llm_generated", fingerprint=fingerprint, fields=list(raw_profile.keys()))
@@ -329,7 +329,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
         async with db_session():
             existing = await supabase_rest.select(
                 table="discovery_profiles",
-                where=[("fingerprint", "eq", fingerprint)],
+                filters=[f"fingerprint=eq.{fingerprint}"],
                 limit=1,
             )
             if not existing:

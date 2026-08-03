@@ -50,7 +50,7 @@ class DeepSeekClient:
         for attempt in range(self.max_retries):
             try:
                 start = time.perf_counter()
-                response = await asyncio.to_thread(client.invoke, messages)
+                response = await asyncio.to_thread(client.invoke, messages, **kwargs)
                 latency_ms = int((time.perf_counter() - start) * 1000)
                 content = response.content if hasattr(response, "content") else str(response)
                 tokens = getattr(response, "usage_metadata", {}).get("total_tokens", None) if hasattr(response, "usage_metadata") else None
@@ -105,14 +105,47 @@ class DeepSeekClient:
         temperature: float = 0.1,
         max_tokens: int = 2000,
     ) -> dict[str, Any]:
-        """Completion parsed as JSON."""
+        """Completion parsed as JSON with markdown stripping and retry."""
         import json
+        import re
+
+        def _strip_markdown(text: str) -> str:
+            text = text.strip()
+            text = re.sub(r"^```json\s*", "", text)
+            text = re.sub(r"^```\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+            return text.strip()
+
+        def _extract_json(text: str) -> str | None:
+            match = re.search(r"(\{[\s\S]*\}|\[[\s\S]*\])", text)
+            if match:
+                return match.group(1)
+            return None
+
         result = await self.complete(prompt, system, temperature=temperature, max_tokens=max_tokens)
-        try:
-            return json.loads(result.content)
-        except json.JSONDecodeError as e:
-            logger.error("llm_json_parse_error", content=result.content[:200], error=str(e))
-            raise ValueError(f"LLM response is not valid JSON: {result.content[:200]}")
+        content = result.content
+
+        for attempt in range(3):
+            try:
+                cleaned = _strip_markdown(content)
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                if attempt == 0:
+                    extracted = _extract_json(content)
+                    if extracted:
+                        try:
+                            return json.loads(extracted)
+                        except json.JSONDecodeError:
+                            pass
+                logger.warning(
+                    "llm_json_parse_retry",
+                    attempt=attempt + 1,
+                    content_preview=content[:200],
+                )
+                if attempt < 2:
+                    content = content + '"}'
+        logger.error("llm_json_parse_error", content=result.content[:500], error="failed after retries")
+        raise ValueError(f"LLM response is not valid JSON: {result.content[:200]}")
 
 
 deepseek_client = DeepSeekClient()

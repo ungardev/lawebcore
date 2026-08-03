@@ -4,6 +4,8 @@ All geo scoring is parameterized — pass geo_indicators from DiscoveryProfile
 instead of hardcoding country-specific constants.
 """
 
+import re
+
 _COUNTRY_NAMES = {
     "VE": "Venezuela",
     "CO": "Colombia",
@@ -22,18 +24,38 @@ _LATAM_KEYWORDS = (
     "latinoamerica", "latam", "latino",
 )
 
+_ISO2_PATTERNS = {
+    "VE": re.compile(r"\bve\b", re.IGNORECASE),
+    "CO": re.compile(r"\bco\b", re.IGNORECASE),
+    "MX": re.compile(r"\bmx\b", re.IGNORECASE),
+    "AR": re.compile(r"\bar\b", re.IGNORECASE),
+    "CL": re.compile(r"\bcl\b", re.IGNORECASE),
+    "PA": re.compile(r"\bpa\b", re.IGNORECASE),
+    "PE": re.compile(r"\bpe\b", re.IGNORECASE),
+    "EC": re.compile(r"\bec\b", re.IGNORECASE),
+    "BR": re.compile(r"\bbr\b", re.IGNORECASE),
+    "DO": re.compile(r"\brd\b", re.IGNORECASE),
+    "US": re.compile(r"\bus\b", re.IGNORECASE),
+}
+
 
 def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     """Universal geographic relevance score (0.0 – 1.0).
 
     Tier 1.0: Ciudad específica o país (ISO) encontrado en geo_indicators
+              + PRIMARY: country field matches target country
     Tier 0.85: Keyword de país (gentilicios, variantes) encontrado
     Tier 0.5:  Keyword LATAM genérico
     Tier 0.4:  Business account con engagement
     Tier 0.3:  High followers con engagement
+
+    Word boundary matching prevents false positives like:
+    - Mexican bio mentioning "Caracas" → won't match
+    - Colombian username "vzla_fan" → won't match
+    - Profile with country field explicit check first
     """
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
-    country = (profile.get("country") or "").lower()
+    country = (profile.get("country") or "").strip().upper()
     username = (profile.get("username") or profile.get("handle") or "").lower()
     full_name = (profile.get("full_name") or profile.get("fullName") or "").lower()
     location = (profile.get("locationName") or profile.get("location") or "").lower()
@@ -43,13 +65,36 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
 
     search_text = f"{bio} {full_name} {username} {location}"
 
-    if any(k.lower() in search_text for k in geo_indicators):
-        return 1.0
-    if country and any(country == c.lower() for c in geo_indicators if len(c) == 2):
+    target_iso2 = None
+    for iso2 in _ISO2_PATTERNS:
+        if any(iso2.lower() == c.lower() for c in geo_indicators if len(c) == 2):
+            target_iso2 = iso2
+            break
+
+    if target_iso2 and country == target_iso2:
         return 1.0
 
+    if country and country not in (target_iso2,):
+        return 0.0
+
+    def _word_match(text: str, keywords: list[str]) -> int:
+        count = 0
+        for kw in keywords:
+            pattern = re.compile(r"\b" + re.escape(kw.lower()) + r"\b", re.IGNORECASE)
+            if pattern.search(text):
+                count += 1
+        return count
+
+    city_keywords = [k for k in geo_indicators if len(k) > 3 and not any(c.isalpha() and c.islower() for c in k[:3])]
+    city_matches = _word_match(search_text, city_keywords)
+
     country_keywords = _get_country_keywords(geo_indicators)
-    if country_keywords and any(k.lower() in search_text for k in country_keywords):
+    country_kw_matches = _word_match(search_text, country_keywords)
+
+    if city_matches >= 1:
+        return 1.0
+
+    if country_kw_matches >= 1:
         return 0.85
 
     if any(k.lower() in search_text for k in _LATAM_KEYWORDS):

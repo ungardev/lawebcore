@@ -38,6 +38,7 @@ from discovery.tools import (
     build_rationale,
 )
 from discovery.scoring.lens_score import lens_score
+from discovery.scoring.niche import niche_relevance
 from discovery.tools.geo_boost import geo_score
 from discovery.profile_generator import get_or_create_profile
 from discovery.candidate_analyzer import candidate_analyzer
@@ -446,8 +447,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
-            if geo >= 0.6:
+            if geo >= 0.85:
                 bio = p.get("biography") or p.get("bio") or ""
+                real_niche = niche_relevance(p, profile_data)
                 is_tienda = any(
                     kw in bio.lower()
                     for kw in ("tienda", "shop", "ventas", "pedidos", "catálogo",
@@ -476,7 +478,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "audience_gender_split": {},
                     "audience_age_buckets": {},
                     "match_score": round(score_val, 2),
-                    "niche_relevance": 90 if tier in ("MICRO", "MID") else 70,
+                    "niche_relevance": round(real_niche * 100, 2),
                     "geo_relevance": 100,
                     "audience_relevance": 80,
                     "content_quality": 80,
@@ -526,11 +528,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         if len(non_tienda) >= 5:
             qualified = non_tienda
 
-        MIN_MATCH_SCORE = 50
+        MIN_MATCH_SCORE = 35
         qualified = [
             c for c in qualified
             if (c.get("match_score") or 0) >= MIN_MATCH_SCORE
-            and (c.get("niche_relevance") or 0) >= 40
             and not c.get("is_tienda")
         ]
 
@@ -580,7 +581,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _run_update_metadata(run_id, {
             "current_step": "completed",
             "candidates_found": total,
-            "completed_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
             "step3_degraded": step3_degraded,
             "step3_error": step3_error,
         })
