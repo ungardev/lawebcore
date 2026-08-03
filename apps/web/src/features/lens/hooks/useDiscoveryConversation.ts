@@ -11,7 +11,7 @@ export function useDiscoveryConversation() {
   const [error, setError] = useState<string | null>(null);
   const [pendingBrief, setPendingBrief] = useState<BriefStructured | null>(null);
   const [pollingRunId, setPollingRunId] = useState<string | null>(null);
-  const { candidates: pollingCandidates, isPolling } = useRunPolling(pollingRunId);
+  const { candidates: pollingCandidates, isPolling, progress: pollingProgress } = useRunPolling(pollingRunId);
 
   useEffect(() => {
     if (!pollingCandidates.length) return;
@@ -39,6 +39,19 @@ export function useDiscoveryConversation() {
       );
     });
   }, [isPolling]);
+
+  useEffect(() => {
+    if (!pollingProgress) return;
+    setTurns((prev) => {
+      const lastIdx = prev.length - 1;
+      if (lastIdx < 0) return prev;
+      const last = prev[lastIdx];
+      if (last.role !== 'assistant') return prev;
+      return prev.map((t, i) =>
+        i === lastIdx ? { ...t, progress: pollingProgress, isLoading: true } : t,
+      );
+    });
+  }, [pollingProgress]);
 
   const startConversation = useCallback(async (initialBrief?: string) => {
     if (isCreating) throw new Error('Conversation creation already in progress');
