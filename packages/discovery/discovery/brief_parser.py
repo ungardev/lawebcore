@@ -38,6 +38,7 @@ Responde en JSON con este formato exacto:
   "audience_age_max": número,
   "audience_countries": ["código ISO del país o países objetivo"],
   "audience_cities": ["ciudad1"],
+  "audience_states": ["estado1", "estado2"],
   "tone": ["tono1"],
   "platforms": ["instagram"],
   "additional_context": "contexto adicional o vacío"
@@ -276,6 +277,9 @@ class BriefParserAgent:
 
         if "audience_cities" in sanitized and not isinstance(sanitized["audience_cities"], list):
             sanitized["audience_cities"] = []
+
+        if "audience_states" in sanitized and not isinstance(sanitized["audience_states"], list):
+            sanitized["audience_states"] = []
 
         if "niches" in sanitized and not isinstance(sanitized["niches"], list):
             sanitized["niches"] = []

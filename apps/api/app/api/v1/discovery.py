@@ -304,6 +304,7 @@ async def send_message(
                         audience_age_max=brief.audience_age_max,
                         audience_countries=brief.audience_countries,
                         audience_cities=brief.audience_cities,
+                        audience_states=brief.audience_states,
                         tone=brief.tone,
                         platforms=brief.platforms,
                         exclude_handles=brief.exclude_handles if hasattr(brief, "exclude_handles") else [],
