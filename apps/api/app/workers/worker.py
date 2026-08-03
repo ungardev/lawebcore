@@ -162,10 +162,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step2_handles: set[str] = set()
 
         async def _fetch_step1():
-            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=50)
+            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=50, force_fresh=True)
 
         async def _fetch_step2():
-            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=30)
+            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=30, force_fresh=True)
 
         print(f"[discovery_run_task] STEP 1+2: Running hashtag + keyword search in parallel", flush=True)
         step1_result, step2_result = await asyncio.gather(
@@ -343,7 +343,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         if handles_to_enrich:
             try:
-                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich)
+                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich, force_fresh=True)
                 if not enriched_profiles:
                     step3_degraded = True
                     step3_error = "Apify returned empty result"
@@ -526,9 +526,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         if len(non_tienda) >= 5:
             qualified = non_tienda
 
+        MIN_MATCH_SCORE = 50
         qualified = [
             c for c in qualified
-            if (c.get("niche_relevance") or 0) >= 35 and not c.get("is_tienda")
+            if (c.get("match_score") or 0) >= MIN_MATCH_SCORE
+            and (c.get("niche_relevance") or 0) >= 40
+            and not c.get("is_tienda")
         ]
 
         TARGET_CANDIDATES = 50

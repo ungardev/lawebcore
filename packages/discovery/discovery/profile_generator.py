@@ -42,14 +42,16 @@ def _normalize_for_fingerprint(text: str) -> str:
 
 
 def compute_fingerprint(brief: BriefStructured) -> str:
-    """Deterministic fingerprint: sha256 of normalized industry + sorted niches + sorted countries.
+    """Deterministic fingerprint: sha256 of normalized industry + sorted niches + sorted countries + sorted states + sorted cities.
 
     Same brief concept always produces the same fingerprint regardless of input phrasing.
     """
     industry = _normalize_for_fingerprint(brief.industry or "")
     niches = "|".join(sorted(_normalize_for_fingerprint(n) for n in (brief.niches or [])))
     countries = "|".join(sorted((c.upper() for c in (brief.audience_countries or [])), key=lambda x: (x, x)))
-    raw = f"{industry}|{niches}|{countries}"
+    states = "|".join(sorted(_normalize_for_fingerprint(s) for s in (brief.audience_states or [])))
+    cities = "|".join(sorted(_normalize_for_fingerprint(c) for c in (brief.audience_cities or [])))
+    raw = f"{industry}|{niches}|{countries}|{states}|{cities}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
