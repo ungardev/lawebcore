@@ -67,6 +67,33 @@ def _country_code_to_currency() -> dict[str, str]:
     }
 
 
+_VE_STATE_CITIES: dict[str, list[str]] = {
+    "Distrito Capital": ["caracas", "catia", "petare", "guarenas", "guatire"],
+    "Miranda": ["los teques", "baruta", "chacao", "el hatillo", "guarenas", "guatire"],
+    "Carabobo": ["valencia", "naguanagua", "puerto cabello"],
+    "Aragua": ["maracay", "turmero", "el limon", "cagua"],
+    "Lara": ["barquisimeto", "carora", "el tocuyo", "cabudare"],
+    "Tachira": ["san cristobal", "rubio", "san antonio del tachira", "la grita"],
+    "Zulia": ["maracaibo", "cabimas", "ciudad ojeda", "sinamaica"],
+    "Anzoategui": ["barcelona", "puerto la cruz", "anaco", "porto franco"],
+    "Bolivar": ["ciudad bolivar", "ciudad guayana", "puerto ordaz", "san felix"],
+    "Monagas": ["maturin", "carupano"],
+    "Sucre": ["cumana", "carupano", "cumanacoa"],
+    "Merida": ["merida", "ejido", "tovar", "tabay"],
+    "Barinas": ["barinas", "sabaneta de tovar"],
+    "Portuguesa": ["guanare", "acarigua", "araure", "biscucuy"],
+    "Guárico": ["san juan de los morros", "calabozo", "valle de la pascua", "tucupido"],
+    "Cojedes": ["san carlos", "tinaco", "la apartada"],
+    "Trujillo": ["trujillo", "valera", "bocono", "betijoque"],
+    "Yaracuy": ["san felipe", "chivacoa", "yaritagua", "neiva"],
+    "Falcón": ["coro", "punto fijo", "la vela de coro", "pueblo nuevo"],
+    "Vargas": ["la guaira", "carayaca", "catia la mar"],
+    "Amazonas": ["puerto ayacucho", "san fernando de apure"],
+    "Apure": ["san fernando", "achaguas", "guasdualito", "elorza"],
+    "Delta Amacuro": ["tucupita", "curiapo", "piacoa"],
+}
+
+
 def _country_code_to_geo_indicators() -> dict[str, list[str]]:
     return {
         "VE": [
@@ -163,8 +190,9 @@ buy_intent_keywords: en el idioma del país, incluye la moneda local y sus varia
 
 def _validate_and_fill(raw: dict[str, Any], brief: BriefStructured) -> dict[str, Any]:
     """Ensure all fields are non-empty. Fill with heuristic fallback if missing."""
-    currency_hint = "pesos" if brief.audience_countries else "pesos"
-    geo_fallback = ["venezuela", "vzla", "caracas"]
+    country_code = (brief.audience_countries or ["VE"])[0].upper()
+    currency_hint = _country_code_to_currency().get(country_code, "pesos")
+    geo_fallback = _country_code_to_geo_indicators().get(country_code, ["venezuela", "vzla", "caracas"])
 
     def _ensure_list(val: Any, fallback: list[str]) -> list[str]:
         if isinstance(val, list) and val:
@@ -172,7 +200,7 @@ def _validate_and_fill(raw: dict[str, Any], brief: BriefStructured) -> dict[str,
         return fallback
 
     return {
-        "hashtags": _ensure_list(raw.get("hashtags"), [f"{brief.industry or 'mascotas'}VE"]),
+        "hashtags": _ensure_list(raw.get("hashtags"), [f"{brief.industry or 'mascotas'}{country_code}"]),
         "keywords": _ensure_list(raw.get("keywords"), [brief.product_name or brief.industry or "producto"]),
         "niche_keywords": _ensure_list(
             raw.get("niche_keywords"),
@@ -281,6 +309,16 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
         "source": "fallback" if not raw_profile.get("hashtags") else "llm",
         **raw_profile,
     }
+
+    if brief.audience_states and country == "VE":
+        for state in brief.audience_states:
+            state_key = state.title() if isinstance(state, str) else str(state)
+            if state_key in _VE_STATE_CITIES:
+                cities = _VE_STATE_CITIES[state_key]
+                existing = set(g.lower() for g in profile.get("geo_indicators", []))
+                for city in cities:
+                    if city.lower() not in existing:
+                        profile["geo_indicators"].append(city)
 
     # 4. Persist to DB
     try:

@@ -63,6 +63,7 @@ class BriefStructured(BaseModel):
     audience_age_max: int = 65
     audience_countries: list[str] = Field(default_factory=list)
     audience_cities: list[str] = Field(default_factory=list)
+    audience_states: list[str] = Field(default_factory=list, description="Venezuelan states/departments for geographic filtering")
     tone: list[str] = Field(default_factory=list)
     platforms: list[Platform] = Field(default_factory=list)
     campaign_objective: str | None = None

@@ -418,6 +418,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         cross_ref_handles = step1_handles & step2_handles
         scored: list[dict] = []
         bots_filtered = 0
+        target_country = (brief.audience_countries or ["VE"])[0].upper()
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
             if followers < 1000:
@@ -445,7 +446,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
-            if geo >= 1.0:
+            if geo >= 0.8:
                 bio = p.get("biography") or p.get("bio") or ""
                 is_tienda = any(
                     kw in bio.lower()
@@ -482,7 +483,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "expected_reach": int(followers * 0.7),
                     "expected_engagement": int(followers * er),
                     "roi_estimate": None,
-                    "rationale": build_rationale(p, tier, followers, er),
+                    "rationale": build_rationale(p, tier, followers, er, target_country=target_country),
                     "tier": tier,
                     "is_tienda": is_tienda,
                     "status": "new",
@@ -503,6 +504,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             profile_data=profile_data,
         )
 
+        for candidate in scored:
+            if candidate.get("ai_rationale"):
+                candidate["rationale"] = candidate["ai_rationale"]
+
         await _run_update_metadata(run_id, {
             "current_step": "step5_ai_analysis",
             "completed_steps": [
@@ -514,7 +519,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         })
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
-        TARGET_CANDIDATES = 15
+        TARGET_CANDIDATES = 25
         qualified = scored[:TARGET_CANDIDATES]
 
         logger.info(

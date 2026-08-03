@@ -1,21 +1,36 @@
 """Geographic & tier scoring for universal discovery.
 
-Geo scoring is now parameterized — pass geo_indicators from DiscoveryProfile
-instead of hardcoding VE/LATAM constants.
+All geo scoring is parameterized — pass geo_indicators from DiscoveryProfile
+instead of hardcoding country-specific constants.
 """
 
+_COUNTRY_NAMES = {
+    "VE": "Venezuela",
+    "CO": "Colombia",
+    "MX": "México",
+    "AR": "Argentina",
+    "CL": "Chile",
+    "PA": "Panamá",
+    "PE": "Perú",
+    "EC": "Ecuador",
+    "BR": "Brasil",
+    "DO": "República Dominicana",
+    "US": "Estados Unidos",
+}
+
 _LATAM_KEYWORDS = (
-    "colombia", "medellin", "bogota", "panama", "ecuador",
-    "latinoamerica", "latam", "peru", "chile", "argentina",
-    "costarica", "guatemala", "mexico", "mx",
+    "latinoamerica", "latam", "latino",
 )
 
 
 def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     """Universal geographic relevance score (0.0 – 1.0).
 
-    Checks: biography, country, username, full_name, locationName.
-    Uses the geo_indicators list from the DiscoveryProfile.
+    Tier 1.0: Ciudad específica o país (ISO) encontrado en geo_indicators
+    Tier 0.85: Keyword de país (gentilicios, variantes) encontrado
+    Tier 0.5:  Keyword LATAM genérico
+    Tier 0.4:  Business account con engagement
+    Tier 0.3:  High followers con engagement
     """
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
     country = (profile.get("country") or "").lower()
@@ -26,14 +41,20 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     is_business = profile.get("is_business") or profile.get("isBusinessAccount") or False
     er = profile.get("engagement_rate") or 0.0
 
-    search_text = bio + " " + full_name + " " + username + " " + location
+    search_text = f"{bio} {full_name} {username} {location}"
 
     if any(k.lower() in search_text for k in geo_indicators):
         return 1.0
     if country and any(country == c.lower() for c in geo_indicators if len(c) == 2):
         return 1.0
+
+    country_keywords = _get_country_keywords(geo_indicators)
+    if country_keywords and any(k.lower() in search_text for k in country_keywords):
+        return 0.85
+
     if any(k.lower() in search_text for k in _LATAM_KEYWORDS):
         return 0.5
+
     if is_business and followers > 5000 and er > 0.01:
         return 0.4
     if followers > 20000 and er > 0.02:
@@ -41,27 +62,32 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     return 0.0
 
 
-def country_boost(profile: dict) -> float:
-    """Deprecated: use geo_score(profile, geo_indicators) instead.
+def _get_country_keywords(geo_indicators: list[str]) -> list[str]:
+    """Extrae keywords de país (gentilicios, variantes) de geo_indicators.
 
-    Kept for backward compatibility during migration.
-    Hardcodes VE geo indicators.
+    These give a 0.85 score — confirms country without city specificity.
     """
-    import warnings
-    warnings.warn("country_boost is deprecated — use geo_score(profile, geo_indicators)", DeprecationWarning, stacklevel=2)
-    return geo_score(profile, [
-        "venezuela", "vzla", "caracas", "maracaibo", "valencia",
-        "san cristobal", "maturin", "barquisimeto", "puerto la cruz",
-        "maracay", "merida", "ciudad guayana", "ciudad bolivar",
-        "vzlatex", "vzlan", "venezolano", "venezolana",
-        "🇻🇪", "anzoategui", "zulia", "lara", "yaracuy",
-        "carabobo", "aragua", "portuguesa", "trujillo", "cojedes",
-        "monagas", "sucre", "nueva esparta", "guarico", "apure", "barinas", "falcon",
-        "amazonas", "bolivariano", "vzlano",
-        "anzoátegui", "guatire", "los teques", "baruta", "chacao", "el hatillo",
-        "petare", "catia", "cabudare",
-        "villa de cura",
-    ])
+    country_signal_keywords = {
+        "ve": ["venezuela", "vzla", "vzlatex", "vzlan", "vzlano", "venezolano", "venezolana", "🇻🇪"],
+        "co": ["colombia", "colombiano", "colombiana", "c🇨🇴"],
+        "mx": ["mexico", "mexicano", "mexicana", "mx", "🇲🇽"],
+        "ar": ["argentina", "argentino", "argentina", "ar", "🇦🇷"],
+        "cl": ["chile", "chileno", "chilena", "cl", "🇨🇱"],
+        "pa": ["panama", "panameño", "panameña", "pa", "🇵🇦"],
+        "pe": ["peru", "peruano", "peruana", "pe", "🇵🇪"],
+        "ec": ["ecuador", "ecuatoriano", "ecuatoriana", "ec", "🇪🇨"],
+        "br": ["brasil", "brasileño", "brasileña", "br", "🇧🇷"],
+        "do": ["dominicana", "dominicano", "rd", "do", "🇩🇴"],
+        "us": ["usa", "united states", "eeuu", "us", "🇺🇸"],
+    }
+    found: list[str] = []
+    for indicator in geo_indicators:
+        il = indicator.lower()
+        for code, keywords in country_signal_keywords.items():
+            if il in keywords:
+                found.append(indicator)
+                break
+    return found
 
 
 def classify_tier(followers: int) -> str:
@@ -75,46 +101,56 @@ def classify_tier(followers: int) -> str:
     return "MACRO"
 
 
-def composite_score(profile: dict) -> float:
-    """v5 formula: engagement*200 + geo*50 + business*25 + verified*15.
-
-    Used as the primary ranking metric for candidate selection.
-    Higher weight on engagement and geo to prioritize real VE influencers.
-    """
-    followers = profile.get("followersCount") or profile.get("follower_count") or 0
-    er = profile.get("engagement_rate") or 0.0
-    geo = country_boost(profile)
-    is_business = profile.get("isBusinessAccount") or profile.get("is_business") or False
-    is_verified = profile.get("verified") or profile.get("is_verified") or False
-    return (er * 200) + (geo * 50) + (25 if is_business else 0) + (15 if is_verified else 0)
-
-
-def is_venezuelan(profile: dict) -> bool:
-    """Hard filter: ONLY Venezuela (geo_boost == 1.0).
-
-    Used as the mandatory post-enrichment gate before inserting a candidate.
-    """
-    return country_boost(profile) >= 1.0
-
-
-def build_rationale(profile: dict, tier: str, followers: int, er: float) -> str:
+def build_rationale(
+    profile: dict,
+    tier: str,
+    followers: int,
+    er: float,
+    target_country: str = "VE",
+) -> str:
     """Build a human-readable rationale string for a candidate profile.
 
-    Mirrors _build_rationale from extract_purina_real_apify.py v4.
+    Args:
+        profile: candidate profile dict with bio, biography, etc.
+        tier: follower tier label (NANO, MICRO, MID, MACRO)
+        followers: follower count
+        er: engagement rate (decimal)
+        target_country: ISO 2-letter country code (default VE)
     """
-    niches = []
-    bio = (profile.get("biography") or profile.get("bio") or "").lower()
+    country_name = _COUNTRY_NAMES.get(target_country.upper(), target_country)
+    niches = _detect_niches(profile)
 
-    if any(k in bio for k in ["perro", "dog", "mascota", "pet", "cachorro", "canino"]):
-        niches.append("mascotas")
-    if any(k in bio for k in ["adopta", "rescate", "coach", "adopcion", "refugio", "animal"]):
-        niches.append("activismo animal")
-    if any(k in bio for k in ["caracas", "maracaibo", "valencia", "vzla", "venezuela", "vzlatex"]):
-        niches.append("VE local")
-    if not niches:
-        niches.append("general")
+    niche_str = ", ".join(niches[:2]) if niches else "niche general"
+    er_pct = er * 100
+
     return (
-        f"Perfil {tier} de {', '.join(niches[:2])} en VE. "
-        f"ER {er * 100:.1f}%, {followers:,} seguidores. "
-        f"Perfil relevante para campaña en Venezuela."
+        f"Perfil {tier} de {niche_str} en {country_name}. "
+        f"ER {er_pct:.1f}%, {followers:,} seguidores. "
+        f"Perfil relevante para campaña en {country_name}."
     )
+
+
+def _detect_niches(profile: dict) -> list[str]:
+    """Detecta nichos del perfil basándose en la bio."""
+    bio = (profile.get("biography") or profile.get("bio") or "").lower()
+    niches: list[str] = []
+    niche_signals = {
+        "mascotas": ["perro", "dog", "mascota", "pet", "cachorro", "canino", "gato", "cat", "mascotas"],
+        "belleza": ["belleza", "makeup", "skincare", "cosmetica", "beauty", "cosmetic"],
+        "fitness": ["fitness", "gym", "ejercicio", "muscle", "workout", "salud", "deporte"],
+        "moda": ["moda", "fashion", "outfit", "style", "ropa", "vestuario"],
+        "comida": ["comida", "recetas", "cocina", "food", "gastronomia", "chef", "eating"],
+        "tecnologia": ["tecnologia", "tech", "gadget", "digital", "innovacion"],
+        "viajes": ["viajes", "travel", "turismo", "vacaciones", "destino"],
+        "negocios": ["negocios", "business", "emprendimiento", "startup", "empresa"],
+        "entretenimiento": ["entretenimiento", "musica", "peliculas", "series", "cultura"],
+        "cafe": ["cafe", "café", "coffee", "barista"],
+        "deportes": ["deportes", "sports", "futbol", "atletismo"],
+        "arte": ["arte", "art", "pintura", "diseno", "creatividad"],
+        "gaming": ["gaming", "videojuegos", "games", "playstation", "xbox"],
+        "lifestyle": ["lifestyle", "vida", "routine", "habitos"],
+    }
+    for niche, keywords in niche_signals.items():
+        if any(k in bio for k in keywords):
+            niches.append(niche)
+    return niches

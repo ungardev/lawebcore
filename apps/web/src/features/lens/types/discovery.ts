@@ -16,6 +16,7 @@ export interface BriefStructured {
   audience_age_max: number;
   audience_countries: string[];
   audience_cities: string[];
+  audience_states: string[];
   tone: string[];
   platforms: Platform[];
   campaign_objective: string | null;

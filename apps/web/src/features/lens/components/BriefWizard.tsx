@@ -74,6 +74,32 @@ const COUNTRIES = [
   { value: 'US', label: 'EE.UU. (Hispanos)' },
 ]
 
+const VENEZUELA_STATES = [
+  { value: 'Distrito Capital', label: 'Distrito Capital' },
+  { value: 'Miranda', label: 'Miranda' },
+  { value: 'Carabobo', label: 'Carabobo' },
+  { value: 'Aragua', label: 'Aragua' },
+  { value: 'Lara', label: 'Lara' },
+  { value: 'Tachira', label: 'Táchira' },
+  { value: 'Zulia', label: 'Zulia' },
+  { value: 'Anzoategui', label: 'Anzoátegui' },
+  { value: 'Bolivar', label: 'Bolívar' },
+  { value: 'Monagas', label: 'Monagas' },
+  { value: 'Sucre', label: 'Sucre' },
+  { value: 'Merida', label: 'Mérida' },
+  { value: 'Barinas', label: 'Barinas' },
+  { value: 'Portuguesa', label: 'Portuguesa' },
+  { value: 'Guárico', label: 'Guárico' },
+  { value: 'Cojedes', label: 'Cojedes' },
+  { value: 'Trujillo', label: 'Trujillo' },
+  { value: 'Yaracuy', label: 'Yaracuy' },
+  { value: 'Falcón', label: 'Falcón' },
+  { value: 'Vargas', label: 'Vargas' },
+  { value: 'Amazonas', label: 'Amazonas' },
+  { value: 'Apure', label: 'Apure' },
+  { value: 'Delta Amacuro', label: 'Delta Amacuro' },
+]
+
 const PLATFORMS: { value: Platform; label: string; icon: React.ReactNode }[] = [
   { value: 'instagram', label: 'Instagram', icon: <Camera className="h-6 w-6" /> },
   { value: 'tiktok', label: 'TikTok', icon: <Music2 className="h-6 w-6" /> },
@@ -118,6 +144,7 @@ function createEmptyBrief(): Partial<BriefStructured> {
     audience_age_max: 45,
     audience_countries: [],
     audience_cities: [],
+    audience_states: [],
     platforms: ['instagram'],
     tone: [],
     additional_context: '',
@@ -154,6 +181,7 @@ export function BriefWizard({
       audience_age_max: extracted.audience_age_max ?? 45,
       audience_countries: extracted.audience_countries ?? ['VE'],
       audience_cities: extracted.audience_cities ?? [],
+      audience_states: (extracted as any).audience_states ?? [],
       platforms: extracted.platforms ?? ['instagram'],
       tone: extracted.tone ?? [],
       additional_context: extracted.additional_context ?? '',
@@ -493,6 +521,43 @@ export function BriefWizard({
                 placeholder="Ej: Caracas, Bogotá, CDMX..."
               />
             </div>
+
+            {brief.audience_countries?.includes('VE') && (
+              <div>
+                <Label className="mb-1.5 block">Estados (opcional){' '}
+                  <span className="text-xs font-normal text-muted-foreground">
+                    Filtra candidatos por estado específico de Venezuela
+                  </span>
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {VENEZUELA_STATES.map((s) => {
+                    const isSelected = brief.audience_states?.includes(s.value)
+                    return (
+                      <button
+                        key={s.value}
+                        type="button"
+                        onClick={() => {
+                          const current = brief.audience_states ?? []
+                          if (isSelected) {
+                            update({ audience_states: current.filter((x) => x !== s.value) })
+                          } else {
+                            update({ audience_states: [...current, s.value] })
+                          }
+                        }}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full border text-xs transition-colors',
+                          isSelected
+                            ? 'border-brand-pink bg-brand-pink/5 text-brand-pink font-medium'
+                            : 'border-border hover:bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
