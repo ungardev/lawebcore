@@ -52,6 +52,10 @@ def lens_score(
         + 0.10 * biz
     )
 
+    bio_lower = (profile.get("biography") or profile.get("bio") or "").lower()
+    if _is_tienda_bio(bio_lower):
+        raw *= 0.6
+
     if cross_referenced:
         raw *= 1.15
 
@@ -78,3 +82,14 @@ def _tier_normalized_er(er: float, tier_key: str | None) -> float:
     if er > 0.005:
         return 0.5
     return 0.0
+
+
+_TIENDA_KEYWORDS = (
+    "tienda", "shop", "ventas", "pedidos", "catálogo",
+    "mayor y detal", "envíos", "mercado libre", "delivery",
+    "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono",
+)
+
+
+def _is_tienda_bio(bio: str) -> bool:
+    return any(kw in bio for kw in _TIENDA_KEYWORDS)

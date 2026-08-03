@@ -446,7 +446,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
-            if geo >= 0.8:
+            if geo >= 0.6:
                 bio = p.get("biography") or p.get("bio") or ""
                 is_tienda = any(
                     kw in bio.lower()
@@ -519,31 +519,50 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         })
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
-        TARGET_CANDIDATES = 25
-        qualified = scored[:TARGET_CANDIDATES]
+
+        qualified = scored[:50]
+
+        non_tienda = [c for c in qualified if not c.get("is_tienda")]
+        if len(non_tienda) >= 5:
+            qualified = non_tienda
+
+        qualified = [
+            c for c in qualified
+            if (c.get("niche_relevance") or 0) >= 35 and not c.get("is_tienda")
+        ]
+
+        TARGET_CANDIDATES = 50
+        qualified = qualified[:TARGET_CANDIDATES]
 
         logger.info(
             "scoring_done",
             total_profiles=len(profiles),
             ve_candidates=len(scored),
             qualified=len(qualified),
+            tiendas_filtered=len(scored) - len([c for c in scored if not c.get("is_tienda")]),
             bots_filtered=bots_filtered,
             top_score=qualified[0].get("match_score") if qualified else None,
         )
 
         if len(qualified) == 0:
             logger.warning(
-                "discovery_run_no_ve_candidates",
+                "discovery_run_no_qualified_candidates",
                 run_id=run_id,
                 profiles_scored=len(profiles),
-                ve_filtered=len(scored),
+                ve_candidates=len(scored),
             )
-
-        await _save_progress_message(
-            run_id,
-            f"✅ **Step 5/5 completado**: {len(scored)} candidatos pasaron el filtro VE. "
-            f"Insertando top {len(qualified)} en la base de datos...",
-        )
+            await _save_progress_message(
+                run_id,
+                f"⚠️ Escané {len(profiles)} perfiles y {len(scored)} pasaron el filtro geográfico, "
+                f"pero ninguno califica en nicho o calidad. Intenta hashtags más específicos.",
+            )
+        else:
+            await _save_progress_message(
+                run_id,
+                f"✅ **Step 5/5 completado**: {len(qualified)} candidatos calificados "
+                f"(de {len(scored)} que pasaron el filtro geográfico). "
+                f"Top score: {qualified[0].get('match_score', 0):.0f}/100",
+            )
 
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
         total = inserted_count
@@ -581,10 +600,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             ]
             if total == 0:
                 content = (
-                    f"Escaneé {len(profiles)} perfiles pero ninguno "
-                    f"califica como venezolano (bio, ubicación o país confirmado en su perfil de Instagram). "
-                    f"Esto puede ocurrir si la cuenta no declara ubicación ni menciona a Venezuela. "
-                    f"Intenta con otros términos o hashtags más específicos en el brief."
+                    f"Escaneé {len(profiles)} perfiles y {len(scored)} pasaron el filtro geográfico, "
+                    f"pero ninguno califica en nicho o calidad (las tiendas y perfiles genéricos fueron filtrados). "
+                    f"Intenta con hashtags más específicos de tu nicho o ajusta el brief."
                 )
             else:
                 content = (
