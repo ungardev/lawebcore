@@ -41,7 +41,7 @@ export function useDiscoveryConversation() {
   }, [isPolling]);
 
   const startConversation = useCallback(async (initialBrief?: string) => {
-    if (isCreating) return;
+    if (isCreating) throw new Error('Conversation creation already in progress');
     setIsCreating(true);
     setIsLoading(true);
     setError(null);
