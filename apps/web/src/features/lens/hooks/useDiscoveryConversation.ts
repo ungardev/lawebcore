@@ -7,6 +7,7 @@ export function useDiscoveryConversation() {
   const [conversation, setConversation] = useState<DiscoveryConversation | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingBrief, setPendingBrief] = useState<BriefStructured | null>(null);
   const [pollingRunId, setPollingRunId] = useState<string | null>(null);
@@ -40,6 +41,8 @@ export function useDiscoveryConversation() {
   }, [isPolling]);
 
   const startConversation = useCallback(async (initialBrief?: string) => {
+    if (isCreating) return;
+    setIsCreating(true);
     setIsLoading(true);
     setError(null);
     try {
@@ -53,8 +56,9 @@ export function useDiscoveryConversation() {
       throw e;
     } finally {
       setIsLoading(false);
+      setIsCreating(false);
     }
-  }, []);
+  }, [isCreating]);
 
   const loadConversation = useCallback(async (conversationId: string) => {
     setIsLoading(true);
@@ -202,10 +206,18 @@ export function useDiscoveryConversation() {
     setPendingBrief(brief);
   }, []);
 
+  const resetConversation = useCallback(() => {
+    setConversation(null);
+    setTurns([]);
+    setPendingBrief(null);
+    setError(null);
+  }, []);
+
   return {
     conversation,
     turns,
     isLoading,
+    isCreating,
     error,
     pendingBrief,
     setPendingBrief: updatePendingBrief,
@@ -215,5 +227,6 @@ export function useDiscoveryConversation() {
     confirmBrief,
     saveCandidate,
     dismissCandidate,
+    resetConversation,
   };
 }

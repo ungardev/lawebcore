@@ -44,6 +44,7 @@ export function LensChatPage() {
     confirmBrief,
     saveCandidate,
     dismissCandidate,
+    resetConversation,
   } = useDiscoveryConversation();
 
   const { data: conversations = [] } = useQuery({
@@ -52,12 +53,12 @@ export function LensChatPage() {
   });
 
   useEffect(() => {
-    if (id) {
+    if (id && conversation?.id !== id) {
       loadConversation(id).catch(() => navigate('/lens'));
-    } else if (conversations.length > 0) {
+    } else if (!id && conversations.length > 0) {
       navigate(`/lens/${conversations[0].id}`, { replace: true });
     }
-  }, [conversations, id, loadConversation, navigate]);
+  }, [conversations, id, loadConversation, navigate, conversation?.id]);
 
   useEffect(() => {
     setTotalCost(turns.reduce((sum, turn) => sum + (turn.cost_usd ?? 0), 0));
@@ -89,6 +90,7 @@ export function LensChatPage() {
 
   const handleWizardSubmit = async (brief: Partial<BriefStructured>) => {
     setWizardLoading(true);
+    resetConversation();
     try {
       const briefJson = JSON.stringify(brief, null, 2);
       const briefMessage = `Brief: ${briefJson}\n\nBuscar ahora.`;
