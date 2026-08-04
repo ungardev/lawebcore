@@ -85,7 +85,7 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
                 count += 1
         return count
 
-    city_keywords = [k for k in geo_indicators if len(k) > 2 and not any(c.isalpha() and c.islower() for c in k[:2])]
+    city_keywords = [k for k in geo_indicators if len(k) > 3]
     city_matches = _word_match(search_text, city_keywords)
 
     country_keywords = _get_country_keywords(geo_indicators)

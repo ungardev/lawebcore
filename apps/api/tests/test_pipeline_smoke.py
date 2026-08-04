@@ -140,7 +140,8 @@ class TestQueryBuilderCaps:
 
     def test_keyword_cap_20(self):
         """After Fable 5 fix, _build_keyword_queries should cap at 20."""
-        from discovery.query_builder import QueryBuilder
+        with patch("shared_ai.deepseek_client"):
+            from discovery.query_builder import QueryBuilder
         qb = QueryBuilder()
         brief = BriefStructured(
             product_name="Test",
@@ -149,16 +150,13 @@ class TestQueryBuilderCaps:
             audience_countries=["CO"],
         )
         profile = {"keywords": [f"kw{i}" for i in range(50)], "niche_keywords": []}
-        with patch("discovery.query_builder.get_or_create_profile", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = profile
-            from discovery.query_builder import QueryBuilder
-            qb = QueryBuilder()
-            result = qb._build_keyword_queries(profile, brief)
-            assert len(result) <= 20, f"Expected <=20 keywords, got {len(result)}"
+        result = qb._build_keyword_queries(profile, brief)
+        assert len(result) <= 20, f"Expected <=20 keywords, got {len(result)}"
 
     def test_hashtag_cap_30(self):
         """_build_hashtag_queries should cap at 30 (not 50)."""
-        from discovery.query_builder import QueryBuilder
+        with patch("shared_ai.deepseek_client"):
+            from discovery.query_builder import QueryBuilder
         qb = QueryBuilder()
         profile = {"hashtags": [f"tag{i}" for i in range(100)]}
         result = qb._build_hashtag_queries(profile)
@@ -166,7 +164,8 @@ class TestQueryBuilderCaps:
 
     def test_no_buy_intent_in_queries(self):
         """buy_intent_keywords should NOT be used as keyword queries."""
-        from discovery.query_builder import QueryBuilder
+        with patch("shared_ai.deepseek_client"):
+            from discovery.query_builder import QueryBuilder
         qb = QueryBuilder()
         brief = BriefStructured(
             product_name="Test",
@@ -190,7 +189,8 @@ class TestCandidateAnalyzerBatchPrompt:
 
     def test_batch_prompt_singular_elite_context(self):
         """The batch prompt should include elite_context once at the top, not in each block."""
-        from discovery.candidate_analyzer import _build_batch_prompt
+        with patch("shared_ai.deepseek_client"):
+            from discovery.candidate_analyzer import _build_batch_prompt
         candidates = [
             {"handle": "user1", "followers": 5000, "bio": "test", "latestPosts": []},
             {"handle": "user2", "followers": 6000, "bio": "test2", "latestPosts": []},
@@ -215,11 +215,11 @@ class TestUpsertManyReturning:
         """Verify RETURNING is always added, even for 'minimal'."""
         from shared_core.supabase_rest import RailwayPg
         mock_pool = AsyncMock()
-        mock_conn = AsyncMock()
+        mock_conn = MagicMock()
         mock_row = MagicMock()
         mock_row.items.return_value = [("id", 1)]
         mock_conn.fetch.return_value = [mock_row]
-        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+        mock_pool.acquire = MagicMock(return_value=mock_conn)
 
         pg = RailwayPg(dsn="postgresql://test")
         pg._pool = mock_pool
@@ -239,6 +239,7 @@ class TestWorkerTyping:
 
     def test_worker_module_imports_any(self):
         """worker.py must import Any for the elite_data: dict[str, Any] annotation."""
-        import apps.api.app.workers.worker as worker_module
-        import typing
-        assert hasattr(typing, "Any") or "Any" in dir(worker_module), "worker.py uses Any without importing it"
+        worker_path = "/mnt/c/Users/Dainer/Documents/proyectoslaweb/lawebcore/apps/api/app/workers/worker.py"
+        with open(worker_path) as f:
+            source = f.read()
+        assert "from typing import Any" in source, "worker.py must have 'from typing import Any'"
