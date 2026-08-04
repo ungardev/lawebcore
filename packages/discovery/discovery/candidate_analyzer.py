@@ -9,6 +9,12 @@ Plus an AI-generated rationale replacing the regex-based build_rationale().
 
 OPTIMIZATION: Batches up to BATCH_SIZE candidates per LLM call to reduce
 DeepSeek API calls from ~50 to ~5 per discovery run.
+
+ELITE INTEGRATION: Uses profile_data.elite_data to provide:
+  - content_themes: para evaluar si el contenido del candidato es relevante
+  - credibility_signals: para scoring de audience_quality
+  - niche_benchmarks: para ajustar umbrales de scoring
+  - local_slang y competitor_intel: para brand_fit scoring
 """
 
 import asyncio
@@ -29,28 +35,28 @@ SYSTEM_PROMPT = """Eres un analista senior de influencer marketing con 15 años 
 Tu tarea es analizar perfiles de Instagram y devolver puntuaciones objetivas de 0 a 100 para cada uno.
 
 REGLAS POR CADA CAMPO:
-- content_quality: Evalúa producción visual, variedad de contenido, coherencia de nicho.
-  90-100 = alta producción, nicho claro, contenido diverso.
-  70-89 = buena producción, nicho presente.
-  50-69 = producción media, nicho vago.
-  30-49 = baja producción, contenido genérico.
-  0-29 = cuenta casi vacía o sin nicho.
+- content_quality: Evalúa producción visual, variedad de contenido, coherencia con los content_themes de la campaña.
+  90-100 = alta producción, contenido alineado con el nicho, formato diverso (Reels + Posts + Stories).
+  70-89 = buena producción, contenido presente y coherente.
+  50-69 = producción media, contenido genérico o inconsistente.
+  30-49 = baja producción, contenido repetitivo o sin nicho claro.
+  0-29 = cuenta casi vacía o sin contenido relevante.
 
-- audience_quality: Evalúa señales de audiencia real vs bots/farm.
-  90-100 = engagement orgánico consistente, comentarios genuinos, cuenta activa real.
-  70-89 = cuenta real con engagement normal.
-  50-69 = señales mixtas, posible uso de engagement groups.
-  30-49 = engagement suspecto, patrones de bots.
-  0-29 = alta probabilidad de bots/farm.
+- audience_quality: Evalúa señales de audiencia real vs bots/farm usando credibility_signals.
+  90-100 = múltiples señales de credibilidad, engagement orgánico consistente, comentarios genuinos.
+  70-89 = cuenta real con engagement normal, algunas señales de credibilidad.
+  50-69 = señales mixtas, posible uso de grupos de engagement.
+  30-49 = patrones sospechosos de bots o engagement farm.
+  0-29 = alta probabilidad de bots/farm — cuenta inauténtica.
 
-- brand_fit: Alineación con la campaña objetivo.
-  90-100 = perfíl totalmente alineado: nicho + tono + audiencia perfecta.
-  70-89 = buena alineación con la campaña.
+- brand_fit: Alineación total con la campaña — evalúa nicho, tono, audiencia y señales de competencia.
+  90-100 = perfil totalmente alineado: contenido + tono + audiencia perfectos para la campaña.
+  70-89 = buena alineación con la campaña, la mayoría de elementos en foco.
   50-69 = alineación parcial, algunos elementos fuera de foco.
-  30-49 = alineación débil.
-  0-29 = perfíl no relevante para esta campaña.
+  30-49 = alineación débil, contenido o audiencia no ideal.
+  0-29 = perfil no relevante para esta campaña.
 
-- summary: Frase breve en español explicando el reasoning (2-3 oraciones).
+- summary: Frase breve en español explicando el reasoning (2-3 oraciones). Explica por qué scoring así.
 
 Responde SOLO con un JSON array válido, sin texto adicional.
 Cada elemento del array debe tener: handle, content_quality, audience_quality, brand_fit, summary."""
@@ -65,6 +71,7 @@ def _build_single_prompt(
     niches: list[str],
     tone: list[str],
     country: str,
+    elite_data: dict[str, Any] | None = None,
 ) -> str:
     bio = biography or "(sin bio)"
     bio_preview = bio[:300]
@@ -81,11 +88,35 @@ def _build_single_prompt(
     tone_str = ", ".join(tone) if tone else "casual"
     industry_str = industry or "productos de consumo"
 
+    elite_context = ""
+    if elite_data:
+        content_themes = elite_data.get("content_themes", [])
+        credibility_signals = elite_data.get("credibility_signals", [])
+        local_slang = elite_data.get("local_slang", [])
+        competitor_brands = elite_data.get("competitor_intel", {}).get("brands", [])
+        benchmarks = elite_data.get("niche_benchmarks", {})
+
+        content_themes_str = ", ".join(content_themes[:6]) if content_themes else "no especificados"
+        credibility_str = ", ".join(credibility_signals[:5]) if credibility_signals else "no especificados"
+        local_slang_str = ", ".join(local_slang[:5]) if local_slang else "ninguno"
+        competitor_str = ", ".join(competitor_brands[:5]) if competitor_brands else "ninguna"
+        min_er = benchmarks.get("min_er", 0.035)
+        target_er = benchmarks.get("target_er", 0.055)
+        min_followers = benchmarks.get("min_followers", 5000)
+
+        elite_context = f"""
+CONTEXTO ELITE DE LA CAMPAÑA:
+- Content themes winners: {content_themes_str}
+- Señales de credibilidad a buscar: {credibility_str}
+- Slang local a identificar: {local_slang_str}
+- Competidores en el nicho: {competitor_str}
+- Benchmarks: min_followers={min_followers:,}, min_er={min_er:.1%}, target_er={target_er:.1%}"""
+
     return f"""@{handle} | {followers:,} seguidores | {industry_str} en {country}
 BIO: {bio_preview}
 CAPTIONS: {caption_text}
 NICHO: {niches_str}
-TONO: {tone_str}"""
+TONO: {tone_str}{elite_context}"""
 
 
 def _build_batch_prompt(
@@ -94,6 +125,7 @@ def _build_batch_prompt(
     niches: list[str],
     tone: list[str],
     country: str,
+    elite_data: dict[str, Any] | None = None,
 ) -> str:
     blocks = []
     for i, c in enumerate(candidates):
@@ -101,19 +133,48 @@ def _build_batch_prompt(
         followers = c.get("followers") or 0
         bio = c.get("bio") or c.get("biography") or ""
         latest_posts = c.get("latestPosts") or c.get("raw_payload", {}).get("latestPosts") or []
-        block = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country)
+        block = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country, elite_data)
         blocks.append(f"[{i}] {block}")
 
     candidates_text = "\n\n".join(blocks)
 
+    elite_section = ""
+    if elite_data:
+        content_themes = elite_data.get("content_themes", [])
+        credibility_signals = elite_data.get("credibility_signals", [])
+        competitor_intel = elite_data.get("competitor_intel", {})
+        benchmarks = elite_data.get("niche_benchmarks", {})
+        local_slang = elite_data.get("local_slang", [])
+
+        content_themes_str = ", ".join(content_themes[:8]) if content_themes else "no especificados"
+        credibility_str = "\n  - ".join(credibility_signals[:8]) if credibility_signals else "no especificados"
+        competitor_str = ", ".join(competitor_intel.get("brands", [])[:6]) if competitor_intel.get("brands") else "ninguna"
+        competitor_hashtags = ", ".join(competitor_intel.get("hashtags", [])[:6]) if competitor_intel.get("hashtags") else "ninguno"
+        slang_str = ", ".join(local_slang[:8]) if local_slang else "ninguno"
+        min_er = benchmarks.get("min_er", 0.035)
+        target_er = benchmarks.get("target_er", 0.055)
+        min_followers = benchmarks.get("min_followers", 5000)
+        ideal_range = benchmarks.get("ideal_follower_range", "5k-150k")
+
+        elite_section = f"""
+
+CONTEXTO ELITE DE LA CAMPAÑA (usa esto para evaluar content_quality, audience_quality y brand_fit):
+  Content themes winners: {content_themes_str}
+  Benchmarks del nicho: min_followers={min_followers:,}, ideal_range={ideal_range}, min_er={min_er:.1%}, target_er={target_er:.1%}
+  Señales de credibilidad (busca estas en bio/posts): {credibility_str}
+  Slang local (identifica si lo usa): {slang_str}
+  Competidores en el nicho: {competitor_str}
+  Hashtags de competidores: {competitor_hashtags}"""
+
     return f"""Analiza los siguientes {len(candidates)} influencers para campaña de {industry or 'productos de consumo'} en {country}.
+Evalúa usando el contexto elite de abajo si está disponible.{elite_section}
 
 PERFILES:
 {candidates_text}
 
 Responde con un JSON array, un objeto por cada handle en orden:
 [
-  {{"handle": "handle1", "content_quality": 0-100, "audience_quality": 0-100, "brand_fit": 0-100, "summary": "razonamiento"}},
+  {{"handle": "handle1", "content_quality": 0-100, "audience_quality": 0-100, "brand_fit": 0-100, "summary": "razonamiento en español"}},
   ...
 ]"""
 
@@ -129,31 +190,39 @@ def _parse_batch_response(content: str) -> list[dict[str, Any]]:
     return data
 
 
-def _fallback_scores(candidate: dict[str, Any]) -> dict[str, Any]:
+def _fallback_scores(candidate: dict[str, Any], elite_data: dict[str, Any] | None = None) -> dict[str, Any]:
     followers = candidate.get("followers", 0) or 0
     er = candidate.get("engagement_rate") or 0
 
+    benchmarks = {}
+    if elite_data and isinstance(elite_data, dict):
+        benchmarks = elite_data.get("niche_benchmarks", {})
+
+    min_followers = benchmarks.get("min_followers", 5000) if benchmarks else 5000
+    min_er = benchmarks.get("min_er", 0.035) if benchmarks else 0.035
+
     if followers >= 100_000:
-        content_quality = 75
+        content_quality = 78
     elif followers >= 20_000:
         content_quality = 68
-    elif followers >= 5_000:
+    elif followers >= min_followers:
         content_quality = 60
     else:
-        content_quality = 50
+        content_quality = 45
 
     if er > 0.10:
-        audience_quality = 80
-    elif er > 0.04:
-        audience_quality = 65
+        audience_quality = 82
+    elif er > min_er:
+        audience_quality = 68
     elif er > 0.01:
         audience_quality = 50
     else:
         audience_quality = 30
 
     bio = (candidate.get("bio") or candidate.get("biography") or "").lower()
+
     niche_keywords = [
-        "mascota", "pet", "dog", "perro", "belleza", "moda", "fitness",
+        "mascota", "pet", "dog", "perro", "gato", "cat", "belleza", "moda", "fitness",
         "tecnologia", "comida", "viajes", "lifestyle", "negocios",
         "moda", "ropa", "zapato", "cosmetico", "skincare", "makeup",
         "fitness", "gym", "ejercicio", "salud", "alimentacion",
@@ -163,8 +232,14 @@ def _fallback_scores(candidate: dict[str, Any]) -> dict[str, Any]:
         "lifestyle", "familia", "hogar", "casa", "decoracion",
         "negocios", "emprendimiento", "empresa", "startup", "marketing",
     ]
+
+    if elite_data and isinstance(elite_data, dict):
+        extra_niches = elite_data.get("niche_keywords", [])
+        if extra_niches:
+            niche_keywords.extend([str(n).lower() for n in extra_niches[:20]])
+
     has_niche = any(k in bio for k in niche_keywords)
-    brand_fit = 75 if has_niche else 55
+    brand_fit = 78 if has_niche else 52
 
     return {
         "content_quality": content_quality,
@@ -188,6 +263,9 @@ class CandidateAnalyzer:
 
         Batches up to BATCH_SIZE candidates per LLM call to reduce
         API calls from N to N/BATCH_SIZE.
+
+        Uses profile_data.elite_data to provide campaign-specific context
+        for scoring (content_themes, credibility_signals, niche_benchmarks, etc).
         """
         if not candidates:
             return candidates
@@ -203,6 +281,10 @@ class CandidateAnalyzer:
         countries = getattr(brief, "audience_countries", []) or []
         country = countries[0] if countries else "Venezuela"
 
+        elite_data = None
+        if profile_data and isinstance(profile_data, dict):
+            elite_data = profile_data.get("elite_data")
+
         semaphore = asyncio.Semaphore(MAX_CONCURRENT_BATCHES)
 
         batches: list[list[tuple[int, dict[str, Any]]]] = []
@@ -216,14 +298,21 @@ class CandidateAnalyzer:
         ) -> list[tuple[int, dict[str, Any]]]:
             async with semaphore:
                 batch_candidates = [c for _, c in indexed_candidates]
-                prompt = _build_batch_prompt(batch_candidates, industry, niches, tone, country)
+                prompt = _build_batch_prompt(
+                    batch_candidates,
+                    industry,
+                    niches,
+                    tone,
+                    country,
+                    elite_data,
+                )
 
                 try:
                     result = await deepseek_client.complete(
                         prompt=prompt,
                         system=SYSTEM_PROMPT,
                         temperature=0.2,
-                        max_tokens=2000,
+                        max_tokens=2500,
                     )
                     parsed = _parse_batch_response(result.content)
 
@@ -244,7 +333,7 @@ class CandidateAnalyzer:
                         if scores:
                             yield idx, scores
                         else:
-                            fb = _fallback_scores(candidate)
+                            fb = _fallback_scores(candidate, elite_data)
                             yield idx, fb
 
                 except Exception as e:
@@ -254,7 +343,7 @@ class CandidateAnalyzer:
                         error=str(e),
                     )
                     for idx, candidate in indexed_candidates:
-                        fb = _fallback_scores(candidate)
+                        fb = _fallback_scores(candidate, elite_data)
                         yield idx, fb
 
         results: list[tuple[int, dict[str, Any]]] = []
@@ -275,7 +364,7 @@ class CandidateAnalyzer:
                 if analysis.get("ai_summary"):
                     candidate["ai_rationale"] = analysis["ai_summary"]
             else:
-                fb = _fallback_scores(candidate)
+                fb = _fallback_scores(candidate, elite_data)
                 candidate["content_quality"] = fb["content_quality"]
                 candidate["audience_quality"] = fb["audience_quality"]
                 candidate["brand_fit"] = fb["brand_fit"]
@@ -289,13 +378,14 @@ async def _analyze_single_candidate(
     niches: list[str],
     tone: list[str],
     country: str,
+    elite_data: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     handle = candidate.get("handle", "unknown")
     followers = candidate.get("followers") or 0
     bio = candidate.get("bio") or candidate.get("biography") or ""
     latest_posts = candidate.get("latestPosts") or candidate.get("raw_payload", {}).get("latestPosts") or []
 
-    prompt = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country)
+    prompt = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country, elite_data)
 
     try:
         result = await deepseek_client.complete(
@@ -325,7 +415,7 @@ async def _analyze_single_candidate(
             handle=handle,
             error=str(e),
         )
-        fb = _fallback_scores(candidate)
+        fb = _fallback_scores(candidate, elite_data)
         return {
             "content_quality": fb["content_quality"],
             "audience_quality": fb["audience_quality"],

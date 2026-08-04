@@ -48,6 +48,7 @@ logger = structlog.get_logger(__name__)
 APIFY_SEMAPHORE = asyncio.Semaphore(5)
 MAX_HANDLES_TO_ENRICH = 25
 MAX_POSTS_PER_HASHTAG = 50
+MIN_FOLLOWERS_BOT_CHECK = 1000
 
 
 async def startup(ctx):
@@ -301,33 +302,72 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             geo_indicators: list[str],
             niche_keywords: list[str],
             top_n: int,
+            elite_data: dict[str, Any] | None = None,
         ) -> list[tuple[str, float]]:
             from discovery.scoring.niche import niche_relevance
             from discovery.tools.geo_boost import geo_score
 
+            anti_bot_signals: list[str] = []
+            niche_benchmarks: dict[str, Any] = {}
+            if elite_data and isinstance(elite_data, dict):
+                anti_bot_signals = elite_data.get("anti_bot_signals", [])
+                niche_benchmarks = elite_data.get("niche_benchmarks", {})
+
+            min_followers = niche_benchmarks.get("min_followers", MIN_FOLLOWERS_BOT_CHECK) if niche_benchmarks else MIN_FOLLOWERS_BOT_CHECK
+            effective_top_n = min(top_n, niche_benchmarks.get("max_handles_to_enrich", top_n) if niche_benchmarks else top_n)
+
             scored: list[tuple[str, float]] = []
+            bot_flags: dict[str, int] = {}
             for handle, p in profiles.items():
-                text_bio = p.get("biography") or p.get("bio") or ""
+                followers = p.get("followersCount") or p.get("follower_count") or 0
+                following = p.get("followsCount") or p.get("following_count") or 0
+                posts_count = p.get("postsCount") or p.get("posts_count") or 0
+
+                if followers < min_followers:
+                    bot_flags[handle] = bot_flags.get(handle, 0) + 1
+
+                if following > 0 and followers > 0:
+                    ff_ratio = following / followers
+                    if ff_ratio > 10 and followers < 5000:
+                        bot_flags[handle] = bot_flags.get(handle, 0) + 2
+                    if ff_ratio > 20:
+                        bot_flags[handle] = bot_flags.get(handle, 0) + 3
+
+                if posts_count < 10 and followers > 5000:
+                    bot_flags[handle] = bot_flags.get(handle, 0) + 1
+
+                bio = p.get("biography") or p.get("bio") or ""
                 geo = geo_score(
-                    {"biography": text_bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
+                    {"biography": bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
                     geo_indicators,
                 )
                 niche = niche_relevance(
-                    {"biography": text_bio, "username": handle, "full_name": p.get("full_name", "")},
+                    {"biography": bio, "username": handle, "full_name": p.get("full_name", "")},
                     {"niche_keywords": niche_keywords, "hashtags": [], "keywords": niche_keywords},
                 )
                 rough = 0.5 * geo + 0.5 * niche
+
+                bot_penalty = bot_flags.get(handle, 0)
+                if bot_penalty >= 3:
+                    rough *= 0.3
+                elif bot_penalty >= 2:
+                    rough *= 0.6
+                elif bot_penalty >= 1:
+                    rough *= 0.85
+
                 scored.append((handle, rough))
 
             scored.sort(key=lambda x: x[1], reverse=True)
-            return scored[:top_n]
+            return scored[:effective_top_n]
 
+        elite_data = profile_data.get("elite_data") if profile_data else None
         prefilter_before = len(unique_handles)
         prefilter_handles = await _prefilter_profiles(
             profiles,
             profile_data.get("geo_indicators", []),
             profile_data.get("niche_keywords", []),
             MAX_HANDLES_TO_ENRICH,
+            elite_data,
         )
         handles_to_enrich = [h for h, _ in prefilter_handles]
         logger.info(
