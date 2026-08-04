@@ -72,7 +72,7 @@ class Settings(BaseSettings):
 
     ADMIN_TOKEN: str = ""
 
-    ENABLE_AI_ANALYZER: bool = True
+    ENABLE_AI_ANALYZER: bool = False
 
     MAX_UPLOAD_SIZE_MB: int = 50
     RATE_LIMIT_PER_MINUTE: int = 300

@@ -336,7 +336,7 @@ export function BriefWizard({
             <div>
               <Label className="mb-1.5 block">Producto o marca *</Label>
               <Input
-                placeholder="Ej: Purina Dog Chow, crema Nivea, Restaurant Plaza"
+                placeholder="Ej: Shampoo Dove, Restaurant Plaza, App fintech"
                 value={brief.product_name ?? ''}
                 onChange={(e) => update({ product_name: e.target.value || null })}
               />
