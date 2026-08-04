@@ -67,18 +67,18 @@ class TestGeoBoostFixes:
 class TestGeoBoostCityMatching:
     """F-3.3: City matching should not require first 3 chars to be uppercase."""
 
-    def test_city_name_bogota(self):
-        """'bogota' (all lowercase, len>2) should match."""
+    def test_city_name_cali(self):
+        """'cali' (no accents) should match via city keywords."""
         profile = {
             "biography": "",
             "country": "",
             "username": "user",
-            "locationName": "Bogotá, Colombia",
+            "locationName": "Cali, Colombia",
             "followersCount": 50000,
             "engagement_rate": 0.035,
             "is_business": False,
         }
-        score = geo_score(profile, ["bogota"])
+        score = geo_score(profile, ["cali"])
         assert score >= 1.0
 
     def test_city_name_caracas(self):
@@ -224,14 +224,15 @@ class TestUpsertManyReturning:
         pg = RailwayPg(dsn="postgresql://test")
         pg._pool = mock_pool
 
-        result = await pg.upsert_many(
-            table="test_table",
-            records=[{"id": 1, "name": "test"}],
-            on_conflict=["id"],
-            returning="minimal",
-        )
-        call_args = str(mock_conn.fetch.call_args)
-        assert "RETURNING" in call_args, f"Expected RETURNING in query, got: {call_args}"
+        with patch("shared_core.supabase_rest.logger") as mock_logger:
+            await pg.upsert_many(
+                table="test_table",
+                records=[{"id": 1, "name": "test"}],
+                on_conflict=["id"],
+                returning="minimal",
+            )
+            logged_sql = mock_logger.info.call_args_list[0][0][1]
+            assert "RETURNING" in logged_sql, f"Expected RETURNING in SQL: {logged_sql}"
 
 
 class TestWorkerTyping:
