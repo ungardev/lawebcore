@@ -46,15 +46,15 @@ def lens_score(
     biz = calculate_business_intent(profile)
 
     raw = (
-        0.35 * tier_er_norm
-        + 0.25 * geo
-        + 0.20 * niche
-        + 0.10 * biz
+        0.389 * tier_er_norm
+        + 0.278 * geo
+        + 0.222 * niche
+        + 0.111 * biz
     )
 
     bio_lower = (profile.get("biography") or profile.get("bio") or "").lower()
     if _is_tienda_bio(bio_lower):
-        raw *= 0.6
+        raw *= 0.85
 
     if cross_referenced:
         raw *= 1.15

@@ -46,7 +46,7 @@ export function useDiscoveryRun() {
     let attempts = 0;
     while (attempts < maxAttempts) {
       const { run: currentRun, candidates: currentCandidates } = await loadRun(runId);
-      if (currentRun.status === 'completed' || currentRun.status === 'failed') {
+      if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial') {
         return { run: currentRun, candidates: currentCandidates };
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));

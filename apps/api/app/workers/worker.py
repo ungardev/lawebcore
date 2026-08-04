@@ -11,6 +11,7 @@ Handles:
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 import structlog
 from arq import cron
@@ -149,7 +150,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         brief = BriefStructured(**brief_parsed)
         plan = await query_builder.build(brief)
-        profile_data = await get_or_create_profile(brief)
+        profile_data = plan.profile
 
         await _run_update_metadata(run_id, {
             "current_step": "step1_hashtag_search",
@@ -251,33 +252,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "verified": item.get("verified", False),
             }
 
-        for item in keyword_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step2_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("fullName", ""),
-                "fullName": item.get("fullName", ""),
-                "bio": item.get("biography", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("profilePicUrlHD") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrlHD") or item.get("profilePicUrl", ""),
-                "follower_count": 0,
-                "followersCount": 0,
-                "following_count": 0,
-                "followsCount": 0,
-                "posts_count": 0,
-                "postsCount": 0,
-                "is_business": item.get("isBusinessAccount", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("verified", False),
-                "verified": item.get("verified", False),
-            }
-
         unique_handles = list(profiles.keys())
         logger.info("step1_and_2_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items))
         step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
@@ -313,7 +287,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 anti_bot_signals = elite_data.get("anti_bot_signals", [])
                 niche_benchmarks = elite_data.get("niche_benchmarks", {})
 
-            min_followers = niche_benchmarks.get("min_followers", MIN_FOLLOWERS_BOT_CHECK) if niche_benchmarks else MIN_FOLLOWERS_BOT_CHECK
+            min_followers = niche_benchmarks.get("min_followers", plan.min_followers) if niche_benchmarks else plan.min_followers
             effective_top_n = min(top_n, niche_benchmarks.get("max_handles_to_enrich", top_n) if niche_benchmarks else top_n)
 
             scored: list[tuple[str, float]] = []

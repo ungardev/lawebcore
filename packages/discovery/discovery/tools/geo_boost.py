@@ -74,7 +74,7 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     if target_iso2 and country == target_iso2:
         return 1.0
 
-    if country and country not in (target_iso2,):
+    if target_iso2 and country and country != target_iso2:
         return 0.0
 
     def _word_match(text: str, keywords: list[str]) -> int:
@@ -85,7 +85,7 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
                 count += 1
         return count
 
-    city_keywords = [k for k in geo_indicators if len(k) > 3 and not any(c.isalpha() and c.islower() for c in k[:3])]
+    city_keywords = [k for k in geo_indicators if len(k) > 2 and not any(c.isalpha() and c.islower() for c in k[:2])]
     city_matches = _word_match(search_text, city_keywords)
 
     country_keywords = _get_country_keywords(geo_indicators)
@@ -114,7 +114,7 @@ def _get_country_keywords(geo_indicators: list[str]) -> list[str]:
     """
     country_signal_keywords = {
         "ve": ["venezuela", "vzla", "vzlatex", "vzlan", "vzlano", "venezolano", "venezolana", "🇻🇪"],
-        "co": ["colombia", "colombiano", "colombiana", "c🇨🇴"],
+        "co": ["colombia", "colombiano", "colombiana", "co", "🇨🇴"],
         "mx": ["mexico", "mexicano", "mexicana", "mx", "🇲🇽"],
         "ar": ["argentina", "argentino", "argentina", "ar", "🇦🇷"],
         "cl": ["chile", "chileno", "chilena", "cl", "🇨🇱"],

@@ -3,7 +3,7 @@
 from typing import Any
 
 from discovery.schemas import BriefStructured, DiscoveryPlan
-from discovery.profile_generator import get_or_create_profile, compute_fingerprint
+from discovery.profile_generator import get_or_create_profile
 
 
 TIER_MIN_FOLLOWERS = {
@@ -39,6 +39,7 @@ class QueryBuilder:
             min_followers=min_followers,
             max_followers=10_000_000,
             exclude_handles=brief.exclude_handles or [],
+            profile=profile,
         )
 
     def _build_keyword_queries(self, profile: dict[str, Any], brief: BriefStructured) -> list[str]:
@@ -46,8 +47,6 @@ class QueryBuilder:
 
         queries.extend(profile.get("keywords", []))
         queries.extend(profile.get("niche_keywords", []))
-        queries.extend(profile.get("geo_indicators", []))
-        queries.extend(profile.get("buy_intent_keywords", []))
 
         if brief.competitor_brands:
             queries.extend(brief.competitor_brands)
@@ -64,12 +63,12 @@ class QueryBuilder:
                 seen.add(q.lower())
                 deduped.append(q)
 
-        return deduped[:80]
+        return deduped[:20]
 
     def _build_hashtag_queries(self, profile: dict[str, Any]) -> list[str]:
         raw = profile.get("hashtags", [])
         hashtags = [f"#{tag.lstrip('#').strip()}" for tag in raw if tag and tag.strip()]
-        return hashtags[:50]
+        return hashtags[:30]
 
     def _get_tier(self, brief: BriefStructured) -> str:
         if brief.influencer_preferences:

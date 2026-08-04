@@ -293,8 +293,10 @@ class RailwayPg:
             f"VALUES {','.join(placeholder_lists)} "
             f"ON CONFLICT ({conflict_cols}) DO UPDATE SET {','.join(set_parts)}"
         )
-        if returning != "minimal":
+        if returning == "representation":
             sql += " RETURNING id"
+        elif returning == "minimal":
+            sql += " RETURNING 1"
         logger.info("[supabase_rest.upsert_many] EXEC: %s", sql)
         try:
             async with pool.acquire() as conn:

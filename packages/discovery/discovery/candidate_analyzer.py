@@ -133,7 +133,7 @@ def _build_batch_prompt(
         followers = c.get("followers") or 0
         bio = c.get("bio") or c.get("biography") or ""
         latest_posts = c.get("latestPosts") or c.get("raw_payload", {}).get("latestPosts") or []
-        block = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country, elite_data)
+        block = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country)
         blocks.append(f"[{i}] {block}")
 
     candidates_text = "\n\n".join(blocks)
@@ -370,58 +370,6 @@ class CandidateAnalyzer:
                 candidate["brand_fit"] = fb["brand_fit"]
 
         return candidates
-
-
-async def _analyze_single_candidate(
-    candidate: dict[str, Any],
-    industry: str | None,
-    niches: list[str],
-    tone: list[str],
-    country: str,
-    elite_data: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    handle = candidate.get("handle", "unknown")
-    followers = candidate.get("followers") or 0
-    bio = candidate.get("bio") or candidate.get("biography") or ""
-    latest_posts = candidate.get("latestPosts") or candidate.get("raw_payload", {}).get("latestPosts") or []
-
-    prompt = _build_single_prompt(handle, followers, bio, latest_posts, industry, niches, tone, country, elite_data)
-
-    try:
-        result = await deepseek_client.complete(
-            prompt=prompt,
-            system=SYSTEM_PROMPT,
-            temperature=0.2,
-            max_tokens=300,
-        )
-
-        content = result.content.strip()
-        match = re.search(r"\{.*\}", content, re.DOTALL)
-        if not match:
-            raise ValueError(f"No JSON found in response: {content[:200]}")
-
-        data = _json.loads(match.group())
-
-        return {
-            "content_quality": max(0, min(100, int(data.get("content_quality", 50)))),
-            "audience_quality": max(0, min(100, int(data.get("audience_quality", 50)))),
-            "brand_fit": max(0, min(100, int(data.get("brand_fit", 50)))),
-            "ai_summary": str(data.get("summary", ""))[:300],
-        }
-
-    except Exception as e:
-        logger.warning(
-            "ai_analysis_failed_using_fallback",
-            handle=handle,
-            error=str(e),
-        )
-        fb = _fallback_scores(candidate, elite_data)
-        return {
-            "content_quality": fb["content_quality"],
-            "audience_quality": fb["audience_quality"],
-            "brand_fit": fb["brand_fit"],
-            "ai_summary": None,
-        }
 
 
 candidate_analyzer = CandidateAnalyzer()

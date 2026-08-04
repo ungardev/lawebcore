@@ -89,6 +89,7 @@ class DiscoveryPlan(BaseModel):
     min_followers: int = 1000
     max_followers: int = 10_000_000
     exclude_handles: list[str] = Field(default_factory=list)
+    profile: dict[str, Any] | None = None
 
 
 class CandidateMetrics(BaseModel):
