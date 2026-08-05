@@ -46,7 +46,6 @@ class QueryBuilder:
         queries: list[str] = []
 
         queries.extend(profile.get("keywords", []))
-        queries.extend(profile.get("niche_keywords", []))
 
         if brief.competitor_brands:
             queries.extend(brief.competitor_brands)

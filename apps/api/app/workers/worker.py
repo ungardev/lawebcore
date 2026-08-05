@@ -297,18 +297,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 following = p.get("followsCount") or p.get("following_count") or 0
                 posts_count = p.get("postsCount") or p.get("posts_count") or 0
 
-                if followers < min_followers:
-                    bot_flags[handle] = bot_flags.get(handle, 0) + 1
+                if followers > 0:
+                    if followers < min_followers:
+                        bot_flags[handle] = bot_flags.get(handle, 0) + 1
 
-                if following > 0 and followers > 0:
-                    ff_ratio = following / followers
+                    ff_ratio = following / followers if following > 0 else 0
                     if ff_ratio > 10 and followers < 5000:
                         bot_flags[handle] = bot_flags.get(handle, 0) + 2
                     if ff_ratio > 20:
                         bot_flags[handle] = bot_flags.get(handle, 0) + 3
 
-                if posts_count < 10 and followers > 5000:
-                    bot_flags[handle] = bot_flags.get(handle, 0) + 1
+                    if posts_count < 10 and followers > 5000:
+                        bot_flags[handle] = bot_flags.get(handle, 0) + 1
 
                 bio = p.get("biography") or p.get("bio") or ""
                 geo = geo_score(
@@ -436,7 +436,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         target_country = (brief.audience_countries or ["VE"])[0].upper()
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
-            if followers < 1000:
+            if followers < plan.min_followers:
                 continue
 
             latest = p.get("latestPosts") or []
@@ -493,9 +493,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "audience_age_buckets": {},
                     "match_score": round(score_val, 2),
                     "niche_relevance": round(real_niche * 100, 2),
-                    "geo_relevance": 100,
-                    "audience_relevance": 80,
-                    "content_quality": 80,
+                    "geo_relevance": round(geo * 100, 1),
+                    "audience_relevance": None,
+                    "content_quality": None,
                     "expected_reach": int(followers * 0.7),
                     "expected_engagement": int(followers * er),
                     "roi_estimate": None,
