@@ -68,3 +68,6 @@ plugins = ["pydantic.mypy"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "-v --strict-markers"
+markers = [
+    "e2e: end-to-end tests requiring real API credentials (Apify + DeepSeek)",
+]
