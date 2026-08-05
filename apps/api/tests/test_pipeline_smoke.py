@@ -240,7 +240,7 @@ class TestWorkerTyping:
 
     def test_worker_module_imports_any(self):
         """worker.py must import Any for the elite_data: dict[str, Any] annotation."""
-        worker_path = "/mnt/c/Users/Dainer/Documents/proyectoslaweb/lawebcore/apps/api/app/workers/worker.py"
-        with open(worker_path) as f:
-            source = f.read()
+        from pathlib import Path
+        import app.workers.worker as worker_mod
+        source = Path(worker_mod.__file__).read_text()
         assert "from typing import Any" in source, "worker.py must have 'from typing import Any'"
