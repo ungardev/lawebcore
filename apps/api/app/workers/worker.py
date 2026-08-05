@@ -513,14 +513,27 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "fetched_at": datetime.now(timezone.utc),
                 })
 
-        print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(scored)} candidates)", flush=True)
-        scored = await candidate_analyzer.analyze_candidates_batch(
-            candidates=scored,
+        scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
+
+        MIN_MATCH_SCORE = 35
+        exclude_stores = getattr(brief, "exclude_stores", True)
+        qualified = [
+            c for c in scored
+            if (c.get("match_score") or 0) >= MIN_MATCH_SCORE
+            and (not exclude_stores or not c.get("is_tienda"))
+        ]
+
+        TARGET_CANDIDATES = 50
+        to_analyze = qualified[:TARGET_CANDIDATES]
+
+        print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
+        analyzed = await candidate_analyzer.analyze_candidates_batch(
+            candidates=to_analyze,
             brief=brief,
             profile_data=profile_data,
         )
 
-        for candidate in scored:
+        for candidate in analyzed:
             if candidate.get("ai_rationale"):
                 candidate["rationale"] = candidate["ai_rationale"]
 
@@ -534,23 +547,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             ],
         })
 
-        scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
-
-        qualified = scored[:50]
-
-        non_tienda = [c for c in qualified if not c.get("is_tienda")]
-        if len(non_tienda) >= 5:
-            qualified = non_tienda
-
-        MIN_MATCH_SCORE = 35
-        qualified = [
-            c for c in qualified
-            if (c.get("match_score") or 0) >= MIN_MATCH_SCORE
-            and not c.get("is_tienda")
-        ]
-
-        TARGET_CANDIDATES = 50
-        qualified = qualified[:TARGET_CANDIDATES]
+        qualified = analyzed
 
         logger.info(
             "scoring_done",

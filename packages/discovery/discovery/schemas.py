@@ -79,6 +79,7 @@ class BriefStructured(BaseModel):
     brief_source: str = Field(default="manual", description="Source of the brief: 'manual', 'file_upload', 'ai_generated'")
     source_document: dict | None = None
     exclude_handles: list[str] = Field(default_factory=list)
+    exclude_stores: bool = Field(default=True, description="Exclude commercial/store accounts from results")
 
 
 class DiscoveryPlan(BaseModel):

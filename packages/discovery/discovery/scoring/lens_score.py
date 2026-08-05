@@ -53,8 +53,6 @@ def lens_score(
     )
 
     bio_lower = (profile.get("biography") or profile.get("bio") or "").lower()
-    if _is_tienda_bio(bio_lower):
-        raw *= 0.85
 
     if cross_referenced:
         raw *= 1.15

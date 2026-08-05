@@ -307,6 +307,7 @@ class CandidateAnalyzer:
                     elite_data,
                 )
 
+                batch_results: list[tuple[int, dict[str, Any]]] = []
                 try:
                     result = await deepseek_client.complete(
                         prompt=prompt,
@@ -331,10 +332,10 @@ class CandidateAnalyzer:
                         handle = candidate.get("handle", "")
                         scores = handle_to_scores.get(handle)
                         if scores:
-                            yield idx, scores
+                            batch_results.append((idx, scores))
                         else:
                             fb = _fallback_scores(candidate, elite_data)
-                            yield idx, fb
+                            batch_results.append((idx, fb))
 
                 except Exception as e:
                     logger.warning(
@@ -344,12 +345,15 @@ class CandidateAnalyzer:
                     )
                     for idx, candidate in indexed_candidates:
                         fb = _fallback_scores(candidate, elite_data)
-                        yield idx, fb
+                        batch_results.append((idx, fb))
 
+                return batch_results
+
+        tasks = [_process_batch(batch) for batch in batches]
+        batch_results = await asyncio.gather(*tasks)
         results: list[tuple[int, dict[str, Any]]] = []
-        for batch in batches:
-            async for result in _process_batch(batch):
-                results.append(result)
+        for batch_result in batch_results:
+            results.extend(batch_result)
 
         results.sort(key=lambda x: x[0])
 
