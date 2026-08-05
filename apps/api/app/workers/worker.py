@@ -524,16 +524,20 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         TARGET_CANDIDATES = 50
         to_analyze = qualified[:TARGET_CANDIDATES]
 
-        print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
-        analyzed = await candidate_analyzer.analyze_candidates_batch(
-            candidates=to_analyze,
-            brief=brief,
-            profile_data=profile_data,
-        )
-
-        for candidate in analyzed:
-            if candidate.get("ai_rationale"):
-                candidate["rationale"] = candidate["ai_rationale"]
+        analyze_with_ai = getattr(brief, "analyze_with_ai", True)
+        if analyze_with_ai:
+            print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
+            analyzed = await candidate_analyzer.analyze_candidates_batch(
+                candidates=to_analyze,
+                brief=brief,
+                profile_data=profile_data,
+            )
+            for candidate in analyzed:
+                if candidate.get("ai_rationale"):
+                    candidate["rationale"] = candidate["ai_rationale"]
+        else:
+            print(f"[discovery_run_task] STEP 5: Skipping AI analysis (analyze_with_ai=False), using rule-based scores", flush=True)
+            analyzed = to_analyze
 
         await _run_update_metadata(run_id, {
             "current_step": "step5_ai_analysis",

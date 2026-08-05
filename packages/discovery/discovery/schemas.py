@@ -80,6 +80,7 @@ class BriefStructured(BaseModel):
     source_document: dict | None = None
     exclude_handles: list[str] = Field(default_factory=list)
     exclude_stores: bool = Field(default=True, description="Exclude commercial/store accounts from results")
+    analyze_with_ai: bool = Field(default=True, description="Enable DeepSeek AI analysis for candidate scoring. Set to False to skip AI analysis and use faster rule-based scoring only.")
 
 
 class DiscoveryPlan(BaseModel):
@@ -193,6 +194,8 @@ class DiscoverySearchRequest(BaseModel):
     platforms: list[Platform] = Field(default=lambda: [Platform.INSTAGRAM])
     max_candidates: int = Field(default=20, ge=1, le=100)
     exclude_handles: list[str] = Field(default_factory=list)
+    exclude_stores: bool = Field(default=True)
+    analyze_with_ai: bool = Field(default=True)
 
 
 class DiscoveryRunResponse(BaseModel):

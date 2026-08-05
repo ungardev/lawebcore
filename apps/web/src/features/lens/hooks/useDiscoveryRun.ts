@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { lensApi } from '../api/lensApi';
 import type { DiscoveryCandidate, DiscoveryRun, Platform } from '../types/discovery';
 
@@ -7,6 +7,7 @@ export function useDiscoveryRun() {
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const cancelledRef = useRef(false);
 
   const createRun = useCallback(async (brief: Parameters<typeof lensApi.search.createRun>[0]) => {
     setIsLoading(true);
@@ -43,9 +44,16 @@ export function useDiscoveryRun() {
   }, []);
 
   const pollRun = useCallback(async (runId: string, intervalMs = 3000, maxAttempts = 60) => {
+    cancelledRef.current = false;
     let attempts = 0;
     while (attempts < maxAttempts) {
+      if (cancelledRef.current) {
+        return { run: null, candidates: [] };
+      }
       const { run: currentRun, candidates: currentCandidates } = await loadRun(runId);
+      if (cancelledRef.current) {
+        return { run: null, candidates: [] };
+      }
       if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial') {
         return { run: currentRun, candidates: currentCandidates };
       }
@@ -55,6 +63,10 @@ export function useDiscoveryRun() {
     throw new Error('Timeout esperando resultados');
   }, [loadRun]);
 
+  const cancelPoll = useCallback(() => {
+    cancelledRef.current = true;
+  }, []);
+
   return {
     run,
     candidates,
@@ -63,6 +75,7 @@ export function useDiscoveryRun() {
     createRun,
     loadRun,
     pollRun,
+    cancelPoll,
     saveCandidate: lensApi.candidates.save,
     dismissCandidate: lensApi.candidates.dismiss,
   };
