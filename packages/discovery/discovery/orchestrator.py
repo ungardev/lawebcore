@@ -102,6 +102,13 @@ class DiscoveryOrchestrator:
                 except Exception:
                     state.brief_structured = None
             state.pending_refinements = stored_state.get("pending_refinements", []) or []
+            candidates_data = stored_state.get("candidates") or []
+            if candidates_data:
+                try:
+                    from discovery.schemas import CandidateStatus, CandidateWithScore
+                    state.candidates = [CandidateWithScore(**c) for c in candidates_data]
+                except Exception as exc:
+                    logger.warning("candidates_restore_failed", error=str(exc))
             return state
 
         try:
