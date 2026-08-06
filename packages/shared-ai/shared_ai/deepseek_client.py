@@ -19,6 +19,9 @@ class LLMResponse:
     content: str
     model: str
     tokens_used: int | None = None
+    tokens_input: int | None = None
+    tokens_output: int | None = None
+    cost_usd: float | None = None
     latency_ms: int | None = None
 
 
@@ -53,11 +56,22 @@ class DeepSeekClient:
                 response = await asyncio.to_thread(client.invoke, messages, **kwargs)
                 latency_ms = int((time.perf_counter() - start) * 1000)
                 content = response.content if hasattr(response, "content") else str(response)
-                tokens = getattr(response, "usage_metadata", {}).get("total_tokens", None) if hasattr(response, "usage_metadata") else None
+                usage_meta = getattr(response, "usage_metadata", {}) or {}
+                tokens_input = usage_meta.get("input_tokens")
+                tokens_output = usage_meta.get("output_tokens")
+                tokens_used = usage_meta.get("total_tokens") or (
+                    (tokens_input + tokens_output) if (tokens_input and tokens_output) else None
+                )
+                cost_usd = None
+                if tokens_input is not None and tokens_output is not None:
+                    cost_usd = (tokens_input * 0.0013 / 1000) + (tokens_output * 0.0039 / 1000)
                 return LLMResponse(
                     content=content,
                     model=self.model,
-                    tokens_used=tokens,
+                    tokens_used=tokens_used,
+                    tokens_input=tokens_input,
+                    tokens_output=tokens_output,
+                    cost_usd=cost_usd,
                     latency_ms=latency_ms,
                 )
             except Exception as e:

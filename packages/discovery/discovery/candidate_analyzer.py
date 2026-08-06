@@ -258,6 +258,7 @@ class CandidateAnalyzer:
         candidates: list[dict[str, Any]],
         brief: Any,
         profile_data: dict[str, Any],
+        cost_callback: Any = None,
     ) -> list[dict[str, Any]]:
         """Analyze candidates with DeepSeek using batching.
 
@@ -266,6 +267,10 @@ class CandidateAnalyzer:
 
         Uses profile_data.elite_data to provide campaign-specific context
         for scoring (content_themes, credibility_signals, niche_benchmarks, etc).
+
+        Args:
+            cost_callback: if provided, called with (cost_usd, tokens_input, tokens_output)
+                           after each successful LLM call.
         """
         if not candidates:
             return candidates
@@ -315,6 +320,12 @@ class CandidateAnalyzer:
                         temperature=0.2,
                         max_tokens=2500,
                     )
+                    if cost_callback and result.cost_usd is not None:
+                        cost_callback(
+                            result.cost_usd,
+                            result.tokens_input or 0,
+                            result.tokens_output or 0,
+                        )
                     parsed = _parse_batch_response(result.content)
 
                     handle_to_scores: dict[str, dict[str, Any]] = {}

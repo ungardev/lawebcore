@@ -20,6 +20,7 @@ from arq.connections import RedisSettings
 from shared_core import settings
 from shared_core import supabase_rest
 
+from app.core.discovery_cost_tracker import get_discovery_cost_tracker
 from app.core.metrics import (
     lens_active_runs,
     lens_candidates_total,
@@ -527,10 +528,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         analyze_with_ai = getattr(brief, "analyze_with_ai", True)
         if analyze_with_ai:
             print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
+            tracker = get_discovery_cost_tracker()
+
+            def record_deepseek_cost(cost_usd: float, tokens_in: int, tokens_out: int) -> None:
+                tracker.record_deepseek_cost(
+                    run_id=run_id,
+                    cost_usd=cost_usd,
+                    tokens_input=tokens_in,
+                    tokens_output=tokens_out,
+                    operation="candidate_analysis",
+                    metadata={"candidates_count": len(to_analyze)},
+                )
+
             analyzed = await candidate_analyzer.analyze_candidates_batch(
                 candidates=to_analyze,
                 brief=brief,
                 profile_data=profile_data,
+                cost_callback=record_deepseek_cost,
             )
             for candidate in analyzed:
                 if candidate.get("ai_rationale"):
@@ -641,21 +655,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         logger.info("discovery_run_completed", run_id=run_id, candidates=total)
 
+        tracker = get_discovery_cost_tracker()
+
         apify_cost = apify_client.get_and_clear_cost(run_id)
         if apify_cost > 0:
-            await supabase_rest.update(
-                table="discovery_runs",
-                values={"actual_cost_usd": apify_cost},
-                filters=[f"id=eq.{run_id}"],
+            tracker.record_apify_cost(
+                run_id=run_id,
+                actor_id="discovery_pipeline",
+                cost_usd=apify_cost,
+                metadata={"run_id": run_id},
             )
-            await supabase_rest.insert("api_costs", {
-                "provider": "apify",
-                "operation": "discovery_pipeline",
-                "entity_id": run_id,
-                "cost_usd": apify_cost,
-                "request_count": 3,
-                "metadata": {"run_id": run_id},
-            })
+
+        cost_summary = tracker.get_run_summary(run_id)
+        total_cost = cost_summary["total_usd"]
+
+        await supabase_rest.update(
+            table="discovery_runs",
+            values={"actual_cost_usd": total_cost},
+            filters=[f"id=eq.{run_id}"],
+        )
+        await tracker.flush(run_id)
 
         lens_active_runs.dec()
         lens_candidates_total.labels(status="inserted").inc(total)
@@ -664,6 +683,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     except Exception as e:
         logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
         await _run_set_status(run_id, "failed", error=str(e))
+        try:
+            tracker = get_discovery_cost_tracker()
+            apify_cost = apify_client.get_and_clear_cost(run_id)
+            if apify_cost > 0:
+                tracker.record_apify_cost(run_id=run_id, actor_id="discovery_pipeline", cost_usd=apify_cost)
+            await tracker.flush(run_id)
+        except Exception:
+            pass
         lens_active_runs.dec()
         raise
 
