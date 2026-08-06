@@ -147,10 +147,6 @@ export function LensChatPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between border-b border-divider bg-surface-sunken px-5 py-3">
-                <div className="flex items-center gap-2 text-xs"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /><span className="font-medium text-foreground">Lens operativo</span></div>
-                <span className="font-mono text-[10px] text-muted-foreground">CHAT / DISCOVERY</span>
-              </div>
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6" aria-live="polite">
                 {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
                 {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
