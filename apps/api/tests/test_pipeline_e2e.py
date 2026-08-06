@@ -91,7 +91,7 @@ async def _get_candidates_count(run_id: str) -> int:
     result = await supabase_rest.select(
         table="discovery_candidates",
         select="id",
-        filters=[f"discovery_run_id=eq.{run_id}"],
+        filters=[f"run_id=eq.{run_id}"],
         limit=1000,
     )
     return len(result) if result else 0
@@ -101,7 +101,7 @@ async def _cleanup(run_id: str, conv_id: str) -> None:
     try:
         await supabase_rest.delete(
             table="discovery_candidates",
-            filters=[f"discovery_run_id=eq.{run_id}"],
+            filters=[f"run_id=eq.{run_id}"],
         )
     except Exception:
         pass
