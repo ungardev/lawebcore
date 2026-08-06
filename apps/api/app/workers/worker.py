@@ -48,8 +48,8 @@ from discovery.candidate_analyzer import candidate_analyzer
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(5)
-MAX_HANDLES_TO_ENRICH = 25
-MAX_POSTS_PER_HASHTAG = 50
+MAX_HANDLES_TO_ENRICH = 50
+MAX_POSTS_PER_HASHTAG = 20
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
 
@@ -164,10 +164,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step2_handles: set[str] = set()
 
         async def _fetch_step1():
-            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=50, force_fresh=False, discovery_run_id=run_id)
+            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=20, force_fresh=False, discovery_run_id=run_id)
 
         async def _fetch_step2():
-            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=30, force_fresh=False, discovery_run_id=run_id)
+            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=15, force_fresh=False, discovery_run_id=run_id)
 
         print(f"[discovery_run_task] STEP 1+2: Running hashtag + keyword search in parallel", flush=True)
         step1_result, step2_result = await asyncio.gather(
@@ -357,7 +357,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         if handles_to_enrich:
             try:
-                enriched_profiles = await apify_client.enrich_profiles_sync(handles_to_enrich, force_fresh=False, discovery_run_id=run_id)
+                enriched_profiles = await apify_client.search_instagram_profiles_batch(handles_to_enrich, discovery_run_id=run_id)
                 if not enriched_profiles:
                     step3_degraded = True
                     step3_error = "Apify returned empty result"

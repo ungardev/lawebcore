@@ -26,7 +26,7 @@ ENGAGEMENT_ANALYTICS_SCRAPER = "easyapi~instagram-profile-engagement-analytics"
 TIKTOK_SCRAPER = "clockworks~tiktok-scraper"
 
 CACHE_TTL_PROFILES = 86400   # 24 hours — follower counts don't change meaningfully in a day
-CACHE_TTL_SEARCH = 21600     # 6 hours — hashtag/keyword results change more frequently
+CACHE_TTL_SEARCH = 43200     # 12 hours — hashtag/keyword results, balanced freshness/reuse
 
 
 class ApifyClient:

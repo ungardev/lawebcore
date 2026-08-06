@@ -139,8 +139,8 @@ def minimal_brief() -> BriefStructured:
     return BriefStructured(
         product_name="Suplemento fitness",
         industry="fitness",
-        niches=["fitness", "gym"],
-        hashtags=["#fitness", "#gym"],
+        niches=["fitness", "gym", "suplementos", "entrenamiento", "deportes", "crossfit", "musculacion"],
+        hashtags=["#fitness", "#gym", "#fitnessVenezuela", "#gimnasioVenezuela", "#suplementosFitness", "#entrenamiento", "#bodybuilding", "#crossfitVenezuela", "#musculacion"],
         audience_gender=AudienceGender.ALL,
         audience_age_min=20,
         audience_age_max=40,
