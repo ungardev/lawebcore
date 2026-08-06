@@ -132,7 +132,7 @@ class RailwayPg:
                 col, val = f.split("=", 1)
                 val = _strip_postgrest_op(val)
                 conds.append(f"{col} = ${len(params) + 1 + param_offset}")
-                params.append(val)
+                params.append(self._maybe_parse_datetime(val))
             elif f.startswith("!"):
                 continue
             elif f.lower().endswith(".is.null"):
@@ -141,26 +141,26 @@ class RailwayPg:
             elif ".gte." in f:
                 col, val = f.split(".gte.", 1)
                 conds.append(f"{col} >= ${len(params) + 1 + param_offset}")
-                params.append(val)
+                params.append(self._maybe_parse_datetime(val))
             elif ".lte." in f:
                 col, val = f.split(".lte.", 1)
                 conds.append(f"{col} <= ${len(params) + 1 + param_offset}")
-                params.append(val)
+                params.append(self._maybe_parse_datetime(val))
             elif ".gt." in f:
                 col, val = f.split(".gt.", 1)
                 conds.append(f"{col} > ${len(params) + 1 + param_offset}")
-                params.append(val)
+                params.append(self._maybe_parse_datetime(val))
             elif ".lt." in f:
                 col, val = f.split(".lt.", 1)
                 conds.append(f"{col} < ${len(params) + 1 + param_offset}")
-                params.append(val)
+                params.append(self._maybe_parse_datetime(val))
             elif ".in." in f:
                 col, rest = f.split(".in.", 1)
                 vals = rest.strip("()").split(",")
                 base = len(params) + 1 + param_offset
                 placeholders = [f"${base + i}" for i in range(len(vals))]
                 conds.append(f"{col} IN ({','.join(placeholders)})")
-                params.extend(vals)
+                params.extend(self._maybe_parse_datetime(v) for v in vals)
             elif ".ilike." in f:
                 col, val = f.split(".ilike.", 1)
                 conds.append(f"{col} ILIKE ${len(params) + 1 + param_offset}")
@@ -170,6 +170,17 @@ class RailwayPg:
         where = " WHERE " + " AND ".join(conds) if conds else ""
         logger.debug("[supabase_rest._parse_filters] filters=%s -> where=%s params=%s", filters, where, params)
         return where, params
+
+    def _maybe_parse_datetime(self, val: str) -> Any:
+        if not isinstance(val, str):
+            return val
+        if len(val) < 10 or val[4] != "-" or val[7] != "-":
+            return val
+        try:
+            normalized = val.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        except ValueError:
+            return val
 
     def _val_to_pg(self, v: Any) -> Any:
         if isinstance(v, dict):
