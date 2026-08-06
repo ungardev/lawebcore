@@ -32,14 +32,6 @@ export function DashboardPage() {
     <div className="space-y-7">
       <section className="flex flex-col gap-5 border-b border-divider pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${isConversationsError ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${isConversationsError ? 'bg-warning' : 'bg-success'}`} aria-hidden="true" />
-              {isConversationsError ? 'Actividad no disponible' : 'Operación sincronizada'}
-            </span>
-            <span>·</span>
-            <span>P.I.A.R. / Home</span>
-          </div>
           <h1 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
             Descubre Influencers con Lens
           </h1>

@@ -73,7 +73,7 @@ export function LensSearchPage() {
       <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-5 md:flex-row md:items-end md:justify-between">
         <div>
           <Button variant="ghost" size="sm" onClick={() => navigate('/lens')} className="mb-3 -ml-2 gap-1 text-xs text-muted-foreground"><ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />Volver a Lens</Button>
-          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Search className="h-4 w-4" aria-hidden="true" /></span><div><p className="text-eyebrow text-muted-foreground">Lens / ejecución</p><h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Nueva búsqueda</h1></div></div>
+          <div className="flex items-center gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Search className="h-4 w-4" aria-hidden="true" /></span><h1 className="text-2xl font-semibold tracking-tight text-foreground">Nueva búsqueda</h1></div>
           <p className="mt-3 max-w-2xl text-sm text-muted-foreground">Define el contexto mínimo y ejecuta un discovery run trazable.</p>
         </div>
         <Button variant="outline" onClick={() => navigate('/lens/runs')} className="gap-2"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />Ver historial</Button>

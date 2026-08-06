@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, MessageSquare, Send, Sparkles, Wand2 } from 'lucide-react';
+import { MessageSquare, Send, Sparkles, Wand2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,7 +25,6 @@ export function LensChatPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [input, setInput] = useState('');
-  const [totalCost, setTotalCost] = useState(0);
   const [showWizard, setShowWizard] = useState(false);
   const [wizardBrief, setWizardBrief] = useState<Partial<BriefStructured> | undefined>();
   const [wizardLoading, setWizardLoading] = useState(false);
@@ -59,10 +58,6 @@ export function LensChatPage() {
       navigate(`/lens/${conversations[0].id}`, { replace: true });
     }
   }, [conversations, id, loadConversation, navigate, conversation?.id]);
-
-  useEffect(() => {
-    setTotalCost(turns.reduce((sum, turn) => sum + (turn.cost_usd ?? 0), 0));
-  }, [turns]);
 
   const handleSend = async (text?: string) => {
     const message = (text ?? input).trim();
@@ -116,16 +111,7 @@ export function LensChatPage() {
         <div>
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/25 bg-primary/10 text-primary"><Sparkles className="h-4 w-4" aria-hidden="true" /></span>
-            <div>
-              <p className="text-eyebrow text-muted-foreground">Inteligencia / discovery</p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">Lens</h1>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5 text-success"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />Servicio online</span>
-            <span>·</span>
-            <span>Datos propios + Apify</span>
-            {totalCost > 0 && <span className="inline-flex items-center gap-1 rounded border border-divider bg-surface-sunken px-2 py-1 font-mono text-[10px]"><DollarSign className="h-3 w-3" aria-hidden="true" />${totalCost.toFixed(4)} sesión</span>}
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Lens</h1>
           </div>
         </div>
         <Button onClick={() => { setWizardBrief(undefined); setShowWizard(true); }} disabled={isCreating || wizardLoading} className="w-full gap-2 md:w-auto">
