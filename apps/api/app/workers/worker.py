@@ -408,6 +408,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "locationName": e.get("locationName", profiles[handle].get("locationName", "")),
                 "location": e.get("locationName", profiles[handle].get("location", "")),
                 "latestPosts": e.get("latestPosts", []),
+                "engagement_rate": e.get("engagement_rate"),
             })
 
         logger.info(
@@ -460,57 +461,56 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
-            if geo >= 0.85:
-                bio = p.get("biography") or p.get("bio") or ""
-                real_niche = niche_relevance(p, profile_data)
-                is_tienda = any(
-                    kw in bio.lower()
-                    for kw in ("tienda", "shop", "ventas", "pedidos", "catálogo",
-                               "mayor y detal", "envíos", "mercado libre", "delivery",
-                               "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
-                )
-                country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
-                scored.append({
-                    "run_id": run_id,
-                    "platform": "instagram",
-                    "handle": handle,
-                    "full_name": p.get("fullName") or p.get("full_name"),
-                    "bio": bio,
-                    "avatar_url": p.get("profilePicUrlHD") or p.get("profilePicUrl") or p.get("avatar_url") or (f"https://instagram.com/{handle}/profile_picture" if handle else ""),
-                    "country": country_val,
-                    "city": p.get("locationName") or p.get("location") or "",
-                    "followers": followers,
-                    "following": p.get("followsCount") or p.get("following_count") or 0,
-                    "posts_count": p.get("postsCount") or p.get("posts_count") or 0,
-                    "avg_likes": None,
-                    "avg_comments": None,
-                    "avg_views": None,
-                    "engagement_rate": round(er, 6),
-                    "audience_credibility": (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if p.get("verified") or p.get("is_verified") else 0),
-                    "audience_quality": 50,
-                    "audience_gender_split": {},
-                    "audience_age_buckets": {},
-                    "match_score": round(score_val, 2),
-                    "niche_relevance": round(real_niche * 100, 2),
-                    "geo_relevance": round(geo * 100, 1),
-                    "audience_relevance": None,
-                    "content_quality": None,
-                    "expected_reach": int(followers * 0.7),
-                    "expected_engagement": int(followers * er),
-                    "roi_estimate": None,
-                    "rationale": build_rationale(p, tier, followers, er, target_country=target_country),
+            bio = p.get("biography") or p.get("bio") or ""
+            real_niche = niche_relevance(p, profile_data)
+            is_tienda = any(
+                kw in bio.lower()
+                for kw in ("tienda", "shop", "ventas", "pedidos", "catálogo",
+                           "mayor y detal", "envíos", "mercado libre", "delivery",
+                           "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
+            )
+            country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
+            scored.append({
+                "run_id": run_id,
+                "platform": "instagram",
+                "handle": handle,
+                "full_name": p.get("fullName") or p.get("full_name"),
+                "bio": bio,
+                "avatar_url": p.get("profilePicUrlHD") or p.get("profilePicUrl") or p.get("avatar_url") or (f"https://instagram.com/{handle}/profile_picture" if handle else ""),
+                "country": country_val,
+                "city": p.get("locationName") or p.get("location") or "",
+                "followers": followers,
+                "following": p.get("followsCount") or p.get("following_count") or 0,
+                "posts_count": p.get("postsCount") or p.get("posts_count") or 0,
+                "avg_likes": None,
+                "avg_comments": None,
+                "avg_views": None,
+                "engagement_rate": round(er, 6),
+                "audience_credibility": (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if p.get("verified") or p.get("is_verified") else 0),
+                "audience_quality": 50,
+                "audience_gender_split": {},
+                "audience_age_buckets": {},
+                "match_score": round(score_val, 2),
+                "niche_relevance": round(real_niche * 100, 2),
+                "geo_relevance": round(geo * 100, 1),
+                "audience_relevance": None,
+                "content_quality": None,
+                "expected_reach": int(followers * 0.7),
+                "expected_engagement": int(followers * er),
+                "roi_estimate": None,
+                "rationale": build_rationale(p, tier, followers, er, target_country=target_country),
+                "tier": tier,
+                "is_tienda": is_tienda,
+                "status": "new",
+                "raw_payload": {
+                    "lens_score": round(score_val, 2),
                     "tier": tier,
-                    "is_tienda": is_tienda,
-                    "status": "new",
-                    "raw_payload": {
-                        "lens_score": round(score_val, 2),
-                        "tier": tier,
-                        "er_calculated": round(er, 6),
-                        "geo_score": geo,
-                        "cross_referenced": cross_referenced,
-                    },
-                    "fetched_at": datetime.now(timezone.utc),
-                })
+                    "er_calculated": round(er, 6),
+                    "geo_score": geo,
+                    "cross_referenced": cross_referenced,
+                },
+                "fetched_at": datetime.now(timezone.utc),
+            })
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
 

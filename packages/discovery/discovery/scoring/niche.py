@@ -33,7 +33,7 @@ def _keyword_overlap(text: str, keywords: list[str]) -> float:
     if not keywords:
         return 0.5
     matches = sum(1 for kw in keywords if kw and len(kw) > 2 and _safe_keyword_match(text, kw))
-    return min(matches / max(len(keywords) * 0.3, 1), 1.0)
+    return min(matches / max(len(keywords) * 0.5, 1), 1.0)
 
 
 def _hashtag_overlap(profile_tags: list[str], target_tags: list[str]) -> float:
