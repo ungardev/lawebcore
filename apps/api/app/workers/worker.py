@@ -514,6 +514,33 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
 
+        score_distribution = {
+            "total_scored": len(scored),
+            "scores_above_50": sum(1 for c in scored if (c.get("match_score") or 0) >= 50),
+            "scores_35_to_50": sum(1 for c in scored if 35 <= (c.get("match_score") or 0) < 50),
+            "scores_25_to_35": sum(1 for c in scored if 25 <= (c.get("match_score") or 0) < 35),
+            "scores_below_25": sum(1 for c in scored if (c.get("match_score") or 0) < 25),
+        }
+        top_5 = scored[:5]
+        top_5_summary = [
+            {
+                "handle": c.get("handle"),
+                "match_score": c.get("match_score"),
+                "geo": c.get("geo_relevance"),
+                "niche": c.get("niche_relevance"),
+                "er": c.get("engagement_rate"),
+                "followers": c.get("followers"),
+                "is_tienda": c.get("is_tienda"),
+            }
+            for c in top_5
+        ]
+        logger.info(
+            "scoring_diagnostic",
+            run_id=run_id,
+            distribution=score_distribution,
+            top_5=top_5_summary,
+        )
+
         MIN_MATCH_SCORE = 35
         exclude_stores = getattr(brief, "exclude_stores", True)
         qualified = [
