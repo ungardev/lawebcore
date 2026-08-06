@@ -812,20 +812,70 @@ async def get_api_costs(
     to_date: str | None = None,
     group_by: str = "provider",
 ):
-    """Retorna costos agregados de APIs externas."""
-    filters = []
+    """Retorna costos agregados de APIs externas.
+
+    Args:
+        provider: Filtrar por proveedor (apify, deepseek).
+        from_date: Fecha inicio ISO (YYYY-MM-DD).
+        to_date: Fecha fin ISO (YYYY-MM-DD).
+        group_by: 'provider' para resumen por proveedor,
+                  'operation' para desglose completo por actor/operacion.
+    """
+    filters: list[str] = []
     if provider:
         filters.append(f"provider=eq.{provider}")
+    if from_date:
+        filters.append(f"occurred_at.gte.{from_date}T00:00:00Z")
+    if to_date:
+        filters.append(f"occurred_at.lte.{to_date}T23:59:59Z")
 
-    result = await supabase_rest.select(
+    rows = await supabase_rest.select(
         table="api_costs",
-        select="provider,cost_usd,request_count",
+        select="provider,operation,cost_usd,request_count,tokens_input,tokens_output",
         filters=filters,
         order="cost_usd.desc",
-        limit=50,
+        limit=1000,
     )
 
-    return result
+    if not rows:
+        return {"total_cost_usd": 0, "by_group": [], "details": []}
+
+    if group_by == "provider":
+        by_group: dict[str, dict] = {}
+        for r in rows:
+            key = r["provider"]
+            if key not in by_group:
+                by_group[key] = {
+                    "provider": key,
+                    "total_cost_usd": 0.0,
+                    "total_requests": 0,
+                    "tokens_input": 0,
+                    "tokens_output": 0,
+                }
+            by_group[key]["total_cost_usd"] += float(r["cost_usd"] or 0)
+            by_group[key]["total_requests"] += int(r["request_count"] or 0)
+            by_group[key]["tokens_input"] += int(r["tokens_input"] or 0)
+            by_group[key]["tokens_output"] += int(r["tokens_output"] or 0)
+        groups = list(by_group.values())
+    else:
+        groups = [
+            {
+                "provider": r["provider"],
+                "operation": r["operation"],
+                "total_cost_usd": round(float(r["cost_usd"] or 0), 6),
+                "total_requests": int(r["request_count"] or 0),
+                "tokens_input": int(r["tokens_input"] or 0),
+                "tokens_output": int(r["tokens_output"] or 0),
+            }
+            for r in rows
+        ]
+
+    total = round(sum(float(r["cost_usd"] or 0) for r in rows), 6)
+    return {
+        "total_cost_usd": total,
+        "by_group": groups,
+        "count": len(rows),
+    }
 
 
 @router.get("/metrics")
