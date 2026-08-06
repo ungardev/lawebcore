@@ -101,6 +101,7 @@ def _serialize_candidate(c: dict) -> dict:
     is_tienda = c.get("is_tienda")
     if is_tienda is None:
         is_tienda = _is_tienda(bio)
+    raw = c.get("raw_payload") or {}
     return {
         "id": str(c.get("id", "")),
         "platform": c.get("platform", "instagram"),
@@ -109,7 +110,15 @@ def _serialize_candidate(c: dict) -> dict:
         "full_name": c.get("full_name") or c.get("fullName"),
         "avatar_url": c.get("avatar_url") or c.get("profilePicUrl"),
         "followers": int(followers) if followers else 0,
+        "following": int(c.get("following") or 0),
+        "posts_count": int(c.get("posts_count") or 0),
+        "avg_likes": int(c.get("avg_likes")) if c.get("avg_likes") is not None else None,
+        "avg_comments": int(c.get("avg_comments")) if c.get("avg_comments") is not None else None,
+        "avg_views": int(c.get("avg_views")) if c.get("avg_views") is not None else None,
         "engagement_rate": engagement_rate,
+        "audience_credibility": round(float(c.get("audience_credibility") or 0), 2),
+        "audience_quality": round(float(c.get("audience_quality") or 0), 2),
+        "is_verified": raw.get("is_verified") or c.get("is_verified") or False,
         "match_score": round(float(c.get("match_score") or 0), 1),
         "tier": tier,
         "niche_relevance": round(float(c.get("niche_relevance") or 0), 2),
@@ -124,6 +133,7 @@ def _serialize_candidate(c: dict) -> dict:
         "city": c.get("city"),
         "bio": bio[:300] if bio else None,
         "is_tienda": is_tienda,
+        "raw_payload": raw,
     }
 
 

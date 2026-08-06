@@ -433,14 +433,22 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         cross_ref_handles = step1_handles & step2_handles
         scored: list[dict] = []
         bots_filtered = 0
+        untracked_no_followers = 0
+        low_followers_skipped = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
+            if followers == 0:
+                untracked_no_followers += 1
+                continue
             if followers < plan.min_followers:
+                low_followers_skipped += 1
                 continue
 
             latest = p.get("latestPosts") or []
             er = 0.0
+            likes_avg = 0.0
+            comments_avg = 0.0
             if latest and followers > 0:
                 likes_avg = sum((post.get("likesCount") or 0) for post in latest) / max(len(latest), 1)
                 comments_avg = sum((post.get("commentsCount") or 0) for post in latest) / max(len(latest), 1)
@@ -470,6 +478,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                            "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
             )
             country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
+            is_verified = bool(p.get("verified") or p.get("is_verified"))
+            credibility = (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if is_verified else 0)
             scored.append({
                 "run_id": run_id,
                 "platform": "instagram",
@@ -482,11 +492,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "followers": followers,
                 "following": p.get("followsCount") or p.get("following_count") or 0,
                 "posts_count": p.get("postsCount") or p.get("posts_count") or 0,
-                "avg_likes": None,
-                "avg_comments": None,
+                "avg_likes": round(likes_avg) if latest else None,
+                "avg_comments": round(comments_avg) if latest else None,
                 "avg_views": None,
                 "engagement_rate": round(er, 6),
-                "audience_credibility": (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if p.get("verified") or p.get("is_verified") else 0),
+                "audience_credibility": credibility,
                 "audience_quality": 50,
                 "audience_gender_split": {},
                 "audience_age_buckets": {},
@@ -508,6 +518,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "er_calculated": round(er, 6),
                     "geo_score": geo,
                     "cross_referenced": cross_referenced,
+                    "is_verified": is_verified,
+                    "is_business": bool(p.get("isBusinessAccount") or p.get("is_business")),
+                    "hd_profile_pic_url": p.get("hdProfilePicUrl") or p.get("profilePicUrlHD"),
+                    "avg_likes_calc": round(likes_avg) if latest else None,
+                    "avg_comments_calc": round(comments_avg) if latest else None,
+                    "posts_analyzed": len(latest) if latest else 0,
                 },
                 "fetched_at": datetime.now(timezone.utc),
             })
@@ -538,6 +554,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "scoring_diagnostic",
             run_id=run_id,
             distribution=score_distribution,
+            skipped={
+                "untracked_no_followers": untracked_no_followers,
+                "low_followers_skipped": low_followers_skipped,
+                "bots_filtered": bots_filtered,
+            },
             top_5=top_5_summary,
         )
 

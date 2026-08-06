@@ -82,7 +82,15 @@ export interface DiscoveryCandidate {
   full_name: string | null;
   avatar_url: string | null;
   followers: number | null;
+  following: number | null;
+  posts_count: number | null;
+  avg_likes: number | null;
+  avg_comments: number | null;
+  avg_views: number | null;
   engagement_rate: number | null;
+  audience_credibility: number | null;
+  audience_quality: number | null;
+  is_verified: boolean | null;
   match_score: number | null;
   niche_relevance: number | null;
   geo_relevance: number | null;
@@ -97,6 +105,7 @@ export interface DiscoveryCandidate {
   bio: string | null;
   tier?: "NANO" | "MICRO" | "MID" | "MACRO" | null;
   is_tienda?: boolean;
+  raw_payload?: Record<string, unknown> | null;
 }
 
 export interface DiscoveryMessage {

@@ -15,6 +15,20 @@ export function formatFollowers(n: number | null): string {
   return String(n);
 }
 
+export function formatNumber(n: number | null): string {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+export function getCredibilityLabel(score: number | null): { label: string; color: string } {
+  if (score == null) return { label: "—", color: "text-muted-foreground" };
+  if (score >= 60) return { label: "Alta", color: "text-success" };
+  if (score >= 40) return { label: "Media", color: "text-warning" };
+  return { label: "Baja", color: "text-destructive" };
+}
+
 export function classifyTier(
   followers: number | null,
 ): "NANO" | "MICRO" | "MID" | "MACRO" | null {

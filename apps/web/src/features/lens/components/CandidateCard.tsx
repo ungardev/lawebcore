@@ -1,12 +1,14 @@
 import { useState } from 'react'
-import { Bookmark, BookmarkCheck, ExternalLink, X } from 'lucide-react'
+import { Bookmark, BookmarkCheck, ExternalLink, X, BadgeCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
   classifyTier,
   formatEngagement,
   formatFollowers,
+  formatNumber,
   getTierColor,
+  getCredibilityLabel,
   isTienda,
 } from '@/lib/format'
 import type { DiscoveryCandidate } from '../types/discovery'
@@ -34,6 +36,9 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
   const displayName = candidate.full_name && candidate.full_name !== candidate.handle
     ? candidate.full_name
     : null
+  const credibility = getCredibilityLabel(candidate.audience_credibility)
+  const rawPayload = candidate.raw_payload as Record<string, unknown> | null
+  const postsAnalyzed = rawPayload?.posts_analyzed as number | null
 
   return (
     <article
@@ -45,39 +50,49 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
       <div className="flex items-start gap-3">
         {showInitials ? (
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-divider bg-surface-raised text-sm font-semibold text-muted-foreground"
+            className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-divider bg-surface-raised text-sm font-semibold text-muted-foreground"
             aria-hidden="true"
           >
             {candidate.handle.slice(0, 2).toUpperCase()}
+            {candidate.is_verified && (
+              <BadgeCheck className="absolute -bottom-1 -right-1 h-4 w-4 fill-primary text-background" aria-hidden="true" />
+            )}
           </div>
         ) : (
-          <img
-            src={avatarUrl ?? undefined}
-            alt={displayName || `Avatar de @${candidate.handle}`}
-            className="h-12 w-12 shrink-0 rounded-lg border border-divider object-cover"
-            onError={() => setImgFailed(true)}
-          />
+          <div className="relative shrink-0">
+            <img
+              src={avatarUrl ?? undefined}
+              alt={displayName || `Avatar de @${candidate.handle}`}
+              className="h-12 w-12 rounded-lg border border-divider object-cover"
+              onError={() => setImgFailed(true)}
+            />
+            {candidate.is_verified && (
+              <BadgeCheck className="absolute -bottom-1 -right-1 h-4 w-4 fill-primary text-background" aria-hidden="true" />
+            )}
+          </div>
         )}
 
         <div className="min-w-0 flex-1">
-          {candidate.url ? (
-            <a
-              href={candidate.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
-            >
-              <span className="truncate">@{candidate.handle}</span>
-              <PlatformIcon platform={candidate.platform} size="sm" />
-              <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="sr-only">Abrir perfil</span>
-            </a>
-          ) : (
-            <span className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold text-foreground">
-              <span className="truncate">@{candidate.handle}</span>
-              <PlatformIcon platform={candidate.platform} size="sm" />
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {candidate.url ? (
+              <a
+                href={candidate.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold text-foreground transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2"
+              >
+                <span className="truncate">@{candidate.handle}</span>
+                <PlatformIcon platform={candidate.platform} size="sm" />
+                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <span className="sr-only">Abrir perfil</span>
+              </a>
+            ) : (
+              <span className="inline-flex max-w-full items-center gap-1.5 text-sm font-semibold text-foreground">
+                <span className="truncate">@{candidate.handle}</span>
+                <PlatformIcon platform={candidate.platform} size="sm" />
+              </span>
+            )}
+          </div>
 
           {displayName && (
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -94,6 +109,12 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
                 )}
               >
                 {tier}
+              </span>
+            )}
+            {candidate.is_verified && (
+              <span className="flex items-center gap-0.5 rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                <BadgeCheck className="h-3 w-3" aria-hidden="true" />
+                Verificado
               </span>
             )}
             {candidate.country && <CountryFlag countryCode={candidate.country} size="sm" />}
@@ -128,11 +149,23 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
         </p>
       )}
 
-      <div className="mt-4 grid grid-cols-3 divide-x border-y border-divider py-3">
+      <div className="mt-4 grid grid-cols-4 divide-x border-y border-divider py-3">
         <Metric label="Seguidores" value={formatFollowers(candidate.followers)} />
         <Metric label="Engagement" value={formatEngagement(candidate.engagement_rate)} />
-        <Metric label="Ubicación" value={candidate.city || candidate.country || '—'} />
+        <Metric label="Posts" value={formatNumber(candidate.posts_count)} />
+        <Metric label="Credibilidad" value={credibility.label} valueColor={credibility.color} />
       </div>
+
+      {!compact && (candidate.avg_likes != null || candidate.avg_comments != null) && (
+        <div className="mt-2 grid grid-cols-2 divide-x border-b border-divider py-2">
+          {candidate.avg_likes != null && (
+            <Metric label="Prom. Likes" value={formatNumber(candidate.avg_likes)} />
+          )}
+          {candidate.avg_comments != null && (
+            <Metric label="Prom. Comentarios" value={formatNumber(candidate.avg_comments)} />
+          )}
+        </div>
+      )}
 
       {!compact && candidate.rationale && (
         <p className="mt-4 border-l-2 border-primary/40 pl-3 text-xs leading-5 text-muted-foreground">
@@ -173,11 +206,13 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
   )
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
-    <div className="min-w-0 px-3 first:pl-0 last:pr-0">
+    <div className="min-w-0 px-2 first:pl-0 last:pr-0">
       <p className="truncate text-[10px] uppercase tracking-[0.1em] text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-foreground">{value}</p>
+      <p className={cn("mt-1 truncate text-sm font-semibold text-foreground", valueColor)}>
+        {value}
+      </p>
     </div>
   )
 }
