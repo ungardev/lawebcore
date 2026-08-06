@@ -858,17 +858,23 @@ async def get_api_costs(
             by_group[key]["tokens_output"] += int(r["tokens_output"] or 0)
         groups = list(by_group.values())
     else:
-        groups = [
-            {
-                "provider": r["provider"],
-                "operation": r["operation"],
-                "total_cost_usd": round(float(r["cost_usd"] or 0), 6),
-                "total_requests": int(r["request_count"] or 0),
-                "tokens_input": int(r["tokens_input"] or 0),
-                "tokens_output": int(r["tokens_output"] or 0),
-            }
-            for r in rows
-        ]
+        op_group: dict[tuple, dict] = {}
+        for r in rows:
+            key = (r["provider"], r["operation"])
+            if key not in op_group:
+                op_group[key] = {
+                    "provider": r["provider"],
+                    "operation": r["operation"],
+                    "total_cost_usd": 0.0,
+                    "total_requests": 0,
+                    "tokens_input": 0,
+                    "tokens_output": 0,
+                }
+            op_group[key]["total_cost_usd"] += float(r["cost_usd"] or 0)
+            op_group[key]["total_requests"] += int(r["request_count"] or 0)
+            op_group[key]["tokens_input"] += int(r["tokens_input"] or 0)
+            op_group[key]["tokens_output"] += int(r["tokens_output"] or 0)
+        groups = list(op_group.values())
 
     total = round(sum(float(r["cost_usd"] or 0) for r in rows), 6)
     return {
