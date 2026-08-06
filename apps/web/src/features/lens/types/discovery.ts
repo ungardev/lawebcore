@@ -91,6 +91,8 @@ export interface DiscoveryCandidate {
   audience_credibility: number | null;
   audience_quality: number | null;
   is_verified: boolean | null;
+  is_creator: boolean | null;
+  creator_signals: number | null;
   match_score: number | null;
   niche_relevance: number | null;
   geo_relevance: number | null;

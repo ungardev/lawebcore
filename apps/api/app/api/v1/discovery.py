@@ -119,6 +119,8 @@ def _serialize_candidate(c: dict) -> dict:
         "audience_credibility": round(float(c.get("audience_credibility") or 0), 2),
         "audience_quality": round(float(c.get("audience_quality") or 0), 2),
         "is_verified": raw.get("is_verified") or c.get("is_verified") or False,
+        "is_creator": raw.get("is_creator") or False,
+        "creator_signals": raw.get("creator_signals") or 0,
         "match_score": round(float(c.get("match_score") or 0), 1),
         "tier": tier,
         "niche_relevance": round(float(c.get("niche_relevance") or 0), 2),

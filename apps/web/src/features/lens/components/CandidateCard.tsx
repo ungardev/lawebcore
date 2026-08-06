@@ -117,6 +117,12 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
                 Verificado
               </span>
             )}
+            {candidate.is_creator && (
+              <span className="flex items-center gap-0.5 rounded border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                <BadgeCheck className="h-3 w-3" aria-hidden="true" />
+                Creator
+              </span>
+            )}
             {candidate.country && <CountryFlag countryCode={candidate.country} size="sm" />}
             {isTienda(candidate.bio) && (
               <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">

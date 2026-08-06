@@ -48,7 +48,7 @@ from discovery.candidate_analyzer import candidate_analyzer
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(5)
-MAX_HANDLES_TO_ENRICH = 50
+MAX_HANDLES_TO_ENRICH = 100
 MAX_POSTS_PER_HASHTAG = 20
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
@@ -328,6 +328,41 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 elif bot_penalty >= 1:
                     rough *= 0.85
 
+                is_business = p.get("isBusinessAccount") or p.get("is_business")
+                bio_lower = bio.lower()
+                commerce_signals = (
+                    ("tienda" in bio_lower or "shop" in bio_lower) +
+                    ("ventas" in bio_lower or "pedidos" in bio_lower) +
+                    ("catálogo" in bio_lower or "mayor y detal" in bio_lower) +
+                    ("envíos" in bio_lower or "delivery" in bio_lower) +
+                    ("comprar" in bio_lower or "adquirir" in bio_lower) +
+                    ("whatsapp" in bio_lower or "telf" in bio_lower or "teléfono" in bio_lower) +
+                    ("precio" in bio_lower or "oferta" in bio_lower or "descuento" in bio_lower) +
+                    ("horario" in bio_lower or "sucursal" in bio_lower or "local" in bio_lower) +
+                    ("market" in bio_lower or "boutique" in bio_lower or "almacén" in bio_lower)
+                )
+                creator_signals = (
+                    ("creador" in bio_lower or "content creator" in bio_lower or "reviewer" in bio_lower) +
+                    ("vlogger" in bio_lower or "youtuber" in bio_lower or "tiktoker" in bio_lower) +
+                    ("streamer" in bio_lower or "entrenador" in bio_lower or "coach" in bio_lower) +
+                    ("atleta" in bio_lower or "deportista" in bio_lower or "fitness" in bio_lower) +
+                    ("influencer" in bio_lower or "blogger" in bio_lower or "periodista" in bio_lower) +
+                    ("presentador" in bio_lower or "comunicador" in bio_lower or "actor" in bio_lower) +
+                    ("cantante" in bio_lower or "músico" in bio_lower or "artista" in bio_lower) +
+                    ("creativo" in bio_lower or "emprendedor" in bio_lower and not commerce_signals) +
+                    ("diseñador" in bio_lower or "fotógrafo" in bio_lower or "artista" in bio_lower)
+                )
+                if is_business and commerce_signals > 0:
+                    rough *= 0.35
+                elif commerce_signals >= 3:
+                    rough *= 0.5
+                elif commerce_signals >= 1:
+                    rough *= 0.75
+                elif creator_signals >= 2:
+                    rough *= 1.3
+                elif creator_signals == 1:
+                    rough *= 1.15
+
                 scored.append((handle, rough))
 
             scored.sort(key=lambda x: x[1], reverse=True)
@@ -417,6 +452,28 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             total_profiles=len(profiles),
         )
 
+        if enriched_profiles:
+            handles_for_analytics = list({e.get("username") for e in enriched_profiles if e.get("username")})
+            if handles_for_analytics:
+                try:
+                    analytics_results = await apify_client.analyze_profile_engagement(
+                        usernames=handles_for_analytics,
+                        posts_to_analyze=30,
+                        discovery_run_id=run_id,
+                    )
+                    analytics_map = {r.get("username"): r for r in analytics_results if r.get("username")}
+                    for e in enriched_profiles:
+                        handle = e.get("username", "")
+                        if handle in analytics_map:
+                            e["engagement_analytics"] = analytics_map[handle]
+                    logger.info(
+                        "step3_engagement_analytics_done",
+                        profiles_analyzed=len(handles_for_analytics),
+                        results_received=len(analytics_results),
+                    )
+                except Exception as exc:
+                    logger.warning("step3_engagement_analytics_failed", run_id=run_id, error=str(exc))
+
         await _run_update_metadata(run_id, {
             "current_step": "step4_scoring",
             "completed_steps": ["step1_hashtag_search", "step2_keyword_search", "step3_profile_enrichment"],
@@ -479,7 +536,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
             is_verified = bool(p.get("verified") or p.get("is_verified"))
-            credibility = (20 if p.get("isBusinessAccount") or p.get("is_business") else 0) + (20 if is_verified else 0)
+            is_business = bool(p.get("isBusinessAccount") or p.get("is_business"))
+            credibility = (20 if is_business else 0) + (20 if is_verified else 0)
+            creator_signals = sum(1 for kw in (
+                "creador", "content creator", "reviewer", "vlogger",
+                "youtuber", "tiktoker", "streamer", "entrenador",
+                "coach", "atleta", "deportista", "fitness",
+                "influencer", "blogger", "periodista", "presentador",
+                "comunicador", "actor", "cantante", "músico", "artista",
+                "creativo", "emprendedor", "diseñador", "fotógrafo",
+            ) if kw in bio.lower())
+            is_creator = creator_signals > 0 and not is_tienda and not is_business
             scored.append({
                 "run_id": run_id,
                 "platform": "instagram",
@@ -519,11 +586,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "geo_score": geo,
                     "cross_referenced": cross_referenced,
                     "is_verified": is_verified,
-                    "is_business": bool(p.get("isBusinessAccount") or p.get("is_business")),
+                    "is_business": is_business,
+                    "is_creator": is_creator,
+                    "creator_signals": creator_signals,
                     "hd_profile_pic_url": p.get("hdProfilePicUrl") or p.get("profilePicUrlHD"),
                     "avg_likes_calc": round(likes_avg) if latest else None,
                     "avg_comments_calc": round(comments_avg) if latest else None,
                     "posts_analyzed": len(latest) if latest else 0,
+                    "engagement_analytics": p.get("engagement_analytics"),
                 },
                 "fetched_at": datetime.now(timezone.utc),
             })
