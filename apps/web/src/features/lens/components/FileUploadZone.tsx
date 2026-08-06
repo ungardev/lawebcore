@@ -1,4 +1,4 @@
-import { useCallback, useId, useState } from 'react';
+import { useCallback, useId, useState, type ChangeEvent, type DragEvent } from 'react';
 import { AlertCircle, CheckCircle2, FileText, Loader2, Upload, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,12 +25,12 @@ export function FileUploadZone({ onBriefExtracted, onClear, isLoading, onLoading
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
-    const allowedTypes = ['application/pdf', 'text/plain', 'text/csv'];
+    const allowedTypes = ['application/pdf', 'text/plain', 'text/csv', 'text/markdown', 'application/json'];
     const extension = file.name.toLowerCase().split('.').pop();
-    const allowedExtensions = ['pdf', 'txt', 'csv'];
+    const allowedExtensions = ['pdf', 'txt', 'csv', 'md', 'json'];
 
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(extension || '')) {
-      setErrorMessage('Formato no soportado. Usa PDF, TXT o CSV.');
+      setErrorMessage('Formato no soportado. Usa PDF, TXT, CSV, MD o JSON.');
       setUploadState('error');
       return;
     }
@@ -58,14 +58,14 @@ export function FileUploadZone({ onBriefExtracted, onClear, isLoading, onLoading
     }
   }, [onBriefExtracted, onLoadingChange]);
 
-  const handleDrop = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragOver(false);
     const file = event.dataTransfer.files[0];
     if (file) void handleFile(file);
   }, [handleFile]);
 
-  const handleInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) void handleFile(file);
     event.target.value = '';
@@ -130,10 +130,10 @@ export function FileUploadZone({ onBriefExtracted, onClear, isLoading, onLoading
 
   return (
     <div onDragOver={(event) => { event.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)} onDrop={handleDrop} className={cn('rounded-md border border-dashed p-4 transition-colors', dragOver ? 'border-primary bg-primary/10' : 'border-divider hover:border-primary/50 hover:bg-surface-raised')}>
-      <div className="flex flex-col items-center gap-3 text-center">
+      <div className="flex flex-col items-center gap-3 text-center" aria-live="polite">
         <span className={cn('flex h-10 w-10 items-center justify-center rounded-md transition-colors', dragOver ? 'bg-primary/15 text-primary' : 'bg-surface-raised text-muted-foreground')}><Upload className="h-5 w-5" aria-hidden="true" /></span>
-        <div><p className="text-sm font-medium text-foreground">Arrastra tu brief aquí</p><p className="mt-1 text-xs text-muted-foreground">PDF · TXT · CSV · máximo 5MB</p></div>
-        <Button asChild type="button" variant="outline" size="sm" className="gap-2"><label htmlFor={inputId} className="cursor-pointer"><FileText className="h-3.5 w-3.5" aria-hidden="true" />Seleccionar archivo<input id={inputId} type="file" accept=".pdf,.txt,.csv" onChange={handleInputChange} className="sr-only" /></label></Button>
+        <div><p className="text-sm font-medium text-foreground">Arrastra tu brief aquí</p><p className="mt-1 text-xs text-muted-foreground">PDF · TXT · CSV · MD · JSON · máximo 5MB</p></div>
+        <Button asChild type="button" variant="outline" size="sm" className="gap-2"><label htmlFor={inputId} className="cursor-pointer"><FileText className="h-3.5 w-3.5" aria-hidden="true" />Seleccionar archivo<input id={inputId} type="file" accept=".pdf,.txt,.csv,.md,.json" onChange={handleInputChange} className="sr-only" /></label></Button>
         <p className="text-[10px] text-muted-foreground">La extracción solo lee el documento para preparar el brief.</p>
       </div>
     </div>

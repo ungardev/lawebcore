@@ -73,8 +73,7 @@ export default {
           purple: 'hsl(var(--brand-purple))',
           blue: 'hsl(var(--brand-blue))',
           'blue-hover': 'hsl(var(--brand-blue-hover))',
-        orange: '#F97316',
-      },
+        },
     },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
@@ -87,12 +86,12 @@ export default {
         sm: 'calc(var(--radius) - 4px)',
       },
       boxShadow: {
-        card: '0 2px 8px rgba(0,0,0,0.04)',
-        'card-hover': '0 4px 16px rgba(0,0,0,0.08)',
-        elevated: '0 12px 48px rgba(0,0,0,0.12)',
-        soft: '0 2px 8px rgba(0,0,0,0.04)',
-        elevated2: '0 8px 32px rgba(0,0,0,0.08)',
-        glow: '0 0 24px rgba(168,85,247,0.25)',
+        card: 'none',
+        'card-hover': '0 0 0 1px rgba(59, 130, 246, 0.24)',
+        elevated: '0 18px 48px rgba(0, 0, 0, 0.34)',
+        soft: '0 1px 2px rgba(0, 0, 0, 0.18), 0 8px 24px rgba(0, 0, 0, 0.12)',
+        elevated2: '0 12px 40px rgba(0, 0, 0, 0.26)',
+        glow: '0 0 0 1px rgba(59, 130, 246, 0.28), 0 8px 24px rgba(15, 23, 42, 0.24)',
       },
       backgroundImage: {
         'brand-gradient': 'linear-gradient(135deg, hsl(var(--brand-pink)), hsl(var(--brand-purple)), hsl(var(--brand-blue)))',

@@ -22,8 +22,10 @@ export function useRunPolling(runId: string | null) {
     setProgress(null)
 
     return () => {
-      ++generationRef.current
-      setIsPolling(false)
+      if (generationRef.current === gen) {
+        generationRef.current = gen + 1
+        setIsPolling(false)
+      }
     }
   }, [runId])
 

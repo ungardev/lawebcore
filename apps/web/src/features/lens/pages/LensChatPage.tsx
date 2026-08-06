@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, MessageSquare, Send, Sparkles, TrendingUp, Wand2 } from 'lucide-react';
+import { DollarSign, MessageSquare, Send, Sparkles, Wand2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,7 +14,6 @@ import { BriefConfirmCard } from '../components/BriefConfirmCard';
 import { BriefWizard } from '../components/BriefWizard';
 import { ChatMessage } from '../components/ChatMessage';
 import { LensEmptyState } from '../components/LensEmptyState';
-import { SearchProgress } from '../components/SearchProgress';
 import type { BriefStructured, DiscoveryConversation } from '../types/discovery';
 
 const WELCOME = `Puedo ayudarte a descubrir creadores, revisar campañas y preparar una búsqueda con datos reales de la agencia.
@@ -45,6 +44,7 @@ export function LensChatPage() {
     saveCandidate,
     dismissCandidate,
     resetConversation,
+    isCreating,
   } = useDiscoveryConversation();
 
   const { data: conversations = [] } = useQuery({
@@ -128,7 +128,7 @@ export function LensChatPage() {
             {totalCost > 0 && <span className="inline-flex items-center gap-1 rounded border border-divider bg-surface-sunken px-2 py-1 font-mono text-[10px]"><DollarSign className="h-3 w-3" aria-hidden="true" />${totalCost.toFixed(4)} sesión</span>}
           </div>
         </div>
-        <Button onClick={() => { setWizardBrief(undefined); setShowWizard(true); }} className="w-full gap-2 md:w-auto">
+        <Button onClick={() => { setWizardBrief(undefined); setShowWizard(true); }} disabled={isCreating || wizardLoading} className="w-full gap-2 md:w-auto">
           <Wand2 className="h-4 w-4" aria-hidden="true" />
           Nueva búsqueda
         </Button>
@@ -140,20 +140,20 @@ export function LensChatPage() {
             <div><p className="text-eyebrow text-muted-foreground">Sesiones</p><p className="mt-1 text-xs font-medium text-foreground">Conversaciones</p></div>
             <span className="font-mono text-[10px] text-muted-foreground">{conversations.length}</span>
           </div>
-          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
+          <div className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2" aria-label="Lista de sesiones">
             {conversations.length === 0 ? <p className="px-3 py-5 text-center text-xs text-muted-foreground">Sin conversaciones guardadas.</p> : conversations.map((item) => (
-              <button key={item.id} type="button" onClick={() => navigate(`/lens/${item.id}`)} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
+              <button key={item.id} type="button" onClick={() => navigate(`/lens/${item.id}`)} aria-current={item.id === id ? 'page' : undefined} className={cn('w-full rounded-md border px-3 py-3 text-left transition-colors focus-ring', item.id === id ? 'border-primary/30 bg-primary/10' : 'border-transparent hover:border-divider hover:bg-surface-raised')}>
                 <span className="block truncate text-xs font-medium text-foreground">{item.title || item.accumulated_brief?.slice(0, 42) || 'Nueva búsqueda'}</span>
                 <span className="mt-1 block text-[10px] text-muted-foreground">{formatDate(item.last_message_at)} · {item.message_count} mensajes</span>
               </button>
             ))}
           </div>
           <div className="border-t border-divider p-2">
-            <Button variant="ghost" size="sm" onClick={handleNewConversation} className="w-full justify-start gap-2 text-xs text-muted-foreground"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />Abrir conversación vacía</Button>
+            <Button variant="ghost" size="sm" onClick={handleNewConversation} disabled={isCreating} className="w-full justify-start gap-2 text-xs text-muted-foreground"><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />Abrir conversación vacía</Button>
           </div>
         </aside>
 
-        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Lens">
+        <section className="flex min-h-[34rem] min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Lens" aria-busy={isLoading}>
           {!conversation && !isLoading ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />
@@ -165,16 +165,15 @@ export function LensChatPage() {
                 <div className="flex items-center gap-2 text-xs"><span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" /><span className="font-medium text-foreground">Lens operativo</span></div>
                 <span className="font-mono text-[10px] text-muted-foreground">CHAT / DISCOVERY</span>
               </div>
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-6" aria-live="polite">
                 {turns.length === 0 && <div className="max-w-2xl border-l-2 border-primary/40 pl-4 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{WELCOME}</div>}
                 {turns.map((turn) => <ChatMessage key={turn.id} turn={turn} onSaveCandidate={saveCandidate} onDismissCandidate={dismissCandidate} />)}
-                {turns.some((t) => t.progress && t.isLoading) && <SearchProgress progress={turns.find((t) => t.progress && t.isLoading)!.progress!} />}
                 {isLoading && <div className="flex items-center gap-2 text-xs text-muted-foreground"><span className="flex gap-1" aria-hidden="true"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:150ms]" /><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:300ms]" /></span>Procesando solicitud…</div>}
                 {error && <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</p>}
                 <div ref={bottomRef} />
               </div>
               {pendingBrief && <div className="border-t border-divider p-4"><BriefConfirmCard brief={pendingBrief} onConfirm={confirmBrief} onEdit={() => { setWizardBrief(pendingBrief); setShowWizard(true); }} isLoading={isLoading} /></div>}
-              <div className="border-t border-divider bg-surface-sunken p-4">
+              <div className="border-t border-divider bg-surface-sunken p-4" aria-label="Composer de Lens">
                 <ActionChips onSend={handleSend} disabled={isLoading} />
                 <div className="flex items-end gap-2 rounded-md border border-divider bg-background p-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10">
                   <Textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); } }} placeholder="Describe el producto, audiencia o campaña…" rows={2} className="min-h-12 resize-none border-0 bg-transparent px-2 py-1 shadow-none focus-visible:ring-0" disabled={isLoading} aria-label="Mensaje para Lens" />

@@ -66,7 +66,7 @@ export function Topbar({ collapsed = false, onToggleCollapse, onOpenMobileMenu }
         >
           <Search className="h-4 w-4 shrink-0 transition-colors group-hover:text-primary" aria-hidden="true" />
           <span className="truncate text-xs">Buscar campañas, clientes, creadores…</span>
-          <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded border border-divider bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">⌘ K</kbd>
+          <kbd className="ml-auto hidden shrink-0 items-center gap-1 rounded border border-divider bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">Ctrl K</kbd>
         </Button>
 
         <div className="ml-auto flex items-center gap-1.5 md:gap-2">

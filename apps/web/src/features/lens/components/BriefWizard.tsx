@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
   Camera,
   Check,
@@ -100,7 +101,7 @@ const VENEZUELA_STATES = [
   { value: 'Delta Amacuro', label: 'Delta Amacuro' },
 ]
 
-const PLATFORMS: { value: Platform; label: string; icon: React.ReactNode }[] = [
+const PLATFORMS: { value: Platform; label: string; icon: ReactNode }[] = [
   { value: 'instagram', label: 'Instagram', icon: <Camera className="h-6 w-6" /> },
   { value: 'tiktok', label: 'TikTok', icon: <Music2 className="h-6 w-6" /> },
   { value: 'youtube', label: 'YouTube', icon: <PlayCircle className="h-6 w-6" /> },
@@ -181,7 +182,7 @@ export function BriefWizard({
       audience_age_max: extracted.audience_age_max ?? 45,
       audience_countries: extracted.audience_countries ?? ['VE'],
       audience_cities: extracted.audience_cities ?? [],
-      audience_states: (extracted as any).audience_states ?? [],
+      audience_states: extracted.audience_states ?? [],
       platforms: extracted.platforms ?? ['instagram'],
       tone: extracted.tone ?? [],
       additional_context: extracted.additional_context ?? '',
@@ -279,9 +280,12 @@ export function BriefWizard({
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-eyebrow text-muted-foreground">Nueva búsqueda / configuración</p>
-            <h2 className="mt-1 text-lg font-semibold text-foreground">
-              Construye el brief de discovery
-            </h2>
+            <DialogTitle asChild>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">
+                Construye el brief de discovery
+              </h2>
+            </DialogTitle>
+            <DialogDescription className="sr-only">Configura producto, audiencia, geografía y plataformas para iniciar una búsqueda.</DialogDescription>
           </div>
           <span className="font-mono text-xs text-muted-foreground">0{step} / 06</span>
         </div>

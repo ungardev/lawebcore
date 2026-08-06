@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { CheckCircle, Clock, History, Loader2, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { discoveryRunsApi } from '@/lib/api';
 import type { DiscoveryRun, DiscoveryRunStatus } from '../types/discovery';
 
-const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: React.ReactNode; className: string }> = {
+const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: ReactNode; className: string }> = {
   pending: { label: 'Pendiente', icon: <Clock className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-warning/30 bg-warning/10 text-warning' },
   running: { label: 'En curso', icon: <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />, className: 'border-info/30 bg-info/10 text-info' },
   partial: { label: 'Parcial', icon: <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-warning/30 bg-warning/10 text-warning' },

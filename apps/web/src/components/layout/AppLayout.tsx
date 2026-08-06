@@ -26,6 +26,7 @@ export function AppLayout() {
           mobileOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         } transition-opacity duration-200`}
         aria-hidden={!mobileOpen}
+        inert={!mobileOpen ? true : undefined}
         onClick={() => setMobileOpen(false)}
       >
         <div className="absolute inset-0 bg-black/70" />

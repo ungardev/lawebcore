@@ -28,10 +28,11 @@ export function useDiscoveryRun() {
     setIsLoading(true);
     setError(null);
     try {
-      const [loadedRun, loadedCandidates] = await Promise.all([
-        lensApi.search.getRun(runId),
-        lensApi.search.getCandidates(runId, { limit: 50 }),
-      ]);
+      const loadedRun = await lensApi.search.getRun(runId);
+      const shouldLoadCandidates = ['completed', 'partial'].includes(loadedRun.status);
+      const loadedCandidates = shouldLoadCandidates
+        ? await lensApi.search.getCandidates(runId, { limit: 50 })
+        : [];
       setRun(loadedRun);
       setCandidates(loadedCandidates);
       return { run: loadedRun, candidates: loadedCandidates };
@@ -65,6 +66,8 @@ export function useDiscoveryRun() {
 
   const cancelPoll = useCallback(() => {
     cancelledRef.current = true;
+    setRun((previous) => previous ? { ...previous, status: 'cancelled' } : previous);
+    setIsLoading(false);
   }, []);
 
   return {

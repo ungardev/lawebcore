@@ -1,11 +1,13 @@
+import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronRight,
+  CircleAlert,
   History,
+  Loader2,
   MessageSquare,
   Search,
-  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { lensApi } from '@/features/lens/api/lensApi';
@@ -14,7 +16,11 @@ import type { DiscoveryConversation } from '@/features/lens/types/discovery';
 export function DashboardPage() {
   const navigate = useNavigate();
 
-  const { data: recentConversations } = useQuery<DiscoveryConversation[]>({
+  const {
+    data: recentConversations,
+    isLoading: isConversationsLoading,
+    isError: isConversationsError,
+  } = useQuery<DiscoveryConversation[]>({
     queryKey: ['lens-conversations-recent'],
     queryFn: () => lensApi.conversations.list({ limit: 5 }),
     retry: 1,
@@ -27,9 +33,9 @@ export function DashboardPage() {
       <section className="flex flex-col gap-5 border-b border-divider pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-2.5 py-1 text-success">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-              Operación sincronizada
+            <span className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 ${isConversationsError ? 'border-warning/30 bg-warning/10 text-warning' : 'border-success/30 bg-success/10 text-success'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${isConversationsError ? 'bg-warning' : 'bg-success'}`} aria-hidden="true" />
+              {isConversationsError ? 'Actividad no disponible' : 'Operación sincronizada'}
             </span>
             <span>·</span>
             <span>P.I.A.R. / Home</span>
@@ -42,9 +48,12 @@ export function DashboardPage() {
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <Button variant="outline" onClick={() => navigate('/lens/search')} className="gap-2">
+            Búsqueda directa
+          </Button>
           <Button onClick={() => navigate('/lens')} className="gap-2">
             <Search className="h-4 w-4" aria-hidden="true" />
-            Buscar creadores
+            Abrir Lens
           </Button>
         </div>
       </section>
@@ -55,9 +64,16 @@ export function DashboardPage() {
             <p className="text-eyebrow text-muted-foreground">Actividad reciente</p>
             <h2 id="conversations-title" className="mt-1 text-sm font-semibold text-foreground">Conversaciones del Lens</h2>
           </div>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/lens/runs')} className="h-8 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground">
+            Ver historial <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
         </div>
         <div className="overflow-hidden rounded-lg border border-divider bg-panel">
-          {conversations.length > 0 ? (
+          {isConversationsLoading ? (
+            <div className="flex min-h-52 items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />Cargando actividad…</div>
+          ) : isConversationsError ? (
+            <div className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center"><CircleAlert className="h-5 w-5 text-warning" aria-hidden="true" /><p className="mt-3 text-sm font-medium text-foreground">No se pudo cargar la actividad</p><p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">Puedes abrir Lens y continuar con una nueva búsqueda.</p><Button size="sm" variant="link" onClick={() => navigate('/lens')} className="mt-2 text-xs text-primary">Abrir Lens</Button></div>
+          ) : conversations.length > 0 ? (
             <div className="divide-y divide-divider">
               {conversations.map((conversation) => (
                 <button
@@ -94,7 +110,7 @@ export function DashboardPage() {
   );
 }
 
-function EmptyPanel({ icon, title, description, actionLabel, onAction }: { icon: React.ReactNode; title: string; description: string; actionLabel: string; onAction: () => void }) {
+function EmptyPanel({ icon, title, description, actionLabel, onAction }: { icon: ReactNode; title: string; description: string; actionLabel: string; onAction: () => void }) {
   return (
     <div className="flex min-h-52 flex-col items-center justify-center px-6 py-10 text-center">
       <span className="flex h-10 w-10 items-center justify-center rounded-md border border-divider bg-surface-raised text-muted-foreground">{icon}</span>

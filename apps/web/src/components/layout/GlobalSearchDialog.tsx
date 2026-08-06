@@ -64,6 +64,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   const navigate = useNavigate();
   const location = useLocation();
   const [query, setQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -78,7 +79,10 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   }, [onOpenChange]);
 
   useEffect(() => {
-    if (!open) setQuery('');
+    if (!open) {
+      setQuery('');
+      setActiveIndex(0);
+    }
   }, [open]);
 
   const destinations = useMemo(() => {
@@ -93,9 +97,28 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     );
   }, [query]);
 
+  useEffect(() => {
+    setActiveIndex((previous) => Math.min(previous, Math.max(destinations.length - 1, 0)));
+  }, [destinations.length]);
+
   const handleSelect = (path: string) => {
     onOpenChange(false);
     if (path !== location.pathname) navigate(path);
+  };
+
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setActiveIndex((previous) => Math.min(previous + 1, destinations.length - 1));
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setActiveIndex((previous) => Math.max(previous - 1, 0));
+    }
+    if (event.key === 'Enter' && destinations[activeIndex]) {
+      event.preventDefault();
+      handleSelect(destinations[activeIndex].path);
+    }
   };
 
   return (
@@ -116,7 +139,11 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
             <Input
               autoFocus
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={handleInputKeyDown}
               placeholder="Buscar vistas, campañas, Lens…"
               className="h-11 pl-10 pr-16"
               aria-label="Buscar vistas y acciones"
@@ -129,7 +156,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
 
         <div className="max-h-[min(24rem,55vh)] overflow-y-auto p-2" role="listbox" aria-label="Resultados de navegación">
           {destinations.length > 0 ? (
-            destinations.map((destination) => (
+            destinations.map((destination, index) => (
               <Button
                 key={destination.path}
                 type="button"
@@ -137,7 +164,8 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                 onClick={() => handleSelect(destination.path)}
                 className={cn(
                   'h-auto w-full justify-start gap-3 rounded-md px-3 py-3 text-left hover:bg-surface-raised',
-                  destination.path === location.pathname && 'bg-surface-raised',
+                  index === activeIndex && 'bg-surface-raised',
+                  destination.path === location.pathname && 'border border-primary/20',
                 )}
                 role="option"
                 aria-selected={destination.path === location.pathname}
@@ -166,7 +194,7 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
         <div className="flex items-center justify-between border-t border-divider bg-surface-sunken px-5 py-3 text-[10px] text-muted-foreground">
           <span>Atajo global</span>
           <span className="inline-flex items-center gap-1 rounded border border-divider bg-surface-raised px-1.5 py-0.5 font-mono">
-            <Command className="h-3 w-3" aria-hidden="true" /> K
+            <Command className="h-3 w-3" aria-hidden="true" /> Ctrl K
           </span>
         </div>
       </DialogContent>

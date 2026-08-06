@@ -41,6 +41,7 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
             variant={platformFilter === 'all' ? 'default' : 'outline'}
             onClick={() => setPlatformFilter('all')}
             className="h-8 text-xs"
+            aria-pressed={platformFilter === 'all'}
           >
             Todos ({candidates.length})
           </Button>
@@ -52,6 +53,7 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
               variant={platformFilter === platform ? 'default' : 'outline'}
               onClick={() => setPlatformFilter(platform)}
               className="h-8 gap-1 text-xs"
+              aria-pressed={platformFilter === platform}
             >
               <PlatformBadge platform={platform} size="sm" />
               ({candidates.filter((c) => c.platform === platform).length})
@@ -66,6 +68,7 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
               variant={tierFilter === tier ? 'default' : 'outline'}
               onClick={() => setTierFilter(tierFilter === tier ? 'all' : tier)}
               className="h-8 text-xs font-medium"
+              aria-pressed={tierFilter === tier}
             >
               {tier}
             </Button>
@@ -86,9 +89,9 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
 
       {isLoading ? (
         <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-28 rounded-xl bg-muted animate-pulse" />
-          ))}
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded-md border border-divider bg-surface-raised animate-pulse" aria-hidden="true" />
+            ))}
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground text-center py-8">No hay candidatos para este filtro.</p>

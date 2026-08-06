@@ -386,7 +386,7 @@ async def upload_brief_from_file(user: CurrentUserDep, file: UploadFile = File(.
     if not file_ext:
         raise HTTPException(
             status_code=415,
-            detail=f"Tipo de archivo no soportado: {content_type}. Usa PDF, TXT o CSV.",
+detail=f"Tipo de archivo no soportado: {content_type}. Usa PDF, TXT, CSV, MD o JSON.",
         )
 
     contents = await file.read()

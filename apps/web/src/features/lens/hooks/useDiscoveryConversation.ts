@@ -185,7 +185,7 @@ export function useDiscoveryConversation() {
     } finally {
       setIsLoading(false);
     }
-  }, [conversation]);
+  }, [conversation, loadConversation]);
 
   const confirmBrief = useCallback(async () => {
     if (!conversation || !pendingBrief) return;
