@@ -48,7 +48,7 @@ from discovery.candidate_analyzer import candidate_analyzer
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(5)
-MAX_HANDLES_TO_ENRICH = 100
+MAX_HANDLES_TO_ENRICH = 75
 MAX_POSTS_PER_HASHTAG = 20
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
@@ -452,27 +452,29 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             total_profiles=len(profiles),
         )
 
-        if enriched_profiles:
-            handles_for_analytics = list({e.get("username") for e in enriched_profiles if e.get("username")})
-            if handles_for_analytics:
-                try:
-                    analytics_results = await apify_client.analyze_profile_engagement(
-                        usernames=handles_for_analytics,
-                        posts_to_analyze=30,
-                        discovery_run_id=run_id,
-                    )
-                    analytics_map = {r.get("username"): r for r in analytics_results if r.get("username")}
-                    for e in enriched_profiles:
-                        handle = e.get("username", "")
-                        if handle in analytics_map:
-                            e["engagement_analytics"] = analytics_map[handle]
-                    logger.info(
-                        "step3_engagement_analytics_done",
-                        profiles_analyzed=len(handles_for_analytics),
-                        results_received=len(analytics_results),
-                    )
-                except Exception as exc:
-                    logger.warning("step3_engagement_analytics_failed", run_id=run_id, error=str(exc))
+        # NOTE: Engagement Analytics (easyapi~instagram-profile-engagement-analytics) is disabled
+        # The actor returns 404 errors. Engagement rate is already calculated from profile scraper data.
+        # if enriched_profiles:
+        #     handles_for_analytics = list({e.get("username") for e in enriched_profiles if e.get("username")})
+        #     if handles_for_analytics:
+        #         try:
+        #             analytics_results = await apify_client.analyze_profile_engagement(
+        #                 usernames=handles_for_analytics,
+        #                 posts_to_analyze=30,
+        #                 discovery_run_id=run_id,
+        #             )
+        #             analytics_map = {r.get("username"): r for r in analytics_results if r.get("username")}
+        #             for e in enriched_profiles:
+        #                 handle = e.get("username", "")
+        #                 if handle in analytics_map:
+        #                     e["engagement_analytics"] = analytics_map[handle]
+        #             logger.info(
+        #                 "step3_engagement_analytics_done",
+        #                 profiles_analyzed=len(handles_for_analytics),
+        #                 results_received=len(analytics_results),
+        #             )
+        #         except Exception as exc:
+        #             logger.warning("step3_engagement_analytics_failed", run_id=run_id, error=str(exc))
 
         await _run_update_metadata(run_id, {
             "current_step": "step4_scoring",
@@ -492,6 +494,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         bots_filtered = 0
         untracked_no_followers = 0
         low_followers_skipped = 0
+        geo_country_mismatch = 0
+        geo_no_signal = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
@@ -520,8 +524,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 bots_filtered += 1
                 continue
 
+            profile_country = (p.get("country") or "").strip().upper()
+            if profile_country and profile_country != target_country:
+                geo_country_mismatch += 1
+                continue
+
             geo_indicators = profile_data.get("geo_indicators", [])
             geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
+            if geo_indicators and geo == 0.0:
+                geo_no_signal += 1
+                continue
+
             cross_referenced = handle in cross_ref_handles
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
@@ -628,6 +641,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "untracked_no_followers": untracked_no_followers,
                 "low_followers_skipped": low_followers_skipped,
                 "bots_filtered": bots_filtered,
+                "geo_country_mismatch": geo_country_mismatch,
+                "geo_no_signal": geo_no_signal,
             },
             top_5=top_5_summary,
         )
