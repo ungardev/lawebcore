@@ -175,6 +175,36 @@ def build_rationale(
     )
 
 
+def has_hard_geo_signal(profile: dict, target_iso: str = "VE") -> bool:
+    """Hard geo filter fallback: checks hard-coded city/country signals when geo_indicators fail.
+
+    This prevents profiles with explicit location mentions from being incorrectly filtered out
+    when geo_indicators don't match (e.g., LLM-generated indicators miss common aliases).
+
+    Returns True if profile contains unambiguous VE location signals.
+    """
+    bio = (profile.get("biography") or profile.get("bio") or "").lower()
+    full_name = (profile.get("full_name") or profile.get("fullName") or "").lower()
+    location = (profile.get("locationName") or profile.get("location") or "").lower()
+    search_text = f"{bio} {full_name} {location}"
+
+    if target_iso == "VE":
+        ve_signals = [
+            "venezuela", "vzla", "vzlex", "vzlan", "vzlano", "vzlana",
+            "venezolano", "venezolana",
+            "caracas", "maracaibo", "valencia", "maracay", "barquisimeto",
+            "maturin", "maturín", "puerto la cruz", "ciudad guayana",
+            "cabimas", "barinas", "mérida", "merida", "anzoátegui",
+            "sancristóbal", "san cristobal", "turmero", "petare",
+            "los teques", "guaira", "guáira", "cumaná", "cabudare",
+            "araure", "acarigua", "barcelona", "margarita", "nueva esparta",
+            "táchira", "tachira", "lara", "zulia", "miranda", "distrito capital",
+            "🇻🇪",
+        ]
+        return any(sig in search_text for sig in ve_signals)
+    return False
+
+
 def _detect_niches(profile: dict) -> list[str]:
     """Detecta nichos del perfil basándose en la bio."""
     bio = (profile.get("biography") or profile.get("bio") or "").lower()

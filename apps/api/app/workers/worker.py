@@ -41,7 +41,7 @@ from discovery.tools import (
 )
 from discovery.scoring.lens_score import lens_score
 from discovery.scoring.niche import niche_relevance
-from discovery.tools.geo_boost import geo_score
+from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
 from discovery.profile_generator import get_or_create_profile
 from discovery.candidate_analyzer import candidate_analyzer
 
@@ -278,7 +278,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             elite_data: dict[str, Any] | None = None,
         ) -> list[tuple[str, float]]:
             from discovery.scoring.niche import niche_relevance
-            from discovery.tools.geo_boost import geo_score
+            from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
 
             anti_bot_signals: list[str] = []
             niche_benchmarks: dict[str, Any] = {}
@@ -532,8 +532,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             geo_indicators = profile_data.get("geo_indicators", [])
             geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
             if geo_indicators and geo == 0.0:
-                geo_no_signal += 1
-                continue
+                if not has_hard_geo_signal(p, target_country):
+                    geo_no_signal += 1
+                    continue
 
             cross_referenced = handle in cross_ref_handles
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
@@ -541,12 +542,33 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             bio = p.get("biography") or p.get("bio") or ""
             real_niche = niche_relevance(p, profile_data)
-            is_tienda = any(
-                kw in bio.lower()
-                for kw in ("tienda", "shop", "ventas", "pedidos", "catálogo",
-                           "mayor y detal", "envíos", "mercado libre", "delivery",
-                           "comprar aquí", "adquirir", "whatsapp", "telf", "teléfono")
+            tienda_keywords_hard = (
+                "tienda", "shop", "store", "petshop", "pet shop", "pets shop",
+                "ventas", "vendemos", "pedidos", "envíos", "delivery", "deliveries",
+                "catálogo", "catalogo", "precios", "oferta", "descuento", "promoción",
+                "comprar", "compras", "adquirir", "adquisición",
+                "whatsapp", "escríbenos", "contáctanos", "contaco", "telf", "teléfono", "telefono",
+                "horario", "horarios", "sucursal", "sucursales", "local", "tienda física",
+                "envíos a todo el país", "envios a todo el pais",
+                "pago en dólares", "pago en euros", "transferencia", "zelle", "paypal",
+                "marca oficial", "distribuidor", "distribuidora", "agente autorizado",
+                "mayor y detal", "menudeo", "por mayor", "al mayor",
+                "stock", "inventario", "bodega", "almacén", "almacen",
+                "mascotienda", "petstore", "pet.store", "petstore.ve", "pet world",
+                "vetstore", "veterinaria store", "tienda veterinaria",
+                "cachorro en venta", "cachorros en venta", "venta de cachorros",
+                "criadero", "cria", "cría", "breeder", "kennel",
             )
+            username_lower = handle.lower()
+            is_tienda = any(kw in bio.lower() for kw in tienda_keywords_hard)
+            if not is_tienda:
+                tienda_username_patterns = (
+                    "shop", "store", "tienda", "petshop", "pet_", "pet-",
+                    "ve_shop", "ve.store", "_ve_", "vzla_shop", ".ve",
+                    "petworld", "petplanet", "petlife", "petlovers",
+                    "mascotienda", "petland", "petsclub",
+                )
+                is_tienda = any(p in username_lower for p in tienda_username_patterns)
             country_val = p.get("country") or (profile_data.get("countries", [""])[0] if profile_data.get("countries") else "")
             is_verified = bool(p.get("verified") or p.get("is_verified"))
             is_business = bool(p.get("isBusinessAccount") or p.get("is_business"))
@@ -558,8 +580,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "influencer", "blogger", "periodista", "presentador",
                 "comunicador", "actor", "cantante", "músico", "artista",
                 "creativo", "emprendedor", "diseñador", "fotógrafo",
+                "veterinario", "veterinaria", "vet", "médico animal",
+                "pet photographer", "dog photographer", "fotógrafo canino",
+                "adiestrador", "adiestramiento", "dog trainer", "canine trainer",
+                "peluquero canino", "groomer", "pet groomer", "dog groomer",
+                "refugio", "rescate", "rescatista", "animal rescue",
+                "refugio animal", "adopción", "adopcion responsable",
+                "dog mom", "dog dad", "pet parent", "pet mom", "pet dad",
+                "golden retriever", "labrador", "husky", "pastor alemán",
+                "beagle", "bulldog", "poodle", "dálmata", "dalmata",
+                "cachorro", "cachorros", "cachorritos", "puppy", "puppies",
+                "kanine", "canine", "dog", "dogs", "pet", "pets",
             ) if kw in bio.lower())
             is_creator = creator_signals > 0 and not is_tienda and not is_business
+            if is_creator:
+                score_val = score_val * 1.15
+            elif is_tienda:
+                score_val = score_val * 0.7
             scored.append({
                 "run_id": run_id,
                 "platform": "instagram",
