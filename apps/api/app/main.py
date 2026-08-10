@@ -176,7 +176,8 @@ async def health_sources():
             await client.close()
             if balance_resp:
                 balance = (
-                    balance_resp.get("user_credit_balance")
+                    balance_resp.get("requests")
+                    or balance_resp.get("user_credit_balance")
                     or balance_resp.get("balance")
                     or balance_resp.get("credits")
                     or balance_resp.get("credit_balance")
@@ -186,6 +187,9 @@ async def health_sources():
                 result["sources"]["hikerapi"] = {
                     "status": "ok",
                     "balance": balance,
+                    "rate_limit": balance_resp.get("rate"),
+                    "currency": balance_resp.get("currency"),
+                    "amount": balance_resp.get("amount"),
                     "status_code": status_code,
                     "response_raw": str(balance_resp)[:500],
                     "key_prefix": hikerapi_key[:8] + "..." if len(hikerapi_key) > 8 else hikerapi_key,
