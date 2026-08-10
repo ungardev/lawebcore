@@ -156,6 +156,60 @@ async def readiness():
         )
 
 
+@app.get("/api/v1/health/sources", tags=["health"])
+async def health_sources():
+    """Check status of all Instagram data sources (HikerAPI, Apify) and remaining credits."""
+    import os
+    from discovery.tools.hikerapi_client import HikerAPIClient
+    from discovery.tools.apify_client import apify_client
+
+    result = {
+        "active_source": os.getenv("INSTAGRAM_SOURCE", "hikerapi"),
+        "sources": {},
+    }
+
+    hikerapi_key = os.getenv("HIKERAPI_API_KEY", "")
+    if hikerapi_key:
+        try:
+            client = HikerAPIClient(api_key=hikerapi_key)
+            balance_resp = await client._get("/sys/balance")
+            await client.close()
+            if balance_resp:
+                result["sources"]["hikerapi"] = {
+                    "status": "ok",
+                    "balance": balance_resp.get("user_credit_balance") or balance_resp.get("balance"),
+                    "key_prefix": hikerapi_key[:8] + "..." if len(hikerapi_key) > 8 else hikerapi_key,
+                }
+            else:
+                result["sources"]["hikerapi"] = {
+                    "status": "error",
+                    "error": "No response from /sys/balance (check x-access-key header)",
+                }
+        except Exception as e:
+            result["sources"]["hikerapi"] = {
+                "status": "error",
+                "error": str(e),
+            }
+    else:
+        result["sources"]["hikerapi"] = {
+            "status": "not_configured",
+            "error": "HIKERAPI_API_KEY env var not set",
+        }
+
+    apify_key = os.getenv("APIFY_API_KEY", "")
+    if apify_key:
+        result["sources"]["apify"] = {
+            "status": "available",
+            "key_prefix": apify_key[:8] + "..." if len(apify_key) > 8 else apify_key,
+        }
+    else:
+        result["sources"]["apify"] = {
+            "status": "not_configured",
+        }
+
+    return result
+
+
 @app.get("/api/v1/health/net-debug", tags=["health"])
 async def net_debug():
     """Debug network connectivity to Supabase hosts."""

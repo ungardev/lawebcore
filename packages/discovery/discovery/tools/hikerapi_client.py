@@ -33,8 +33,8 @@ class HikerAPIClient:
             self._client = httpx.AsyncClient(
                 base_url=self.BASE_URL,
                 headers={
-                    "x-api-key": self.api_key,
-                    "Content-Type": "application/json",
+                    "x-access-key": self.api_key,
+                    "accept": "application/json",
                 },
                 timeout=self.TIMEOUT,
             )
@@ -100,13 +100,27 @@ class HikerAPIClient:
                 return None
             if response.status_code == 404:
                 return None
+            if response.status_code in (401, 403):
+                logger.error(
+                    "hikerapi_auth_error",
+                    path=path,
+                    status=response.status_code,
+                    response_body=response.text[:500],
+                    hint="Verify x-access-key header is correct and key is active",
+                )
+                return None
             response.raise_for_status()
             data = response.json()
             if cache_key and data:
                 await self._set_cached(cache_key, data, cache_ttl)
             return data
         except httpx.HTTPStatusError as e:
-            logger.error("hikerapi_http_error", path=path, status=e.response.status_code, detail=str(e))
+            logger.error(
+                "hikerapi_http_error",
+                path=path,
+                status=e.response.status_code,
+                response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
+            )
             return None
         except Exception as e:
             logger.error("hikerapi_request_error", path=path, error=str(e))
