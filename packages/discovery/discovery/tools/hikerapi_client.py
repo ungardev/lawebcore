@@ -319,30 +319,11 @@ class HikerAPIClient:
     def _extract_media_items(self, resp: dict) -> list[dict]:
         """Extrae media objects de la estructura anidada de /v2/hashtag/medias/top.
 
-        Estructura real descubierta via test_hikerapi --raw:
-        resp = {
-          "response": {
-            "sections": [
-              {
-                "layout_type": "one_by_two_left",
-                "feed_type": "clips",
-                "layout_content": {
-                  "one_by_two_item": {
-                    "clips": {
-                      "id": "clips-...",
-                      "tag": "...",
-                      "items": [
-                        {"media": {...full media object...}},
-                        ...
-                      ]
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "next_page_id": "..."
-        }
+        Estructura descubierta via test_hikerapi --raw:
+        - layout_type="one_by_two_left" / "two_column" / etc:
+            layout_content = {X: {clips: {items: [{media: {...}}, ...]}}}
+        - layout_type="media_grid":
+            layout_content = {medias: [{media: {...}}, ...]}
         """
         media_items = []
         sections = resp.get("response", {}).get("sections", [])
@@ -350,7 +331,18 @@ class HikerAPIClient:
             layout_content = section.get("layout_content", {})
             if not isinstance(layout_content, dict):
                 continue
+
+            for media_wrapper in layout_content.get("medias", []):
+                if isinstance(media_wrapper, dict):
+                    media = media_wrapper.get("media")
+                    if isinstance(media, dict):
+                        media_items.append(media)
+                    elif "pk" in media_wrapper or "id" in media_wrapper:
+                        media_items.append(media_wrapper)
+
             for layout_key, layout_value in layout_content.items():
+                if layout_key == "medias":
+                    continue
                 if not isinstance(layout_value, dict):
                     continue
                 clips = layout_value.get("clips")
