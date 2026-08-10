@@ -684,7 +684,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             top_5=top_5_summary,
         )
 
-        MIN_MATCH_SCORE = 35
+        MIN_MATCH_SCORE = 20
         exclude_stores = getattr(brief, "exclude_stores", True)
         qualified = [
             c for c in scored
