@@ -496,7 +496,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         low_followers_skipped = 0
         geo_country_mismatch = 0
         geo_no_signal = 0
+        political_filtered = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
+        political_keywords = (
+            "político", "política", "politología", "politólogo",
+            "gobierno", "gobierno de", "gobierno nacional",
+            "maduro", "madurista", "maduristas",
+            "chavismo", "chavista", "chavistas", "chávez", "chavez",
+            "oposición", "opositor", "opositores", "oposición",
+            "ventevenezuela", "vente venezuela",
+            "voluntadpopular", "voluntad popular",
+            "asambleanacional", "asamblea nacional",
+            "tribunalsupremo", "tribunal supremo",
+            "elecciones", "fraude electoral", "fraude",
+            "votar", "voto", "candidato", "candidata",
+            "protesta", "manifestación", "marcha",
+            "dictadura", "dictador", "régimen", "regimen",
+            "embargo", "sanción", "sanciones", "bloqueo",
+            "libertad", "libertades",
+            "venezuelalibre", "venezuela libre",
+        )
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
             if followers == 0:
@@ -535,6 +554,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 if not has_hard_geo_signal(p, target_country):
                     geo_no_signal += 1
                     continue
+
+            bio_or_username = f"{bio.lower()} {handle.lower()}"
+            if any(kw in bio_or_username for kw in political_keywords):
+                political_filtered += 1
+                continue
 
             cross_referenced = handle in cross_ref_handles
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
@@ -680,6 +704,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "bots_filtered": bots_filtered,
                 "geo_country_mismatch": geo_country_mismatch,
                 "geo_no_signal": geo_no_signal,
+                "political_filtered": political_filtered,
             },
             top_5=top_5_summary,
         )
