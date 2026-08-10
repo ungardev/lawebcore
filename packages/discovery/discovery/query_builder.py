@@ -29,7 +29,7 @@ class QueryBuilder:
                 min_followers = explicit_min
 
         keyword_queries = self._build_keyword_queries(profile, brief)
-        hashtag_queries = self._build_hashtag_queries(profile)
+        hashtag_queries = self._build_hashtag_queries(profile, brief)
 
         return DiscoveryPlan(
             keyword_queries=keyword_queries,
@@ -64,9 +64,19 @@ class QueryBuilder:
 
         return deduped[:20]
 
-    def _build_hashtag_queries(self, profile: dict[str, Any]) -> list[str]:
-        raw = profile.get("hashtags", [])
-        hashtags = [f"#{tag.lstrip('#').strip()}" for tag in raw if tag and tag.strip()]
+    def _build_hashtag_queries(self, profile: dict[str, Any], brief: BriefStructured) -> list[str]:
+        seen = set()
+        hashtags = []
+        for tag in (brief.hashtags or []):
+            cleaned = f"#{tag.lstrip('#').strip()}"
+            if cleaned not in seen:
+                seen.add(cleaned)
+                hashtags.append(cleaned)
+        for tag in profile.get("hashtags", []):
+            cleaned = f"#{tag.lstrip('#').strip()}"
+            if cleaned not in seen:
+                seen.add(cleaned)
+                hashtags.append(cleaned)
         return hashtags[:30]
 
     def _get_tier(self, brief: BriefStructured) -> str:

@@ -41,6 +41,7 @@ Responde en JSON con este formato exacto:
   "audience_states": ["estado1", "estado2"],
   "tone": ["tono1"],
   "platforms": ["instagram"],
+  "hashtags": ["#hashtag1", "#hashtag2"],
   "additional_context": "contexto adicional o vacío"
 }}"""
 
@@ -292,6 +293,11 @@ class BriefParserAgent:
             sanitized["tone"] = normalized_tones
         else:
             sanitized["tone"] = []
+
+        if "hashtags" in sanitized and isinstance(sanitized["hashtags"], list):
+            sanitized["hashtags"] = [str(h).strip() for h in sanitized["hashtags"] if h]
+        else:
+            sanitized["hashtags"] = []
 
         return sanitized
 

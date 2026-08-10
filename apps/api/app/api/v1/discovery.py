@@ -317,6 +317,7 @@ async def send_message(
                         product_name=brief.product_name,
                         industry=brief.industry,
                         niches=brief.niches,
+                        hashtags=brief.hashtags,
                         audience_gender=brief.audience_gender,
                         audience_age_min=brief.audience_age_min,
                         audience_age_max=brief.audience_age_max,
