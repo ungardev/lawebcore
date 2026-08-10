@@ -11,6 +11,8 @@ from discovery.tools.multi_actor_instagram import multi_actor_instagram_client
 from discovery.tools.youtube_client import youtube_client
 from discovery.tools.metricool_client import metricool_client
 from discovery.tools.tiktok_client import tiktok_client
+from discovery.tools.hikerapi_client import hikerapi_client
+from discovery.tools.source_registry import get_instagram_source, registry
 
 __all__ = [
     "apify_client",
@@ -22,4 +24,7 @@ __all__ = [
     "youtube_client",
     "metricool_client",
     "tiktok_client",
+    "hikerapi_client",
+    "get_instagram_source",
+    "registry",
 ]

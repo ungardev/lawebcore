@@ -11,6 +11,7 @@ Handles:
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+import os
 from typing import Any
 
 import structlog
@@ -39,6 +40,7 @@ from discovery.tools import (
     classify_tier,
     build_rationale,
 )
+from discovery.tools.source_registry import get_instagram_source
 from discovery.scoring.lens_score import lens_score
 from discovery.scoring.niche import niche_relevance
 from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
@@ -57,7 +59,6 @@ async def startup(ctx):
     """Initialize worker context (DB, Redis) and start health server."""
     logger.info("workers_starting", env=settings.API_ENV, version="0.1.0")
     ctx["redis"] = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
-    import os
     if os.environ.get("STANDALONE_WORKER") == "true":
         from app.workers.health_server import run_health_server
         import asyncio
@@ -162,14 +163,30 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         profiles: dict[str, dict] = {}
         step1_handles: set[str] = set()
         step2_handles: set[str] = set()
+        source_name = os.getenv("INSTAGRAM_SOURCE", "hikerapi")
+        instagram_source = get_instagram_source(source_name)
 
         async def _fetch_step1():
-            return await apify_client.scrape_hashtags_all_sync(plan.hashtag_queries, results_limit=20, force_fresh=False, discovery_run_id=run_id)
+            results = []
+            for tag in plan.hashtag_queries:
+                try:
+                    items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
+                    results.extend(items)
+                except Exception as e:
+                    logger.warning("source_hashtag_error", source=source_name, hashtag=tag, error=str(e))
+            return results
 
         async def _fetch_step2():
-            return await apify_client.search_users_by_keywords_sync(plan.keyword_queries, limit_per_keyword=15, force_fresh=False, discovery_run_id=run_id)
+            results = []
+            for kw in plan.keyword_queries:
+                try:
+                    items = await instagram_source.search_keyword(kw, limit=15)
+                    results.extend(items)
+                except Exception as e:
+                    logger.warning("source_keyword_error", source=source_name, keyword=kw, error=str(e))
+            return results
 
-        print(f"[discovery_run_task] STEP 1+2: Running hashtag + keyword search in parallel", flush=True)
+        print(f"[discovery_run_task] STEP 1+2: Running with source={source_name}", flush=True)
         step1_result, step2_result = await asyncio.gather(
             _fetch_step1(),
             _fetch_step2(),
@@ -186,17 +203,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             step1_failed = True
         else:
             hashtag_items = step1_result
-            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items))
+            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source=source_name)
 
         if isinstance(step2_result, Exception):
             logger.error("step2_keyword_failed", error=str(step2_result))
             step2_failed = True
         else:
             keyword_items = step2_result
-            logger.info("step2_keyword_done", keyword_users=len(keyword_items))
+            logger.info("step2_keyword_done", keyword_users=len(keyword_items), source=source_name)
 
         for item in hashtag_items:
-            handle = item.get("ownerUsername") or item.get("username")
+            handle = item.get("username") or item.get("ownerUsername", "")
             if not handle:
                 continue
             step1_handles.add(handle)
@@ -204,24 +221,25 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
             profiles[handle] = {
                 "username": handle,
-                "full_name": item.get("ownerFullName", "") or item.get("fullName", ""),
-                "fullName": item.get("ownerFullName", "") or item.get("fullName", ""),
-                "bio": item.get("caption", "") or item.get("biography", ""),
-                "biography": item.get("caption", "") or item.get("biography", ""),
-                "avatar_url": item.get("profilePicUrlHD") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
-                "profilePicUrl": item.get("profilePicUrlHD") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
-                "follower_count": 0,
-                "followersCount": 0,
-                "following_count": 0,
-                "followsCount": 0,
-                "posts_count": 0,
-                "postsCount": 0,
-                "is_business": False,
-                "isBusinessAccount": False,
-                "is_verified": False,
-                "verified": False,
+                "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
+                "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
+                "bio": item.get("bio", "") or item.get("biography", ""),
+                "biography": item.get("biography", "") or item.get("bio", ""),
+                "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                "follower_count": item.get("follower_count", 0),
+                "followersCount": item.get("followersCount", 0),
+                "following_count": item.get("following_count", 0),
+                "followsCount": item.get("followsCount", 0),
+                "posts_count": item.get("posts_count", 0),
+                "postsCount": item.get("postsCount", 0),
+                "is_business": item.get("is_business", False),
+                "isBusinessAccount": item.get("isBusinessAccount", False),
+                "is_verified": item.get("is_verified", False),
+                "verified": item.get("verified", False),
                 "locationName": item.get("locationName", "") or "",
                 "location": item.get("locationName", "") or "",
+                "pk": item.get("pk"),
             }
 
         for item in keyword_items:
@@ -233,41 +251,75 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
             profiles[handle] = {
                 "username": handle,
-                "full_name": item.get("fullName", ""),
-                "fullName": item.get("fullName", ""),
-                "bio": item.get("biography", ""),
+                "full_name": item.get("full_name", ""),
+                "fullName": item.get("full_name", ""),
+                "bio": item.get("bio", ""),
                 "biography": item.get("biography", ""),
-                "avatar_url": item.get("profilePicUrlHD") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrlHD") or item.get("profilePicUrl", ""),
-                "follower_count": 0,
-                "followersCount": 0,
-                "following_count": 0,
-                "followsCount": 0,
-                "posts_count": 0,
-                "postsCount": 0,
-                "is_business": item.get("isBusinessAccount", False),
+                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                "follower_count": item.get("follower_count", 0),
+                "followersCount": item.get("followersCount", 0),
+                "following_count": item.get("following_count", 0),
+                "followsCount": item.get("followsCount", 0),
+                "posts_count": item.get("posts_count", 0),
+                "postsCount": item.get("postsCount", 0),
+                "is_business": item.get("is_business", False),
                 "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("verified", False),
+                "is_verified": item.get("is_verified", False),
                 "verified": item.get("verified", False),
+                "pk": item.get("pk"),
             }
 
         unique_handles = list(profiles.keys())
         logger.info("step1_and_2_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items))
         step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
+
+        prefiltered_handles = []
+        stores_prefiltered = 0
+        low_followers_prefiltered = 0
+        private_prefiltered = 0
+        for handle in unique_handles:
+            p = profiles.get(handle, {})
+            followers = p.get("followersCount") or p.get("follower_count") or 0
+            is_biz = p.get("isBusinessAccount") or p.get("is_business") or False
+            is_priv = p.get("is_private", False)
+            if followers < plan.min_followers:
+                low_followers_prefiltered += 1
+                continue
+            if is_biz and followers < 50000:
+                stores_prefiltered += 1
+                continue
+            if is_priv and followers < 10000:
+                private_prefiltered += 1
+                continue
+            prefiltered_handles.append(handle)
+
+        logger.info(
+            "step1_prefiltered",
+            total=len(unique_handles),
+            after_prefilter=len(prefiltered_handles),
+            stores_filtered=stores_prefiltered,
+            low_followers_filtered=low_followers_prefiltered,
+            private_filtered=private_prefiltered,
+        )
+
         await _save_progress_message(
             run_id,
             f"✅ **Steps 1+2 {step_status}**: Encontré **{len(unique_handles)} perfiles únicos** "
             f"({len(hashtag_items)} via hashtags + {len(keyword_items)} via keywords). "
-            f"Enriqueciendo los top {min(MAX_HANDLES_TO_ENRICH, len(unique_handles))} con datos de Instagram...",
+            f"Pre-filtrados: {stores_prefiltered} stores, {low_followers_prefiltered} sin seguidores suficientes. "
+            f"Enriqueciendo {min(MAX_HANDLES_TO_ENRICH, len(prefiltered_handles))} perfiles con datos de Instagram...",
         )
 
         await _run_update_metadata(run_id, {
             "completed_steps": ["step1_hashtag_search", "step2_keyword_search"],
             "total_unique_handles": len(unique_handles),
+            "prefiltered_handles": len(prefiltered_handles),
+            "stores_prefiltered": stores_prefiltered,
             "current_step": "step3_profile_enrichment",
         })
 
-        handles_to_enrich = unique_handles[:MAX_HANDLES_TO_ENRICH]
+        handles_to_enrich = prefiltered_handles[:MAX_HANDLES_TO_ENRICH]
         print(f"[discovery_run_task] STEP 3: Profile enrichment ({len(handles_to_enrich)} profiles)", flush=True)
 
         async def _prefilter_profiles(

@@ -57,6 +57,8 @@ class Settings(BaseSettings):
 
     HYPEAUDITOR_API_KEY: str = ""
     APIFY_API_KEY: str = ""
+    HIKERAPI_API_KEY: str = ""
+    INSTAGRAM_SOURCE: str = "hikerapi"
 
     META_APP_ID: str = ""
     META_APP_SECRET: str = ""
