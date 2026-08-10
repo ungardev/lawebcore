@@ -21,7 +21,7 @@ export function LensSearchPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { run, candidates, isLoading, error, createRun, pollRun, loadRun, cancelPoll, saveCandidate, dismissCandidate } = useDiscoveryRun();
-  const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 45, audience_countries: '', platforms: [] as Platform[] });
+  const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 65, audience_countries: '', platforms: [] as Platform[] });
 
   useEffect(() => {
     const runId = searchParams.get('runId');

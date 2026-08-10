@@ -571,7 +571,7 @@ class DiscoveryOrchestrator:
         if brief.tone:
             parts.append(f"**Tono:** {', '.join(brief.tone)}")
         if brief.additional_context:
-            parts.append(f"**Contexto adicional:** {brief.additional_context[:100]}")
+            parts.append(f"**Contexto adicional:** {brief.additional_context}")
 
         return "\n".join(parts)
 
@@ -613,7 +613,7 @@ class DiscoveryOrchestrator:
             niches=niches,
             audience_gender="female" if any(w in text_lower for w in ["mujer", "mama", "mamá", "dueña", "female"]) else "all",
             audience_age_min=25,
-            audience_age_max=45,
+            audience_age_max=65,
             audience_countries=countries,
             audience_cities=cities if cities else None,
             tone=["emocional"],
