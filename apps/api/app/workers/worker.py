@@ -543,6 +543,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 bots_filtered += 1
                 continue
 
+            bio = p.get("biography") or p.get("bio") or ""
             profile_country = (p.get("country") or "").strip().upper()
             if profile_country and profile_country != target_country:
                 geo_country_mismatch += 1
@@ -563,8 +564,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             cross_referenced = handle in cross_ref_handles
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
-
-            bio = p.get("biography") or p.get("bio") or ""
             real_niche = niche_relevance(p, profile_data)
             tienda_keywords_hard = (
                 "tienda", "shop", "store", "petshop", "pet shop", "pets shop",
