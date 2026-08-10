@@ -102,6 +102,12 @@ def _serialize_candidate(c: dict) -> dict:
     if is_tienda is None:
         is_tienda = _is_tienda(bio)
     raw = c.get("raw_payload") or {}
+    if isinstance(raw, str):
+        try:
+            import json
+            raw = json.loads(raw)
+        except Exception:
+            raw = {}
     return {
         "id": str(c.get("id", "")),
         "platform": c.get("platform", "instagram"),
@@ -118,9 +124,9 @@ def _serialize_candidate(c: dict) -> dict:
         "engagement_rate": engagement_rate,
         "audience_credibility": round(float(c.get("audience_credibility") or 0), 2),
         "audience_quality": round(float(c.get("audience_quality") or 0), 2),
-        "is_verified": raw.get("is_verified") or c.get("is_verified") or False,
-        "is_creator": raw.get("is_creator") or False,
-        "creator_signals": raw.get("creator_signals") or 0,
+        "is_verified": raw.get("is_verified") if isinstance(raw, dict) else False,
+        "is_creator": raw.get("is_creator") if isinstance(raw, dict) else False,
+        "creator_signals": raw.get("creator_signals") if isinstance(raw, dict) else 0,
         "match_score": round(float(c.get("match_score") or 0), 1),
         "tier": tier,
         "niche_relevance": round(float(c.get("niche_relevance") or 0), 2),
