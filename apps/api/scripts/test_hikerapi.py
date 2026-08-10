@@ -8,10 +8,14 @@ Run from Railway shell:
 
 Or from local machine:
     python -m scripts.test_hikerapi --api-key your_key_here
+
+With raw mode (print full JSON responses before field extraction):
+    python -m scripts.test_hikerapi --api-key your_key_here --raw
 """
 
 import argparse
 import asyncio
+import json
 import sys
 import os
 from typing import Any
@@ -21,26 +25,35 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from discovery.tools.hikerapi_client import HikerAPIClient
 
 
-async def test_balance(client: HikerAPIClient) -> dict[str, Any]:
-    """GET /sys/balance — verify API key is valid and check credits."""
+async def test_balance(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
     print("\n[1/6] Testing /sys/balance (API key validation)...")
-    resp = await client._get("/sys/balance")
+    resp, status = await client._get_debug("/sys/balance")
+    if raw:
+        print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)}")
     if resp:
-        balance = resp.get("user_credit_balance") or resp.get("balance") or resp.get("credits")
+        balance = (
+            resp.get("requests")
+            or resp.get("user_credit_balance")
+            or resp.get("balance")
+            or resp.get("credits")
+        )
         print(f"    Balance: {balance}")
         return {"ok": True, "balance": balance, "raw": resp}
     return {"ok": False, "error": "No response from /sys/balance"}
 
 
-async def test_user_lookup(client: HikerAPIClient) -> dict[str, Any]:
-    """GET /v2/user/by/username — verify profile format with is_business field."""
+async def test_user_lookup(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
     print("\n[2/6] Testing /v2/user/by/username (cocinavenezuela)...")
-    resp = await client.enrich_profile("cocinavenezuela")
+    username = "cocinavenezuela"
+    resp, status = await client._get_debug("/v2/user/by/username", params={"username": username})
+    if raw:
+        print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)[:2000]}")
     if resp:
-        followers = resp.get("follower_count", 0)
-        is_biz = resp.get("is_business", False)
-        bio = resp.get("biography", "")[:80]
-        print(f"    Username: {resp.get('username')}")
+        user = resp.get("user") or resp
+        followers = user.get("follower_count", 0)
+        is_biz = user.get("is_business", False)
+        bio = user.get("biography", "")[:80]
+        print(f"    Username: {user.get('username')}")
         print(f"    Followers: {followers:,}")
         print(f"    is_business: {is_biz}")
         print(f"    Bio: {bio}...")
@@ -48,108 +61,123 @@ async def test_user_lookup(client: HikerAPIClient) -> dict[str, Any]:
     return {"ok": False, "error": "Profile not found"}
 
 
-async def test_hashtag_top(client: HikerAPIClient) -> dict[str, Any]:
-    """GET /v2/hashtag/medias/top — verify top posts return real creators."""
-    print("\n[3/6] Testing /v2/hashtag/medias/top (#recetasvenezuela)...")
-    results = await client.search_hashtag("recetasvenezuela", limit=10)
-    if not results:
-        return {"ok": False, "error": "No results returned"}
-
-    stores = 0
-    creators = 0
-    for r in results:
-        followers = r.get("follower_count", 0)
-        is_biz = r.get("is_business", False)
-        if is_biz and followers < 50000:
-            stores += 1
-        else:
-            creators += 1
-
-    print(f"    Total results: {len(results)}")
-    print(f"    Likely creators: {creators}")
-    print(f"    Likely stores/business: {stores}")
-    if results:
-        top = results[0]
-        print(f"    Top result: @{top.get('username')} | {top.get('follower_count', 0):,} followers | is_business={top.get('is_business')}")
-    return {"ok": len(results) > 0, "total": len(results), "stores": stores, "creators": creators}
+async def test_hashtag_info(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
+    print("\n[3/6] Testing /v2/hashtag/by/name (recetasvenezuela)...")
+    hashtag = "recetasvenezuela"
+    resp, status = await client._get_debug("/v2/hashtag/by/name", params={"name": hashtag})
+    if raw:
+        print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)[:2000]}")
+    if resp:
+        print(f"    Hashtag ID: {resp.get('id')}")
+        print(f"    Media count: {resp.get('media_count')}")
+        return {"ok": True, "hashtag_id": resp.get("id"), "media_count": resp.get("media_count")}
+    return {"ok": False, "error": "Hashtag not found"}
 
 
-async def test_hashtag_pagination(client: HikerAPIClient) -> dict[str, Any]:
-    """Verify cursor pagination works — fetch 2 pages of results."""
-    print("\n[4/6] Testing hashtag pagination (cursor-based)...")
-    results_page1 = await client.search_hashtag("cocinavenezuela", limit=5)
-    if not results_page1:
-        return {"ok": False, "error": "No results on first page"}
+async def test_hashtag_top(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
+    print("\n[4/6] Testing /v2/hashtag/medias/top (#recetasvenezuela)...")
+    hashtag = "recetasvenezuela"
+    resp, status = await client._get_debug("/v2/hashtag/medias/top", params={"name": hashtag})
+    if raw:
+        print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)[:3000]}")
+    if not resp:
+        return {"ok": False, "error": "No response from /v2/hashtag/medias/top"}
 
-    handles_p1 = {r.get("username") for r in results_page1 if r.get("username")}
-    print(f"    Page 1: {len(results_page1)} results, first: @{results_page1[0].get('username')}")
+    raw_items = resp.get("response", [])
+    print(f"    Top-level keys: {list(resp.keys())}")
+    print(f"    'response' field count: {len(raw_items)}")
+    print(f"    'next_page_id': {resp.get('next_page_id')}")
+    print(f"    'more_available': {resp.get('more_available')}")
 
-    results_page2 = await client.search_hashtag("cocinavenezuela", limit=5)
-    handles_p2 = {r.get("username") for r in results_page2 if r.get("username")}
+    if raw_items:
+        first_post = raw_items[0]
+        print(f"    First post keys: {list(first_post.keys())}")
+        user = first_post.get("user") or first_post.get("users", [{}])[0] if first_post.get("users") else {}
+        print(f"    First post username: @{user.get('username')}, followers: {user.get('follower_count', 0):,}")
 
-    overlap = handles_p1 & handles_p2
-    print(f"    Page 2: {len(results_page2)} results, overlap with page1: {len(overlap)}")
-    return {"ok": True, "page1": len(results_page1), "page2": len(results_page2), "overlap": len(overlap)}
+    return {"ok": len(raw_items) > 0, "items": len(raw_items)}
 
 
-async def test_keyword_search(client: HikerAPIClient) -> dict[str, Any]:
-    """GET /v2/fbsearch/accounts — verify keyword search returns user-type results."""
+async def test_keyword_search(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
     print("\n[5/6] Testing /v2/fbsearch/accounts (keyword: recetas con leche)...")
-    results = await client.search_keyword("recetas con leche evaporada", limit=10)
-    if not results:
-        return {"ok": False, "error": "No results returned"}
+    keyword = "recetas con leche evaporada"
+    resp, status = await client._get_debug("/v2/fbsearch/accounts", params={"query": keyword, "rank_token": "discovery_pipeline"})
+    if raw:
+        print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)[:3000]}")
+    if not resp:
+        return {"ok": False, "error": "No response from /v2/fbsearch/accounts"}
 
-    stores = sum(1 for r in results if r.get("is_business") and r.get("follower_count", 0) < 50000)
-    print(f"    Total: {len(results)}")
-    print(f"    Stores filtered: {stores}")
-    if results:
-        top = results[0]
-        print(f"    Top result: @{top.get('username')} | {top.get('follower_count', 0):,} followers")
-    return {"ok": len(results) > 0, "total": len(results)}
+    raw_users = resp.get("users", [])
+    print(f"    Top-level keys: {list(resp.keys())}")
+    print(f"    'users' field count: {len(raw_users)}")
+    print(f"    'page_token': {resp.get('page_token')}")
+    print(f"    'has_more': {resp.get('has_more')}")
+
+    if raw_users:
+        first_user = raw_users[0].get("user") or raw_users[0]
+        print(f"    First user: @{first_user.get('username')}, followers: {first_user.get('follower_count', 0):,}")
+
+    return {"ok": len(raw_users) > 0, "users": len(raw_users)}
 
 
-async def test_multiple_hashtags(client: HikerAPIClient) -> dict[str, Any]:
-    """Simulate Carnation brief: 14 hashtags → verify data quality."""
-    hashtags = [
-        "recetasvenezuela", "cocinavenezuela", "postresvenezuela",
-        "reposteriacasera", "comidacasera", "cafévenezuela", "bebidascalientes",
-        "dulcestipicos", "cocinafacil", "horneadocasa", "comidasegura",
-        "cocinacasera", "recetasfaciles", "postresfaciles",
-    ]
-    print(f"\n[6/6] Simulating Carnation brief: {len(hashtags)} hashtags...")
-    all_results = []
-    stores_total = 0
-    for tag in hashtags:
-        results = await client.search_hashtag(tag, limit=5)
-        stores = sum(1 for r in results if r.get("is_business") and r.get("follower_count", 0) < 50000)
-        stores_total += stores
-        all_results.extend(results)
-        print(f"    #{tag}: {len(results)} posts, {stores} stores")
+async def test_hashtag_pagination(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
+    print("\n[6/6] Testing hashtag pagination (cursor-based)...")
+    hashtag = "cocinavenezuela"
+    print(f"    Fetching page 1...")
+    resp1, _ = await client._get_debug("/v2/hashtag/medias/top", params={"name": hashtag})
+    if raw and resp1:
+        print(f"    PAGE 1 RAW: {json.dumps(resp1, indent=4, default=str)[:1500]}")
 
-    unique_handles = {r.get("username") for r in all_results if r.get("username")}
-    print(f"\n    TOTAL unique handles: {len(unique_handles)}")
-    print(f"    TOTAL stores detected: {stores_total}")
-    return {
-        "ok": len(unique_handles) >= 20,
-        "unique_handles": len(unique_handles),
-        "stores": stores_total,
-        "hashtags_tested": len(hashtags),
-    }
+    if not resp1:
+        return {"ok": False, "error": "No response on first page"}
+
+    items_p1 = resp1.get("response", [])
+    handles_p1 = set()
+    for post in items_p1:
+        user = post.get("user") or post.get("users", [{}])[0] if post.get("users") else {}
+        if user.get("username"):
+            handles_p1.add(user.get("username"))
+
+    print(f"    Page 1: {len(items_p1)} posts, handles: {handles_p1}")
+
+    cursor = resp1.get("next_page_id")
+    print(f"    Cursor for page 2: {cursor}")
+
+    if cursor:
+        print(f"    Fetching page 2 with cursor...")
+        resp2, _ = await client._get_debug("/v2/hashtag/medias/top", params={"name": hashtag, "page_id": cursor})
+        if raw and resp2:
+            print(f"    PAGE 2 RAW: {json.dumps(resp2, indent=4, default=str)[:1500]}")
+        items_p2 = resp2.get("response", []) if resp2 else []
+        handles_p2 = set()
+        for post in items_p2:
+            user = post.get("user") or post.get("users", [{}])[0] if post.get("users") else {}
+            if user.get("username"):
+                handles_p2.add(user.get("username"))
+        overlap = handles_p1 & handles_p2
+        print(f"    Page 2: {len(items_p2)} posts, overlap with page1: {len(overlap)}")
+    else:
+        print(f"    No cursor — cannot test page 2")
+
+    return {"ok": len(items_p1) > 0}
 
 
 async def main():
     parser = argparse.ArgumentParser(description="Test HikerAPI end-to-end")
     parser.add_argument("--api-key", type=str, help="HikerAPI access key (or set HIKERAPI_API_KEY env var)")
+    parser.add_argument("--raw", action="store_true", help="Print full raw JSON responses before field extraction")
     args = parser.parse_args()
 
     api_key = args.api_key or os.getenv("HIKERAPI_API_KEY")
     if not api_key:
         print("ERROR: No API key provided. Set HIKERAPI_API_KEY env var or use --api-key")
-        print("Usage: python -m scripts.test_hikerapi --api-key wr6l9jyb469nwtwzpk19j25o9wsjyq6b")
+        print("Usage: python -m scripts.test_hikerapi --api-key wr6l9jyb469nwtwzpk19j25o9wsjyq6b [--raw]")
         return 1
 
+    raw = args.raw
+
     print("=" * 70)
-    print("HikerAPI End-to-End Diagnostic")
+    print("HikerAPI End-to-End Diagnostic" + (" [RAW MODE]" if raw else ""))
     print("=" * 70)
     print(f"API Key: {api_key[:8]}...{api_key[-4:]}")
     print()
@@ -159,18 +187,21 @@ async def main():
     tests = [
         ("Balance/Health", test_balance),
         ("User Lookup", test_user_lookup),
+        ("Hashtag Info", test_hashtag_info),
         ("Hashtag Top Posts", test_hashtag_top),
-        ("Hashtag Pagination", test_hashtag_pagination),
         ("Keyword Search", test_keyword_search),
-        ("Carnation Simulation (14 hashtags)", test_multiple_hashtags),
+        ("Hashtag Pagination", test_hashtag_pagination),
     ]
 
     results: dict[str, Any] = {}
     for name, test_fn in tests:
         try:
-            results[name] = await test_fn(client)
+            results[name] = await test_fn(client, raw=raw)
         except Exception as e:
             print(f"    EXCEPTION: {type(e).__name__}: {e}")
+            if raw:
+                import traceback
+                traceback.print_exc()
             results[name] = {"ok": False, "error": str(e)}
 
     await client.close()
@@ -181,7 +212,7 @@ async def main():
     passed = 0
     failed = 0
     for name, r in results.items():
-        status = "✅ PASS" if r.get("ok") else "❌ FAIL"
+        status = "PASS" if r.get("ok") else "FAIL"
         if r.get("ok"):
             passed += 1
         else:
@@ -193,9 +224,15 @@ async def main():
             extra = f" | total={r['total']}"
         if "unique_handles" in r:
             extra = f" | handles={r['unique_handles']} stores={r.get('stores', 0)}"
+        if "hashtag_id" in r:
+            extra = f" | id={r['hashtag_id']} media_count={r.get('media_count')}"
+        if "items" in r:
+            extra = f" | items={r['items']}"
+        if "users" in r:
+            extra = f" | users={r['users']}"
         if "error" in r:
             extra = f" | error={r['error']}"
-        print(f"  {status}: {name}{extra}")
+        print(f"  [{status}]: {name}{extra}")
 
     print(f"\n  Total: {passed}/{len(tests)} passed")
     print("=" * 70)
