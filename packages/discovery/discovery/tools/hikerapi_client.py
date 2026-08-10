@@ -207,8 +207,14 @@ class HikerAPIClient:
             if not resp:
                 break
 
-            raw_items = resp.get("response", [])
+            raw_items = self._extract_media_items(resp)
             if not raw_items:
+                logger.warning(
+                    "hikerapi_hashtag_no_media",
+                    hashtag=clean,
+                    sections_count=len(resp.get("response", {}).get("sections", [])),
+                    response_keys=list(resp.keys()),
+                )
                 break
 
             for post in raw_items:
@@ -219,8 +225,8 @@ class HikerAPIClient:
                     continue
                 normalized = self._normalize_user(user)
                 normalized["_source_hashtag"] = clean
-                normalized["_post_likers_count"] = post.get("like_count", 0)
-                normalized["_post_comments_count"] = post.get("comment_count", 0)
+                normalized["_post_likers_count"] = post.get("like_count", 0) or post.get("likes_count", 0)
+                normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
                 results.append(normalized)
 
             cursor = resp.get("next_page_id")
@@ -251,10 +257,18 @@ class HikerAPIClient:
 
             resp = await self._get("/v2/fbsearch/accounts", params=params)
             if not resp:
+                logger.warning("hikerapi_keyword_no_response", keyword=keyword)
                 break
 
             raw_users = resp.get("users", [])
             if not raw_users:
+                logger.warning(
+                    "hikerapi_keyword_no_users",
+                    keyword=keyword,
+                    num_results=resp.get("num_results", 0),
+                    has_more=resp.get("has_more"),
+                    hint="may be trial-limited or query too specific",
+                )
                 break
 
             for u in raw_users:
@@ -302,11 +316,68 @@ class HikerAPIClient:
         logger.info("hikerapi_profile_enriched", username=clean, followers=normalized.get("follower_count"))
         return normalized
 
+    def _extract_media_items(self, resp: dict) -> list[dict]:
+        """Extrae media objects de la estructura anidada de /v2/hashtag/medias/top.
+
+        Estructura real descubierta via test_hikerapi --raw:
+        resp = {
+          "response": {
+            "sections": [
+              {
+                "layout_type": "one_by_two_left",
+                "feed_type": "clips",
+                "layout_content": {
+                  "one_by_two_item": {
+                    "clips": {
+                      "id": "clips-...",
+                      "tag": "...",
+                      "items": [
+                        {"media": {...full media object...}},
+                        ...
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "next_page_id": "..."
+        }
+        """
+        media_items = []
+        sections = resp.get("response", {}).get("sections", [])
+        for section in sections:
+            layout_content = section.get("layout_content", {})
+            if not isinstance(layout_content, dict):
+                continue
+            for layout_key, layout_value in layout_content.items():
+                if not isinstance(layout_value, dict):
+                    continue
+                clips = layout_value.get("clips")
+                if not isinstance(clips, dict):
+                    continue
+                for item in clips.get("items", []):
+                    if not isinstance(item, dict):
+                        continue
+                    if "media" in item and isinstance(item["media"], dict):
+                        media_items.append(item["media"])
+                    elif "pk" in item or "id" in item:
+                        media_items.append(item)
+        return media_items
+
     def _extract_user_from_post(self, post: dict) -> dict | None:
         user = post.get("user")
         if not user:
-            user = post.get("users", [{}])[0] if post.get("users") else {}
-        return user
+            users = post.get("users")
+            if isinstance(users, list) and users and isinstance(users[0], dict):
+                user = users[0]
+            elif isinstance(users, dict):
+                user = users
+        if not user:
+            caption = post.get("caption")
+            if isinstance(caption, dict):
+                user = caption.get("user")
+        return user if isinstance(user, dict) else None
 
     def _normalize_user(self, user: dict) -> dict[str, Any]:
         pk = user.get("pk") or user.get("id") or user.get("user_id")

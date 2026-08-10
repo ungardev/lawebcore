@@ -43,8 +43,8 @@ async def test_balance(client: HikerAPIClient, raw: bool = False) -> dict[str, A
 
 
 async def test_user_lookup(client: HikerAPIClient, raw: bool = False) -> dict[str, Any]:
-    print("\n[2/6] Testing /v2/user/by/username (cocinavenezuela)...")
-    username = "cocinavenezuela"
+    print("\n[2/6] Testing /v2/user/by/username (instagram)...")
+    username = "instagram"
     resp, status = await client._get_debug("/v2/user/by/username", params={"username": username})
     if raw:
         print(f"    RAW ({status}): {json.dumps(resp, indent=4, default=str)[:2000]}")
@@ -83,17 +83,20 @@ async def test_hashtag_top(client: HikerAPIClient, raw: bool = False) -> dict[st
     if not resp:
         return {"ok": False, "error": "No response from /v2/hashtag/medias/top"}
 
-    raw_items = resp.get("response", [])
+    raw_items = client._extract_media_items(resp)
     print(f"    Top-level keys: {list(resp.keys())}")
-    print(f"    'response' field count: {len(raw_items)}")
+    print(f"    Extracted media items: {len(raw_items)}")
     print(f"    'next_page_id': {resp.get('next_page_id')}")
-    print(f"    'more_available': {resp.get('more_available')}")
 
     if raw_items:
         first_post = raw_items[0]
         print(f"    First post keys: {list(first_post.keys())}")
-        user = first_post.get("user") or first_post.get("users", [{}])[0] if first_post.get("users") else {}
-        print(f"    First post username: @{user.get('username')}, followers: {user.get('follower_count', 0):,}")
+        user = first_post.get("user") if isinstance(first_post, dict) else None
+        if not user:
+            caption = first_post.get("caption", {})
+            if isinstance(caption, dict):
+                user = caption.get("user")
+        print(f"    First post username: @{user.get('username') if user else 'N/A'}, followers: {user.get('follower_count', 0) if user else 0:,}")
 
     return {"ok": len(raw_items) > 0, "items": len(raw_items)}
 
@@ -131,11 +134,11 @@ async def test_hashtag_pagination(client: HikerAPIClient, raw: bool = False) -> 
     if not resp1:
         return {"ok": False, "error": "No response on first page"}
 
-    items_p1 = resp1.get("response", [])
+    items_p1 = client._extract_media_items(resp1)
     handles_p1 = set()
     for post in items_p1:
-        user = post.get("user") or post.get("users", [{}])[0] if post.get("users") else {}
-        if user.get("username"):
+        user = post.get("user") if isinstance(post, dict) else None
+        if user and user.get("username"):
             handles_p1.add(user.get("username"))
 
     print(f"    Page 1: {len(items_p1)} posts, handles: {handles_p1}")
@@ -148,11 +151,11 @@ async def test_hashtag_pagination(client: HikerAPIClient, raw: bool = False) -> 
         resp2, _ = await client._get_debug("/v2/hashtag/medias/top", params={"name": hashtag, "page_id": cursor})
         if raw and resp2:
             print(f"    PAGE 2 RAW: {json.dumps(resp2, indent=4, default=str)[:1500]}")
-        items_p2 = resp2.get("response", []) if resp2 else []
+        items_p2 = client._extract_media_items(resp2) if resp2 else []
         handles_p2 = set()
         for post in items_p2:
-            user = post.get("user") or post.get("users", [{}])[0] if post.get("users") else {}
-            if user.get("username"):
+            user = post.get("user") if isinstance(post, dict) else None
+            if user and user.get("username"):
                 handles_p2.add(user.get("username"))
         overlap = handles_p1 & handles_p2
         print(f"    Page 2: {len(items_p2)} posts, overlap with page1: {len(overlap)}")
