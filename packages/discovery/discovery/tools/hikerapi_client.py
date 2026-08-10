@@ -79,6 +79,52 @@ class HikerAPIClient:
         except Exception as e:
             logger.warning("hikerapi_cache_set_error", error=str(e))
 
+    async def _get_debug(
+        self,
+        path: str,
+        params: dict | None = None,
+    ) -> tuple[dict | None, int | None]:
+        """GET with full response debug. Returns (data, status_code)."""
+        client = await self._get_client()
+        try:
+            response = await client.get(path, params=params)
+            status = response.status_code
+            if response.status_code == 429:
+                logger.warning("hikerapi_rate_limited", path=path)
+                return None, 429
+            if response.status_code == 404:
+                return None, 404
+            if response.status_code in (401, 403):
+                logger.error(
+                    "hikerapi_auth_error",
+                    path=path,
+                    status=status,
+                    response_body=response.text[:500],
+                    hint="Verify x-access-key header is correct and key is active",
+                )
+                return None, status
+            response.raise_for_status()
+            data = response.json()
+            logger.info(
+                "hikerapi_response_debug",
+                path=path,
+                status=status,
+                data_keys=list(data.keys()) if isinstance(data, dict) else type(data).__name__,
+                data_preview=str(data)[:300],
+            )
+            return data, status
+        except httpx.HTTPStatusError as e:
+            logger.error(
+                "hikerapi_http_error",
+                path=path,
+                status=e.response.status_code,
+                response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
+            )
+            return None, e.response.status_code
+        except Exception as e:
+            logger.error("hikerapi_request_error", path=path, error=str(e))
+            return None, None
+
     async def _get(
         self,
         path: str,

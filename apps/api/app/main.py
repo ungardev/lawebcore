@@ -172,18 +172,29 @@ async def health_sources():
     if hikerapi_key:
         try:
             client = HikerAPIClient(api_key=hikerapi_key)
-            balance_resp = await client._get("/sys/balance")
+            balance_resp, status_code = await client._get_debug("/sys/balance")
             await client.close()
             if balance_resp:
+                balance = (
+                    balance_resp.get("user_credit_balance")
+                    or balance_resp.get("balance")
+                    or balance_resp.get("credits")
+                    or balance_resp.get("credit_balance")
+                    or balance_resp.get("data", {}).get("balance")
+                    or balance_resp.get("response", {}).get("balance")
+                )
                 result["sources"]["hikerapi"] = {
                     "status": "ok",
-                    "balance": balance_resp.get("user_credit_balance") or balance_resp.get("balance"),
+                    "balance": balance,
+                    "status_code": status_code,
+                    "response_raw": str(balance_resp)[:500],
                     "key_prefix": hikerapi_key[:8] + "..." if len(hikerapi_key) > 8 else hikerapi_key,
                 }
             else:
                 result["sources"]["hikerapi"] = {
                     "status": "error",
-                    "error": "No response from /sys/balance (check x-access-key header)",
+                    "status_code": status_code,
+                    "error": f"No response from /sys/balance (status={status_code})",
                 }
         except Exception as e:
             result["sources"]["hikerapi"] = {
