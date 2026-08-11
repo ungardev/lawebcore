@@ -32,6 +32,7 @@ from discovery.schemas import BriefStructured, Platform
 from discovery.memory import conversation_memory
 from discovery.tools import (
     apify_client,
+    hikerapi_client,
     meta_client,
     metricool_client,
     multi_actor_instagram_client,
@@ -50,8 +51,10 @@ from discovery.candidate_analyzer import candidate_analyzer
 logger = structlog.get_logger(__name__)
 
 APIFY_SEMAPHORE = asyncio.Semaphore(5)
-MAX_HANDLES_TO_ENRICH = 75
+MAX_HANDLES_TO_ENRICH = 50
 MAX_POSTS_PER_HASHTAG = 20
+TIER_MIN_FOLLOWERS = 5_000
+TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
 
@@ -444,22 +447,48 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         if handles_to_enrich:
             try:
-                enriched_profiles = await apify_client.search_instagram_profiles_batch(handles_to_enrich, discovery_run_id=run_id)
-                if not enriched_profiles:
-                    step3_degraded = True
-                    step3_error = "Apify returned empty result"
-                    await _save_progress_message(
-                        run_id,
-                        f"⚠️ **Step 3/4 degradado**: Apify no devolvió datos enriquecidos "
-                        f"({len(handles_to_enrich)} perfiles intentados). "
-                        f"Continuando con datos básicos...",
-                    )
+                if source_name == "hikerapi":
+                    logger.info("step3_using_hikerapi_enrichment", handles_count=len(handles_to_enrich))
+                    enriched_profiles = []
+                    for handle in handles_to_enrich:
+                        try:
+                            profile = await hikerapi_client.enrich_profile(handle)
+                            if profile:
+                                enriched_profiles.append(profile)
+                            await asyncio.sleep(1.0)
+                        except Exception as e:
+                            logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
+                    if enriched_profiles:
+                        await _save_progress_message(
+                            run_id,
+                            f"✅ **Step 3/4 completado (HikerAPI)**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
+                            f"con datos reales de Instagram (followers, ER, bio, etc.)",
+                        )
+                    else:
+                        step3_degraded = True
+                        step3_error = "HikerAPI returned empty result"
+                        await _save_progress_message(
+                            run_id,
+                            f"⚠️ **Step 3/4 degradado**: HikerAPI no devolvió datos enriquecidos. "
+                            f"Continuando con datos básicos...",
+                        )
                 else:
-                    await _save_progress_message(
-                        run_id,
-                        f"✅ **Step 3/4 completado**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
-                        f"con datos reales de Instagram (followers, ER, bio, etc.)",
-                    )
+                    enriched_profiles = await apify_client.search_instagram_profiles_batch(handles_to_enrich, discovery_run_id=run_id)
+                    if not enriched_profiles:
+                        step3_degraded = True
+                        step3_error = "Apify returned empty result"
+                        await _save_progress_message(
+                            run_id,
+                            f"⚠️ **Step 3/4 degradado**: Apify no devolvió datos enriquecidos "
+                            f"({len(handles_to_enrich)} perfiles intentados). "
+                            f"Continuando con datos básicos...",
+                        )
+                    else:
+                        await _save_progress_message(
+                            run_id,
+                            f"✅ **Step 3/4 completado**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
+                            f"con datos reales de Instagram (followers, ER, bio, etc.)",
+                        )
             except Exception as e:
                 step3_degraded = True
                 step3_error = str(e)
@@ -542,6 +571,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[discovery_run_task] STEP 4: Excluded {original_count - len(profiles)} handles, scoring {len(profiles)} remaining", flush=True)
 
         cross_ref_handles = step1_handles & step2_handles
+        hashtag_appearances: dict[str, int] = {}
+        for h in step1_handles:
+            hashtag_appearances[h] = hashtag_appearances.get(h, 0) + 1
         scored: list[dict] = []
         bots_filtered = 0
         untracked_no_followers = 0
@@ -601,6 +633,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 geo_country_mismatch += 1
                 continue
 
+            non_ve_signals = (
+                "españa", "spain", "salamanca", "madrid", "barcelona", "valencia es",
+                "dominicana", "santo domingo", "santiago rd", "rd 🇩🇴",
+                "méxico", "colombia", "argentina", "chile", "perú",
+                "estados unidos", "usa ", "miami", "nyc", "texas",
+                "kenwood españa", "embajador kenwood",
+            )
+            bio_geo = f"{bio.lower()} {handle.lower()} {p.get('full_name', '').lower()}"
+            if any(sig in bio_geo for sig in non_ve_signals):
+                geo_country_mismatch += 1
+                continue
+
             geo_indicators = profile_data.get("geo_indicators", [])
             geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
             if geo_indicators and geo == 0.0:
@@ -613,7 +657,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 political_filtered += 1
                 continue
 
-            cross_referenced = handle in cross_ref_handles
+            cross_referenced = hashtag_appearances.get(handle, 0) >= 2
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
             real_niche = niche_relevance(p, profile_data)
@@ -633,6 +677,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "vetstore", "veterinaria store", "tienda veterinaria",
                 "cachorro en venta", "cachorros en venta", "venta de cachorros",
                 "criadero", "cria", "cría", "breeder", "kennel",
+                "cápsulas", "capsulas", "granos", "molido", "seleccionamos a mano",
+                "selección a mano", "nuestro café", "nuestra marca",
+                "cursos online", "curso de repostería", "clases de cocina", "aprende repostería",
+                "haz click aquí", "link en bio", "clic abajo enlace", "contáctanos al",
+                "embajador kenwood", "embajador officiel",
+                "nuestra marca", "fabricamos", "elaboramos", "producimos",
+                "nuestra tienda", "punto de venta", "pdv",
+                "delivery propio", "envío gratis", "envío a domicilio",
+                "productos artesanales", "artesanal",
+                "panadería profesional", "pastelería profesional",
             )
             username_lower = handle.lower()
             is_tienda = any(kw in bio.lower() for kw in tienda_keywords_hard)
