@@ -106,7 +106,7 @@ export function LensChatPage() {
   };
 
   return (
-    <div className="flex h-full flex-col gap-5 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden">
       <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
