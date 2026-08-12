@@ -41,6 +41,38 @@ APIFY_SEMAPHORE = asyncio.Semaphore(3)
 MAX_HANDLES_TO_ENRICH = 150
 MAX_POSTS_PER_HASHTAG = 50
 
+TIER_DISTRIBUTION = {"NANO": 0.40, "MICRO": 0.35, "MID": 0.15, "MACRO": 0.10}
+
+
+def _tier_of(followers: int) -> str:
+    if followers < 10_000:
+        return "NANO"
+    if followers < 100_000:
+        return "MICRO"
+    if followers < 500_000:
+        return "MID"
+    return "MACRO"
+
+
+def _rerank_diversified(scored: list[dict], target_n: int = 80) -> list[dict]:
+    buckets: dict[str, list[dict]] = {"NANO": [], "MICRO": [], "MID": [], "MACRO": []}
+    for c in scored:
+        buckets[_tier_of(c.get("followers") or 0)].append(c)
+    for bucket in buckets.values():
+        bucket.sort(key=lambda x: x.get("match_score") or 0, reverse=True)
+    final: list[dict] = []
+    for tier, pct in TIER_DISTRIBUTION.items():
+        quota = max(1, int(target_n * pct))
+        final.extend(buckets[tier][:quota])
+    if len(final) < target_n:
+        remaining = sorted(
+            [c for b in buckets.values() for c in b if c not in final],
+            key=lambda x: x.get("match_score") or 0,
+            reverse=True,
+        )
+        final.extend(remaining[: target_n - len(final)])
+    return final[:target_n]
+
 
 async def startup(ctx):
     """Initialize worker context (DB, Redis) and start health server."""
@@ -359,7 +391,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
             tier = classify_tier(followers)
 
-            if geo >= 1.0:
+            if geo >= 0.3:
                 bio = p.get("biography") or p.get("bio") or ""
                 is_tienda = any(
                     kw in bio.lower()
@@ -411,8 +443,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 })
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
-        TARGET_CANDIDATES = 15
-        qualified = scored[:TARGET_CANDIDATES]
+        target_candidates = 80
+        qualified = _rerank_diversified(scored, target_candidates)
 
         logger.info(
             "scoring_done",
