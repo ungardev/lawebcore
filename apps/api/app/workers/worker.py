@@ -166,7 +166,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1():
             results = []
-            for tag in plan.hashtag_queries:
+            for tag in plan.hashtag_queries[:5]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
@@ -176,7 +176,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2():
             results = []
-            for kw in plan.keyword_queries:
+            for kw in plan.keyword_queries[:5]:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=15)
                     results.extend(items)
