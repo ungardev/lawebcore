@@ -1,21 +1,19 @@
 """
-End-to-end test for Purina Dog Chow discovery via HikerAPI.
+End-to-end test for Leche Evaporada Carnation discovery via HikerAPI.
 
 This script:
 1. Logs in via local bcrypt auth (Railway Postgres)
-2. Creates a discovery run with the Purina Dog Chow brief (VE, Instagram)
+2. Creates a discovery run with the Carnation brief (VE, Instagram)
 3. Polls until completion
 4. Returns top candidates
 
 Run from Railway shell:
     cd /app/apps/api
-    python3 scripts/test_purina_dogchow.py
+    python3 scripts/test_carnation.py
 
 Requirements:
     - HIKERAPI_API_KEY env var set in Railway
-    - DATABASE_URL pointing to Railway Postgres
-    - ADMIN_TOKEN set (for API auth)
-    - User with email/password in users table (e.g. from create_user_ignacio.sql)
+    - User with email/password in users table (local bcrypt auth)
 """
 
 import asyncio
@@ -29,17 +27,25 @@ import httpx
 from discovery.tools.hikerapi_client import HikerAPIClient
 
 
-PURINA_BRIEF = {
-    "product_name": "Purina Dog Chow",
-    "industry": "mascotas",
-    "niches": ["mascotas", "perros", "pet care", "adopcion animal"],
+CARNATION_BRIEF = {
+    "product_name": "Leche Evaporada Carnation",
+    "industry": "food",
+    "niches": [
+        "cocina venezolana",
+        "recetas",
+        "reposteria",
+        "postres",
+        "dulce de leche",
+        "cocina facil",
+        "comida criolla",
+    ],
     "audience_countries": ["VE"],
-    "audience_cities": ["Caracas", "Valencia", "Maracay"],
+    "audience_cities": ["Caracas", "Valencia", "Maracay", "Barquisimeto"],
     "platforms": ["instagram"],
     "audience_gender": "all",
     "audience_age_min": 18,
-    "audience_age_max": 45,
-    "tone": ["warm and authentic"],
+    "audience_age_max": 55,
+    "tone": ["warm and authentic", "family oriented"],
     "exclude_stores": True,
     "analyze_with_ai": True,
 }
@@ -60,7 +66,7 @@ async def check_hikerapi_balance() -> dict:
 
 async def main():
     print("=" * 60)
-    print("PURINA DOG CHOW — E2E DISCOVERY TEST (HikerAPI Only)")
+    print("LECHE EVAPORADA CARNATION — E2E DISCOVERY TEST (HikerAPI Only)")
     print("=" * 60)
 
     print("\n[0/5] Pre-flight: HikerAPI balance check...")
@@ -74,11 +80,14 @@ async def main():
     if balance < 100:
         print(f"  WARNING: Low balance ({balance} requests). Test needs ~100.")
     else:
-        print(f"  OK: Sufficient for Purina test")
+        print(f"  OK: Sufficient for Carnation test")
 
     print("\n[1/5] Login via local auth...")
-    login_email = os.getenv("TEST_EMAIL", "ignacio.chacon@hacemosloquenosgusta.com")
-    login_password = os.getenv("TEST_PASSWORD", "aYavBm8xwrTTLGuxtCPEEQ")
+    login_email = os.getenv("TEST_EMAIL", "ungar.villamizar@hacemosloquenosgusta.com")
+    login_password = os.getenv("TEST_PASSWORD", "")
+    if not login_password:
+        print(f"  FAIL: TEST_PASSWORD env var not set")
+        return 1
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
         try:
             r = await client.post("/api/v1/auth/login", json={"email": login_email, "password": login_password})
@@ -98,10 +107,10 @@ async def main():
             print(f"  FAIL: Login error — {e}")
             return 1
 
-        print("\n[2/5] Create discovery run — Purina Dog Chow (VE, Instagram)...")
+        print("\n[2/5] Create discovery run — Leche Evaporada Carnation (VE, Instagram)...")
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         try:
-            r = await client.post("/api/v1/discovery/search", json=PURINA_BRIEF, headers=headers)
+            r = await client.post("/api/v1/discovery/search", json=CARNATION_BRIEF, headers=headers)
             if r.status_code not in (200, 201):
                 print(f"  FAIL: Create run failed — {r.status_code}")
                 print(f"  Response: {r.text[:300]}")
@@ -113,7 +122,7 @@ async def main():
             print(f"  FAIL: Create run error — {e}")
             return 1
 
-        print(f"\n[3/5] Polling run {run_id[:8]}... (max 600s)...")
+        print(f"\n[3/5] Polling run {run_id[:8]}... (max 900s)...")
         start_time = time.time()
         last_status = None
         while True:
@@ -138,7 +147,7 @@ async def main():
                     error = data.get("error", "Unknown error")
                     print(f"\n  FAIL: Run failed — {error}")
                     return 1
-                if elapsed > 600:
+                if elapsed > 900:
                     print(f"\n  FAIL: Timeout after {elapsed}s")
                     return 1
             except Exception as e:
