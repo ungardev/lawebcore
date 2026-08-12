@@ -120,6 +120,7 @@
   html,
   body {
     height: 100%;
+    overflow: hidden;
   }
   html {
     -webkit-font-smoothing: antialiased;

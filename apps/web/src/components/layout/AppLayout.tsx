@@ -46,7 +46,7 @@ export function AppLayout() {
           onToggleCollapse={toggleCollapsed}
           onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className="min-h-0 overflow-hidden">
+        <main className="min-h-0 overflow-y-auto">
           <div className="mx-auto h-full w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
             <Outlet />
           </div>
