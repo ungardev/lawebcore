@@ -13,11 +13,12 @@ const ACTIONS = [
 interface ActionChipsProps {
   onSend: (prompt: string) => void;
   disabled?: boolean;
+  className?: string;
 }
 
-export function ActionChips({ onSend, disabled }: ActionChipsProps) {
+export function ActionChips({ onSend, disabled, className }: ActionChipsProps) {
   return (
-    <div className="flex flex-wrap gap-2 mb-3">
+    <div className={cn('flex flex-wrap gap-2', className)}>
       {ACTIONS.map((action) => (
         <Button
           key={action.label}

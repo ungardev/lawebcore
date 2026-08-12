@@ -141,9 +141,10 @@ export function LensChatPage() {
 
         <section className="grid min-w-0 overflow-hidden rounded-lg border border-divider bg-panel" style={{ gridTemplateRows: 'minmax(0, 1fr) auto auto' }} aria-label="Conversación con Lens" aria-busy={isLoading}>
           {!conversation && !isLoading ? (
-            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center gap-4">
               <LensEmptyState variant="no_conversations" />
-              <Button onClick={handleNewConversation} className="mt-1 gap-2"><MessageSquare className="h-4 w-4" aria-hidden="true" />Iniciar búsqueda asistida</Button>
+              <Button onClick={handleNewConversation} className="gap-2"><MessageSquare className="h-4 w-4" aria-hidden="true" />Iniciar búsqueda asistida</Button>
+              <ActionChips onSend={handleSend} disabled={isLoading} className="mt-4 justify-center" />
             </div>
           ) : (
             <>
@@ -156,7 +157,6 @@ export function LensChatPage() {
               </div>
               {pendingBrief && <div className="border-t border-divider p-4"><BriefConfirmCard brief={pendingBrief} onConfirm={confirmBrief} onEdit={() => { setWizardBrief(pendingBrief); setShowWizard(true); }} isLoading={isLoading} /></div>}
               <div className="border-t border-divider bg-surface-sunken p-4" aria-label="Composer de Lens">
-                <ActionChips onSend={handleSend} disabled={isLoading} />
                 <div className="flex items-end gap-2 rounded-md border border-divider bg-background p-2 transition-colors focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/10">
                   <Textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend(); } }} placeholder="Describe el producto, audiencia o campaña…" rows={2} className="min-h-12 resize-none border-0 bg-transparent px-2 py-1 shadow-none focus-visible:ring-0" disabled={isLoading} aria-label="Mensaje para Lens" />
                   <Button onClick={() => handleSend()} disabled={isLoading || !input.trim()} size="icon" className="mb-0.5 shrink-0" aria-label="Enviar mensaje"><Send className="h-4 w-4" aria-hidden="true" /></Button>
