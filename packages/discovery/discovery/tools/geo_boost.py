@@ -100,10 +100,6 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     if any(k.lower() in search_text for k in _LATAM_KEYWORDS):
         return 0.5
 
-    if is_business and followers > 5000 and er > 0.01:
-        return 0.4
-    if followers > 20000 and er > 0.02:
-        return 0.3
     return 0.0
 
 

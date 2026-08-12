@@ -64,9 +64,53 @@ class ApifyInstagramSource:
         self,
         username: str,
     ) -> dict[str, Any] | None:
-        """Apify does not support direct username lookup — return None."""
-        logger.debug("apify_source_enrich_not_supported", username=username)
-        return None
+        """Use apify~instagram-profile-scraper to get full profile with country/locationName.
+
+        This is the key method that HikerAPI cannot replace — Apify's profile scraper
+        returns country and locationName fields that HikerAPI does not expose.
+        """
+        profile = await self._client.search_instagram_profile(
+            username=username.lstrip("@"),
+        )
+        if not profile or not isinstance(profile, dict):
+            logger.warning("apify_enrich_profile_failed", username=username)
+            return None
+
+        enriched = {
+            "username": profile.get("username") or username.lstrip("@"),
+            "full_name": profile.get("fullName") or "",
+            "fullName": profile.get("fullName") or "",
+            "bio": profile.get("biography") or "",
+            "biography": profile.get("biography") or "",
+            "avatar_url": profile.get("profilePicUrlHD") or profile.get("profilePicUrl") or "",
+            "profilePicUrl": profile.get("profilePicUrl") or "",
+            "profilePicUrlHD": profile.get("profilePicUrlHD") or "",
+            "follower_count": profile.get("followersCount", 0) or 0,
+            "followersCount": profile.get("followersCount", 0) or 0,
+            "following_count": profile.get("followsCount", 0) or 0,
+            "followsCount": profile.get("followsCount", 0) or 0,
+            "posts_count": profile.get("postsCount", 0) or 0,
+            "postsCount": profile.get("postsCount", 0) or 0,
+            "is_business": bool(profile.get("isBusinessAccount", False)),
+            "isBusinessAccount": bool(profile.get("isBusinessAccount", False)),
+            "is_verified": bool(profile.get("verified", False)),
+            "verified": bool(profile.get("verified", False)),
+            "pk": profile.get("id") or profile.get("pk"),
+            "country": profile.get("country", "") or "",
+            "locationName": profile.get("locationName", "") or "",
+            "city": profile.get("city") or "",
+            "external_url": profile.get("externalUrl") or profile.get("external_url") or "",
+            "latestPosts": profile.get("latestPosts", []) or [],
+        }
+
+        logger.info(
+            "apify_enrich_success",
+            username=enriched["username"],
+            followers=enriched["followersCount"],
+            country=enriched["country"],
+            location=enriched["locationName"],
+        )
+        return enriched
 
     async def close(self) -> None:
         await self._client.close()
@@ -99,6 +143,6 @@ class ApifyInstagramSource:
             "is_verified": bool(user.get("is_verified") or user.get("verified") or item.get("verified", False)),
             "verified": bool(user.get("is_verified") or user.get("verified") or item.get("verified", False)),
             "pk": None,
-            "country": "",
+            "country": user.get("country", "") or item.get("country", "") or "",
             "locationName": item.get("locationName", "") or user.get("locationName", ""),
         }

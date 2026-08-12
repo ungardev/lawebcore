@@ -50,7 +50,7 @@ from discovery.candidate_analyzer import candidate_analyzer
 
 logger = structlog.get_logger(__name__)
 
-MAX_HANDLES_TO_ENRICH = 50
+MAX_HANDLES_TO_ENRICH = 30
 MAX_POSTS_PER_HASHTAG = 20
 TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
@@ -444,10 +444,30 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step3_error: str | None = None
 
         if handles_to_enrich:
+            enrichment_source_used = None
             try:
-                if source_name == "hikerapi":
+                if source_name in ("apify", "hybrid"):
+                    logger.info("step3_using_apify_enrichment", handles_count=len(handles_to_enrich))
+                    try:
+                        apify_enriched = await apify_client.search_instagram_profiles_batch(
+                            usernames=handles_to_enrich,
+                            discovery_run_id=run_id,
+                        )
+                        if apify_enriched:
+                            enriched_profiles = apify_enriched
+                            enrichment_source_used = "apify"
+                            logger.info(
+                                "step3_apify_enrichment_done",
+                                enriched=len(enriched_profiles),
+                                requested=len(handles_to_enrich),
+                            )
+                        else:
+                            logger.warning("step3_apify_returned_empty", requested=len(handles_to_enrich))
+                    except Exception as e:
+                        logger.warning("step3_apify_enrichment_failed", error=str(e))
+
+                if not enriched_profiles and source_name in ("hikerapi", "hybrid"):
                     logger.info("step3_using_hikerapi_enrichment", handles_count=len(handles_to_enrich))
-                    enriched_profiles = []
                     for handle in handles_to_enrich:
                         try:
                             profile = await hikerapi_client.enrich_profile(handle)
@@ -457,23 +477,25 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         except Exception as e:
                             logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
                     if enriched_profiles:
-                        await _save_progress_message(
-                            run_id,
-                            f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos completos "
-                            f"(seguidores, engagement, biografía). Analizando calidad...",
+                        enrichment_source_used = "hikerapi"
+                        logger.info(
+                            "step3_hikerapi_enrichment_done",
+                            enriched=len(enriched_profiles),
+                            requested=len(handles_to_enrich),
                         )
-                    else:
-                        step3_degraded = True
-                        step3_error = "HikerAPI returned empty result"
-                        await _save_progress_message(
-                            run_id,
-                            "⚠️ Tuve un problema técnico obteniendo datos completos. "
-                            "Continuando con datos básicos para no retrasar tu búsqueda...",
-                        )
+
+                if not enriched_profiles:
+                    step3_degraded = True
+                    step3_error = "Both Apify and HikerAPI enrichment failed"
+                    await _save_progress_message(
+                        run_id,
+                        "⚠️ No pude enriquecer perfiles. Continuando con datos básicos...",
+                    )
                 else:
-                    raise ValueError(
-                        f"INSTAGRAM_SOURCE='{source_name}' is not supported. "
-                        "Only HikerAPI is available. Set INSTAGRAM_SOURCE=hikerapi or leave unset."
+                    source_label = enrichment_source_used or "unknown"
+                    await _save_progress_message(
+                        run_id,
+                        f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos reales vía {source_label}...",
                     )
             except Exception as e:
                 step3_degraded = True
