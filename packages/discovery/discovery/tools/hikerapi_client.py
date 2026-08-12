@@ -194,7 +194,7 @@ class HikerAPIClient:
         hashtag_id = info.get("id")
         media_count = info.get("media_count", 0)
         logger.info("hikerapi_hashtag_info", hashtag=clean, media_count=media_count, id=hashtag_id)
-        if media_count < 50:
+        if media_count < 5:
             logger.warning("hikerapi_hashtag_low_volume", hashtag=clean, media_count=media_count)
             return []
 

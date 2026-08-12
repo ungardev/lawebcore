@@ -199,15 +199,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         if isinstance(step1_result, Exception):
             logger.error("step1_hashtag_failed", error=str(step1_result))
             step1_failed = True
+            print(f"[STEP 1] FAILED: {step1_result}", flush=True)
         else:
             hashtag_items = step1_result
+            print(f"[STEP 1] {len(hashtag_items)} posts from {len(plan.hashtag_queries)} hashtags source={source_name}", flush=True)
             logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source=source_name)
 
         if isinstance(step2_result, Exception):
             logger.error("step2_keyword_failed", error=str(step2_result))
             step2_failed = True
+            print(f"[STEP 2] FAILED: {step2_result}", flush=True)
         else:
             keyword_items = step2_result
+            print(f"[STEP 2] {len(keyword_items)} users from {len(plan.keyword_queries)} keywords source={source_name}", flush=True)
             logger.info("step2_keyword_done", keyword_users=len(keyword_items), source=source_name)
 
         for item in hashtag_items:
@@ -271,6 +275,69 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         unique_handles = list(profiles.keys())
         logger.info("step1_and_2_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items))
         step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
+
+        if not unique_handles and not step1_failed and not step2_failed:
+            print(f"[FALLBACK] No candidates from niche hashtags. Trying broad hashtags...", flush=True)
+            await _save_progress_message(
+                run_id,
+                "Los hashtags específicos no encontraron candidatos. Ampliando búsqueda a hashtags generales...",
+            )
+            industry = (brief.industry or "").lower()
+            broad_hashtags: list[str] = []
+            if industry in ("mascotas", "pet", "animals"):
+                broad_hashtags = ["mascotas", "perros", "pets", "petlovers", "dogs", "doglover"]
+            elif industry in ("food", "comida", "bebida"):
+                broad_hashtags = ["comida", "cocina", "recetas", "foodie", "cocinafacil", "gastronomia"]
+            elif industry in ("moda", "fashion", "vestuario"):
+                broad_hashtags = ["moda", "fashion", "estilo", "outfit", "modave", "modavenezuela"]
+            elif industry in ("fitness", "gym", "salud"):
+                broad_hashtags = ["fitness", "gym", "ejercicio", "salud", "fitfam"]
+            elif industry in ("belleza", "beauty", "cosmeticos"):
+                broad_hashtags = ["belleza", "makeup", "beauty", "cosmeticos", "skincare"]
+            else:
+                broad_hashtags = ["lifestyle", "venezuela", "caracas", "vzla"]
+
+            fallback_items: list[dict] = []
+            for tag in broad_hashtags:
+                try:
+                    items = await instagram_source.search_hashtag(tag, limit=20)
+                    fallback_items.extend(items)
+                    print(f"[FALLBACK] hashtag={tag} returned={len(items)} items", flush=True)
+                except Exception as e:
+                    print(f"[FALLBACK] hashtag={tag} error={e}", flush=True)
+
+            for item in fallback_items:
+                handle = item.get("username") or item.get("ownerUsername", "")
+                if not handle:
+                    continue
+                step1_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "bio": item.get("bio", "") or item.get("biography", ""),
+                    "biography": item.get("biography", "") or item.get("bio", ""),
+                    "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "locationName": item.get("locationName", "") or "",
+                    "location": item.get("locationName", "") or "",
+                    "pk": item.get("pk"),
+                }
+
+            unique_handles = list(profiles.keys())
+            print(f"[FALLBACK] Total candidates after fallback: {len(unique_handles)}", flush=True)
 
         prefiltered_handles = []
         stores_prefiltered = 0
