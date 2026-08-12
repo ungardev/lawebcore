@@ -31,12 +31,12 @@ class SourceRegistry:
         return self._instances[source_name]
 
     def _create(self, name: str) -> InstagramSource:
-        if name == "hikerapi":
+        if name == "hikerapi" or name == "hybrid":
             return HikerAPIClient()
         elif name == "apify":
             return ApifyInstagramSource()
         else:
-            raise ValueError(f"Unknown Instagram source: {name}. Valid: hikerapi, apify")
+            raise ValueError(f"Unknown Instagram source: {name}. Valid: hikerapi, apify, hybrid")
 
     def close_all(self) -> None:
         """Close all cached source instances."""
