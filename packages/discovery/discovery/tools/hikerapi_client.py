@@ -319,11 +319,13 @@ class HikerAPIClient:
     def _extract_media_items(self, resp: dict) -> list[dict]:
         """Extrae media objects de la estructura anidada de /v2/hashtag/medias/top.
 
-        Estructura descubierta via test_hikerapi --raw:
+        Estructuras descubiertas via test_hikerapi --raw:
         - layout_type="one_by_two_left" / "two_column" / etc:
             layout_content = {X: {clips: {items: [{media: {...}}, ...]}}}
         - layout_type="media_grid":
             layout_content = {medias: [{media: {...}}, ...]}
+        - feed_type="clips" con fill_items (lista directa):
+            layout_content = {'one_by_two_item': {...}, 'fill_items': [{'media': {...}}, ...]}
         """
         media_items = []
         sections = resp.get("response", {}).get("sections", [])
@@ -342,6 +344,15 @@ class HikerAPIClient:
 
             for layout_key, layout_value in layout_content.items():
                 if layout_key == "medias":
+                    continue
+                if isinstance(layout_value, list):
+                    for item in layout_value:
+                        if not isinstance(item, dict):
+                            continue
+                        if "media" in item and isinstance(item["media"], dict):
+                            media_items.append(item["media"])
+                        elif "pk" in item or "id" in item:
+                            media_items.append(item)
                     continue
                 if not isinstance(layout_value, dict):
                     continue
