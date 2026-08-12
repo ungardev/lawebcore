@@ -277,37 +277,37 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
 
         if not unique_handles and not step1_failed and not step2_failed:
-            print(f"[FALLBACK] No candidates from niche hashtags. Trying broad hashtags...", flush=True)
+            print(f"[FALLBACK] No candidates from niche queries. Trying broad keywords...", flush=True)
             await _save_progress_message(
                 run_id,
-                "Los hashtags específicos no encontraron candidatos. Ampliando búsqueda a hashtags generales...",
+                "Los hashtags específicos no encontraron candidatos. Ampliando búsqueda con términos generales...",
             )
             industry = (brief.industry or "").lower()
-            broad_hashtags: list[str] = []
+            broad_keywords: list[str] = []
             if industry in ("mascotas", "pet", "animals"):
-                broad_hashtags = ["mascotas", "perros", "pets", "petlovers", "dogs", "doglover"]
+                broad_keywords = ["mascotas", "perros", "pets", "doglover", "mascota", "cuidado animal"]
             elif industry in ("food", "comida", "bebida"):
-                broad_hashtags = ["comida", "cocina", "recetas", "foodie", "cocinafacil", "gastronomia"]
+                broad_keywords = ["comida", "cocina", "recetas", "foodie", "gastronomia", "chef"]
             elif industry in ("moda", "fashion", "vestuario"):
-                broad_hashtags = ["moda", "fashion", "estilo", "outfit", "modave", "modavenezuela"]
+                broad_keywords = ["moda", "fashion", "estilo", "outfit", "tendencias"]
             elif industry in ("fitness", "gym", "salud"):
-                broad_hashtags = ["fitness", "gym", "ejercicio", "salud", "fitfam"]
+                broad_keywords = ["fitness", "gym", "ejercicio", "salud", "entrenamiento"]
             elif industry in ("belleza", "beauty", "cosmeticos"):
-                broad_hashtags = ["belleza", "makeup", "beauty", "cosmeticos", "skincare"]
+                broad_keywords = ["belleza", "makeup", "beauty", "skincare", "cosmeticos"]
             else:
-                broad_hashtags = ["lifestyle", "venezuela", "caracas", "vzla"]
+                broad_keywords = ["lifestyle", "vzla", "venezuela", "caracas"]
 
             fallback_items: list[dict] = []
-            for tag in broad_hashtags:
+            for kw in broad_keywords:
                 try:
-                    items = await instagram_source.search_hashtag(tag, limit=20)
+                    items = await instagram_source.search_keyword(kw, limit=20)
                     fallback_items.extend(items)
-                    print(f"[FALLBACK] hashtag={tag} returned={len(items)} items", flush=True)
+                    print(f"[FALLBACK] keyword={kw} returned={len(items)} items", flush=True)
                 except Exception as e:
-                    print(f"[FALLBACK] hashtag={tag} error={e}", flush=True)
+                    print(f"[FALLBACK] keyword={kw} error={e}", flush=True)
 
             for item in fallback_items:
-                handle = item.get("username") or item.get("ownerUsername", "")
+                handle = item.get("username", "")
                 if not handle:
                     continue
                 step1_handles.add(handle)
@@ -315,11 +315,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     continue
                 profiles[handle] = {
                     "username": handle,
-                    "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
-                    "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
-                    "bio": item.get("bio", "") or item.get("biography", ""),
-                    "biography": item.get("biography", "") or item.get("bio", ""),
-                    "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", ""),
+                    "biography": item.get("biography", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
                     "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
                     "follower_count": item.get("follower_count", 0),
                     "followersCount": item.get("followersCount", 0),
@@ -331,8 +331,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "isBusinessAccount": item.get("isBusinessAccount", False),
                     "is_verified": item.get("is_verified", False),
                     "verified": item.get("verified", False),
-                    "locationName": item.get("locationName", "") or "",
-                    "location": item.get("locationName", "") or "",
+                    "locationName": "",
+                    "location": "",
                     "pk": item.get("pk"),
                 }
 

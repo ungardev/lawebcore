@@ -220,10 +220,16 @@ class HikerAPIClient:
             for post in raw_items:
                 if len(results) >= limit:
                     break
-                user = self._extract_user_from_post(post)
-                if not user or not user.get("username"):
+                try:
+                    user = self._extract_user_from_post(post)
+                    if not user or not user.get("username"):
+                        continue
+                    normalized = self._normalize_user(user)
+                    if not normalized:
+                        continue
+                except Exception as e:
+                    logger.warning("hikerapi_post_normalize_error", error=str(e), post_type=type(post).__name__)
                     continue
-                normalized = self._normalize_user(user)
                 normalized["_source_hashtag"] = clean
                 normalized["_post_likers_count"] = post.get("like_count", 0) or post.get("likes_count", 0)
                 normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
@@ -357,7 +363,9 @@ class HikerAPIClient:
                         media_items.append(item)
         return media_items
 
-    def _extract_user_from_post(self, post: dict) -> dict | None:
+    def _extract_user_from_post(self, post: Any) -> dict | None:
+        if not isinstance(post, dict):
+            return None
         user = post.get("user")
         if not user:
             users = post.get("users")
@@ -371,7 +379,12 @@ class HikerAPIClient:
                 user = caption.get("user")
         return user if isinstance(user, dict) else None
 
-    def _normalize_user(self, user: dict) -> dict[str, Any]:
+    def _normalize_user(self, user: Any) -> dict[str, Any] | None:
+        if not isinstance(user, dict):
+            return None
+        username = user.get("username", "")
+        if not username:
+            return None
         pk = user.get("pk") or user.get("id") or user.get("user_id")
         follower_count = user.get("follower_count", 0) or 0
         following_count = user.get("following_count", 0) or 0
