@@ -186,7 +186,8 @@ def has_hard_geo_signal(profile: dict, target_iso: str = "VE") -> bool:
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
     full_name = (profile.get("full_name") or profile.get("fullName") or "").lower()
     location = (profile.get("locationName") or profile.get("location") or "").lower()
-    search_text = f"{bio} {full_name} {location}"
+    username = (profile.get("username") or "").lower()
+    search_text = f"{bio} {full_name} {location} {username}"
 
     if target_iso == "VE":
         ve_signals = [

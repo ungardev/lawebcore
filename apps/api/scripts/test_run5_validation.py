@@ -3,14 +3,13 @@ Run 5 pre-flight validation for HikerAPI.
 
 Validates:
 1. Balance has enough requests for Run 5 (~50 needed)
-2. Enrichment returns real profile data for handles from Run 4
-3. Geo-filter rejects Spain/RD/USA handles
+2. Enrichment returns real profile data for VE handles
+3. Geo-filter rejects RD/MX/ES/CO/AR handles (TLD + signals)
 4. Tienda filter rejects commercial accounts
 
 Run from Railway shell:
-    cd /app
-    export HIKERAPI_API_KEY=wr6l9jyb469nwtwzpk19j25o9wsjyq6b
-    python -m scripts.test_run5_validation
+    cd /app/apps/api
+    python3 scripts/test_run5_validation.py
 """
 
 import asyncio
@@ -24,10 +23,17 @@ from discovery.tools.hikerapi_client import HikerAPIClient
 
 NON_VE_SIGNALS = (
     "españa", "spain", "salamanca", "madrid", "barcelona", "valencia es",
-    "dominicana", "santo domingo", "santiago rd", "rd 🇩🇴",
+    "dominicana", "santo domingo", "santiago rd",
     "méxico", "colombia", "argentina", "chile", "perú",
     "estados unidos", "usa ", "miami", "nyc", "texas",
     "kenwood españa", "embajador kenwood",
+)
+
+NON_VE_HANDLE_TLDS = (
+    ".rd", ".do", ".mx", ".ar", ".co", ".cl", ".pe",
+    ".ec", ".pa", ".uy", ".py", ".bo", ".cr",
+    "_rd", "_do", "_mx", "_ar", "_co", "_cl", "_pe",
+    "_ec", "_pa", "_uy", "_py", "_bo", "_cr",
 )
 
 TIENDA_KEYWORDS = (
@@ -73,13 +79,13 @@ async def main():
     else:
         print(f"  OK: Sufficient for Run 5")
 
-    print("\n[2/4] Enrichment test (5 handles from Run 4)...")
+    print("\n[2/4] Enrichment test (5 handles: 2 VE + 3 non-VE for filter validation)...")
     test_handles = [
-        "paola_cocina_",
-        "cocinavenezolana",
-        "sarasellos",
-        "onlypans.rd",
-        "mamaloncheras",
+        "paola_cocina_",       # VE - should PASS geo filter
+        "cocinavenezolana",    # VE - should PASS geo filter
+        "onlypans.rd",         # RD - should REJECT (TLD check)
+        "mamiferosmx",         # MX - should REJECT (TLD + signal)
+        "cocinaespanola",      # ES - should REJECT (signal)
     ]
     enriched = {}
     for handle in test_handles:
@@ -100,16 +106,24 @@ async def main():
         print("  FAIL: No profiles enriched. Check API key and rate limit.")
         return 1
 
-    print("\n[3/4] Geo-filter test (reject non-VE)...")
+    print("\n[3/4] Geo-filter test (reject non-VE via signals + handle TLD)...")
     geo_pass = 0
     geo_fail = 0
     for handle, profile in enriched.items():
         bio = (profile.get("biography") or profile.get("bio") or "").lower()
         full_name = (profile.get("fullName") or profile.get("full_name") or "").lower()
         combined = f"{bio} {handle.lower()} {full_name}"
-        rejected = any(sig in combined for sig in NON_VE_SIGNALS)
+        signal_rejected = any(sig in combined for sig in NON_VE_SIGNALS)
+        handle_lower = handle.lower()
+        tld_rejected = any(handle_lower.endswith(tld) for tld in NON_VE_HANDLE_TLDS)
+        rejected = signal_rejected or tld_rejected
+        reason = []
+        if tld_rejected:
+            reason.append("TLD")
+        if signal_rejected:
+            reason.append("signal")
         status = "REJECT" if rejected else "PASS"
-        print(f"  @{handle}: {status} (bio snippet: {bio[:60]!r})")
+        print(f"  @{handle}: {status} ({', '.join(reason) if reason else 'OK'}) - bio: {bio[:50]!r}")
         if rejected:
             geo_fail += 1
         else:
@@ -142,10 +156,10 @@ async def main():
     await client.close()
 
     print("\n" + "=" * 60)
-    if balance >= 50 and geo_fail >= 2 and tienda_fail >= 1 and enriched:
+    if balance >= 50 and geo_fail >= 3 and tienda_fail >= 1 and enriched:
         print("RESULT: VALIDATION PASSED — Ready for Run 5")
         print("  - Sufficient balance")
-        print("  - Geo-filter working (rejects Spain/RD)")
+        print("  - Geo-filter working (rejects RD/MX/ES via TLD + signals)")
         print("  - Tienda-filter working (rejects commercial)")
         return 0
     elif balance < 50:

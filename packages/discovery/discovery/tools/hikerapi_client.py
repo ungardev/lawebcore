@@ -380,6 +380,18 @@ class HikerAPIClient:
         hd_pic = (user.get("hd_profile_pic_url_info") or {}).get("url", "")
         profile_pic = user.get("profile_pic_url", "") or hd_pic
 
+        country_raw = (
+            user.get("country_code")
+            or user.get("country")
+            or (user.get("account_type") or {}).get("country")
+            or (user.get("user") or {}).get("country_code")
+            or (user.get("hikerapi_country", "") or "").get("iso_code")
+            or ""
+        )
+        country_iso = ""
+        if country_raw:
+            country_iso = str(country_raw).upper()[:2]
+
         return {
             "username": user.get("username", ""),
             "full_name": user.get("full_name", "") or user.get("fullName", ""),
@@ -400,7 +412,7 @@ class HikerAPIClient:
             "verified": bool(user.get("is_verified", False)),
             "is_private": bool(user.get("is_private", False)),
             "pk": str(pk) if pk else None,
-            "country": "",
+            "country": country_iso,
             "locationName": user.get("location_name", "") or user.get("city", ""),
         }
 

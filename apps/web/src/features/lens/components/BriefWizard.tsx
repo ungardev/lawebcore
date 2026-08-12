@@ -53,26 +53,26 @@ const INDUSTRIES = [
 ]
 
 const NICHE_PRESETS: Record<string, string[]> = {
-  mascotas: ['mascotas', 'perros', 'gatos', 'pet care', 'adopcion', 'rescate animal'],
-  belleza: ['makeup', 'skincare', 'haircare', 'nails', 'beauty blogger'],
-  food: ['foodie', 'recetas', 'cocina', 'restaurantes', 'comida saludable'],
-  moda: ['fashion', 'streetwear', 'outfits', 'estilo'],
-  fitness: ['gym', 'workout', 'healthy', 'running'],
-  tecnologia: ['tech', 'gadgets', 'apps', 'coding'],
-  turismo: ['travel', 'viajes', 'hoteles', 'experiencias'],
+  mascotas: ['mascotas', 'perros', 'gatos', 'pet care', 'adopcion', 'rescate animal', 'mascotas Venezuela', 'perrosvzla', 'vet Venezuela'],
+  belleza: ['makeup', 'skincare', 'haircare', 'nails', 'beauty blogger', 'belleza Venezuela'],
+  food: ['foodie', 'recetas', 'cocina', 'restaurantes', 'comida saludable', 'cocina venezolana', 'comidavenezolana'],
+  moda: ['fashion', 'streetwear', 'outfits', 'estilo', 'moda Venezuela'],
+  fitness: ['gym', 'workout', 'healthy', 'running', 'fitness Venezuela'],
+  tecnologia: ['tech', 'gadgets', 'apps', 'coding', 'tech Venezuela'],
+  turismo: ['travel', 'viajes', 'hoteles', 'experiencias', 'turismo Venezuela'],
 }
 
 const COUNTRIES = [
-  { value: 'VE', label: 'Venezuela' },
-  { value: 'CO', label: 'Colombia' },
-  { value: 'MX', label: 'México' },
-  { value: 'AR', label: 'Argentina' },
-  { value: 'CL', label: 'Chile' },
-  { value: 'EC', label: 'Ecuador' },
-  { value: 'PE', label: 'Perú' },
-  { value: 'PA', label: 'Panamá' },
-  { value: 'DO', label: 'Rep. Dominicana' },
-  { value: 'US', label: 'EE.UU. (Hispanos)' },
+  { value: 'VE', label: '🇻🇪 Venezuela' },
+  { value: 'CO', label: '🇨🇴 Colombia' },
+  { value: 'MX', label: '🇲🇽 México' },
+  { value: 'AR', label: '🇦🇷 Argentina' },
+  { value: 'CL', label: '🇨🇱 Chile' },
+  { value: 'EC', label: '🇪🇨 Ecuador' },
+  { value: 'PE', label: '🇵🇪 Perú' },
+  { value: 'PA', label: '🇵🇦 Panamá' },
+  { value: 'DO', label: '🇩🇴 Rep. Dominicana' },
+  { value: 'US', label: '🇺🇸 EE.UU. (Hispanos)' },
 ]
 
 const VENEZUELA_STATES = [
@@ -143,7 +143,7 @@ function createEmptyBrief(): Partial<BriefStructured> {
     audience_gender: 'all',
     audience_age_min: 25,
     audience_age_max: 65,
-    audience_countries: [],
+    audience_countries: ['VE'],
     audience_cities: [],
     audience_states: [],
     platforms: ['instagram'],

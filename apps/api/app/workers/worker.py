@@ -5,7 +5,7 @@ Handles:
 - AI generation tasks (brief, post-mortem, etc.)
 - Campaign automation triggers
 - Scheduled report generation
-- Discovery run execution (Apify, Meta, TikTok, YouTube)
+- Discovery run execution (HikerAPI, Meta, TikTok, YouTube)
 - Integration syncs
 """
 
@@ -50,7 +50,6 @@ from discovery.candidate_analyzer import candidate_analyzer
 
 logger = structlog.get_logger(__name__)
 
-APIFY_SEMAPHORE = asyncio.Semaphore(5)
 MAX_HANDLES_TO_ENRICH = 50
 MAX_POSTS_PER_HASHTAG = 20
 TIER_MIN_FOLLOWERS = 5_000
@@ -467,21 +466,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                             "Continuando con datos básicos para no retrasar tu búsqueda...",
                         )
                 else:
-                    enriched_profiles = await apify_client.search_instagram_profiles_batch(handles_to_enrich, discovery_run_id=run_id)
-                    if not enriched_profiles:
-                        step3_degraded = True
-                        step3_error = "Apify returned empty result"
-                        await _save_progress_message(
-                            run_id,
-                            "⚠️ No pude obtener datos completos de algunos perfiles. "
-                            "Continuando con los datos que tenemos...",
-                        )
-                    else:
-                        await _save_progress_message(
-                            run_id,
-                            f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos completos "
-                            f"(seguidores, engagement, biografía). Analizando calidad...",
-                        )
+                    raise ValueError(
+                        f"INSTAGRAM_SOURCE='{source_name}' is not supported. "
+                        "Only HikerAPI is available. Set INSTAGRAM_SOURCE=hikerapi or leave unset."
+                    )
             except Exception as e:
                 step3_degraded = True
                 step3_error = str(e)
@@ -601,6 +589,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             if followers < plan.min_followers:
                 low_followers_skipped += 1
                 continue
+            if followers > TIER_MAX_FOLLOWERS:
+                low_followers_skipped += 1
+                continue
 
             latest = p.get("latestPosts") or []
             er = 0.0
@@ -628,13 +619,24 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             non_ve_signals = (
                 "españa", "spain", "salamanca", "madrid", "barcelona", "valencia es",
-                "dominicana", "santo domingo", "santiago rd", "rd 🇩🇴",
+                "dominicana", "santo domingo", "santiago rd",
                 "méxico", "colombia", "argentina", "chile", "perú",
                 "estados unidos", "usa ", "miami", "nyc", "texas",
                 "kenwood españa", "embajador kenwood",
             )
             bio_geo = f"{bio.lower()} {handle.lower()} {p.get('full_name', '').lower()}"
             if any(sig in bio_geo for sig in non_ve_signals):
+                geo_country_mismatch += 1
+                continue
+
+            handle_lower = handle.lower()
+            non_ve_handle_tlds = (
+                ".rd", ".do", ".mx", ".ar", ".co", ".cl", ".pe",
+                ".ec", ".pa", ".uy", ".py", ".bo", ".cr",
+                "_rd", "_do", "_mx", "_ar", "_co", "_cl", "_pe",
+                "_ec", "_pa", "_uy", "_py", "_bo", "_cr",
+            )
+            if any(handle_lower.endswith(tld) for tld in non_ve_handle_tlds):
                 geo_country_mismatch += 1
                 continue
 
@@ -988,72 +990,15 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
 
 async def _execute_platform_query(platform: Platform, query, run_progress: dict | None = None) -> list[dict]:
-    """Ejecuta una query en la plataforma específica."""
-    if platform == Platform.INSTAGRAM:
-        if query.query_type == "hashtag_search":
-            raw_posts = await multi_actor_instagram_client.discover_by_hashtag(
-                hashtag=query.params["hashtag"],
-                country=query.params.get("country", "VE"),
-                results_limit=MAX_POSTS_PER_HASHTAG,
-            )
+    """Deprecated: platform-specific queries now go through HikerAPI via discovery_run_task.
 
-            if raw_posts:
-                unique_handles = list(set(
-                    p.get("ownerUsername")
-                    for p in raw_posts
-                    if p.get("ownerUsername")
-                ))[:MAX_HANDLES_TO_ENRICH]
-                logger.info("instagram_enriching_profiles", handles_count=len(unique_handles))
-
-                profile_map: dict[str, dict] = {}
-                if unique_handles:
-                    try:
-                        async with APIFY_SEMAPHORE:
-                            profiles = await apify_client.search_instagram_profiles_batch(unique_handles)
-                        if profiles is None:
-                            logger.warning("Apify returned None for batch, skipping profile enrichment")
-                            profile_map = {}
-                        else:
-                            for p in profiles:
-                                username = p.get("username", "")
-                                if username:
-                                    profile_map[username] = p
-                    except Exception as exc:
-                        logger.warning("instagram_profile_enrichment_failed", error=str(exc))
-
-                enriched_posts = []
-                for post in raw_posts:
-                    handle = post.get("ownerUsername", "")
-                    profile = profile_map.get(handle, {})
-                    if profile:
-                        merged = {**post, **profile, "_from_profile": True}
-                    else:
-                        merged = {**post, "_from_profile": False}
-                    enriched_posts.append(merged)
-
-                return enriched_posts
-            return raw_posts
-
-        elif query.query_type == "profile_search":
-            result = await apify_client.search_instagram_profile(
-                username=query.params.get("keyword", ""),
-            )
-            return [result] if result else []
-    elif platform == Platform.TIKTOK:
-        if query.query_type == "hashtag_search":
-            return await tiktok_client.search_content(
-                query=query.params["hashtag"],
-                country=query.params.get("country", "VE"),
-                max_count=30,
-            )
-    elif platform == Platform.YOUTUBE:
-        if query.query_type == "channel_search":
-            return await youtube_client.search_channels(
-                query=query.params.get("query", ""),
-                region=query.params.get("region", "VE"),
-                max_results=10,
-            )
-    return []
+    This function is kept as a stub to avoid breaking any external callers.
+    Raises NotImplementedError if called.
+    """
+    raise NotImplementedError(
+        "Platform-specific query execution via this path is deprecated. "
+        "All discovery now routes through HikerAPI in discovery_run_task."
+    )
 
 
 def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
