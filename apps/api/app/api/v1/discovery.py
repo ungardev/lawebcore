@@ -332,9 +332,24 @@ async def send_message(
                 )
                 await enqueue_discovery_run(str(run["id"]))
                 discovery_run_id = str(run["id"])
+                platform_text = "Instagram"
+                if len(brief.platforms) == 2:
+                    platform_text = f"Instagram y {brief.platforms[1].replace('instagram', '').replace('tiktok', 'TikTok').replace('youtube', 'YouTube')}"
+                elif len(brief.platforms) > 2:
+                    platform_text = "Instagram, TikTok y YouTube"
+                elif brief.platforms and brief.platforms[0] != "instagram":
+                    platform_text = brief.platforms[0].replace("tiktok", "TikTok").replace("youtube", "YouTube").replace("instagram", "Instagram")
+
+                product_text = f"'{brief.product_name}'" if brief.product_name else "tu producto"
+                location_text = ""
+                if brief.audience_cities and len(brief.audience_cities) > 0:
+                    location_text = f" en {', '.join(brief.audience_cities[:2])}"
+                elif brief.audience_countries and len(brief.audience_countries) > 0:
+                    location_text = f" en {', '.join(brief.audience_countries[:2])}"
+
                 assistant_content = (
-                    "Estoy buscando candidatos en Instagram, TikTok y YouTube "
-                    "basado en tu brief. Te aviso cuando tenga resultados."
+                    f"Perfecto. Voy a buscar candidatos en {platform_text} para {product_text}{location_text}. "
+                    "Te aviso cuando tenga resultados."
                 )
             except Exception as e:
                 assistant_content = (

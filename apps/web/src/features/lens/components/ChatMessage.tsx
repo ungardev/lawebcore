@@ -1,3 +1,4 @@
+import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ChatTurn } from '../types/discovery';
@@ -45,7 +46,15 @@ export function ChatMessage({ turn, onSaveCandidate, onDismissCandidate }: ChatM
                 ) : (
                   <>
                     {turn.content && (
-                      <p className="text-sm break-words whitespace-pre-wrap">{turn.content}</p>
+                      <p className="text-sm break-words whitespace-pre-wrap">
+                        {turn.content.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+                          /^\*\*[^*]+\*\*$/.test(part) ? (
+                            <strong key={i} className="font-semibold">{part.slice(2, -2)}</strong>
+                          ) : (
+                            <React.Fragment key={i}>{part}</React.Fragment>
+                          )
+                        )}
+                      </p>
                     )}
                     {turn.reasoning && (
                       <ThinkingBlock

@@ -100,20 +100,16 @@ async def _save_progress_message(
     tool: str = "discovery_pipeline",
 ) -> None:
     """Guarda un mensaje de progreso en el conversation asociado al run."""
-    import uuid as uuid_lib
     from uuid import UUID as pyUUID
     try:
         conv_id = await _get_conversation_id_for_run(run_id)
         if not conv_id:
             logger.debug("no_conversation_for_run", run_id=run_id)
             return
-        tool_id = str(uuid_lib.uuid4())
         await conversation_memory.save_message(
             conversation_id=pyUUID(conv_id),
             role="assistant",
             content=content,
-            tool_calls=[{"id": tool_id, "name": tool, "status": "completed"}],
-            tool_results=[{"tool_call_id": tool_id, "success": True, "output": {}}],
         )
     except Exception as e:
         logger.warning("save_progress_message_failed", run_id=run_id, error=str(e))
@@ -308,10 +304,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         await _save_progress_message(
             run_id,
-            f"✅ **Steps 1+2 {step_status}**: Encontré **{len(unique_handles)} perfiles únicos** "
-            f"({len(hashtag_items)} via hashtags + {len(keyword_items)} via keywords). "
-            f"Pre-filtrados: {stores_prefiltered} stores, {low_followers_prefiltered} sin seguidores suficientes. "
-            f"Enriqueciendo {min(MAX_HANDLES_TO_ENRICH, len(prefiltered_handles))} perfiles con datos de Instagram...",
+            f"✅ Encontré {len(unique_handles)} perfiles candidatos. "
+            f"Filtrando tiendas y cuentas sin seguidores suficientes...",
         )
 
         await _run_update_metadata(run_id, {
@@ -461,16 +455,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     if enriched_profiles:
                         await _save_progress_message(
                             run_id,
-                            f"✅ **Step 3/4 completado (HikerAPI)**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
-                            f"con datos reales de Instagram (followers, ER, bio, etc.)",
+                            f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos completos "
+                            f"(seguidores, engagement, biografía). Analizando calidad...",
                         )
                     else:
                         step3_degraded = True
                         step3_error = "HikerAPI returned empty result"
                         await _save_progress_message(
                             run_id,
-                            f"⚠️ **Step 3/4 degradado**: HikerAPI no devolvió datos enriquecidos. "
-                            f"Continuando con datos básicos...",
+                            "⚠️ Tuve un problema técnico obteniendo datos completos. "
+                            "Continuando con datos básicos para no retrasar tu búsqueda...",
                         )
                 else:
                     enriched_profiles = await apify_client.search_instagram_profiles_batch(handles_to_enrich, discovery_run_id=run_id)
@@ -479,15 +473,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         step3_error = "Apify returned empty result"
                         await _save_progress_message(
                             run_id,
-                            f"⚠️ **Step 3/4 degradado**: Apify no devolvió datos enriquecidos "
-                            f"({len(handles_to_enrich)} perfiles intentados). "
-                            f"Continuando con datos básicos...",
+                            "⚠️ No pude obtener datos completos de algunos perfiles. "
+                            "Continuando con los datos que tenemos...",
                         )
                     else:
                         await _save_progress_message(
                             run_id,
-                            f"✅ **Step 3/4 completado**: Enriqueí **{len(enriched_profiles)}/{len(handles_to_enrich)} perfiles** "
-                            f"con datos reales de Instagram (followers, ER, bio, etc.)",
+                            f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos completos "
+                            f"(seguidores, engagement, biografía). Analizando calidad...",
                         )
             except Exception as e:
                 step3_degraded = True
@@ -495,8 +488,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 logger.warning("step3_enrichment_failed", run_id=run_id, error=str(e))
                 await _save_progress_message(
                     run_id,
-                    f"⚠️ **Step 3/4 degradado**: Error enriqueciendo perfiles con Apify. "
-                    f"Continuando con datos básicos. Detalle: {str(e)[:100]}",
+                    "⚠️ Tuve un problema técnico con algunos perfiles. "
+                    "Continuando con los datos que tenemos...",
                 )
 
         for e in enriched_profiles:
@@ -884,15 +877,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             await _save_progress_message(
                 run_id,
-                f"⚠️ Escané {len(profiles)} perfiles y {len(scored)} pasaron el filtro geográfico, "
-                f"pero ninguno califica en nicho o calidad. Intenta hashtags más específicos.",
+                "⚠️ Esta vez no encontré candidatos que califiquen. "
+                "Probemos con hashtags más específicos o ajustes al brief...",
             )
         else:
             await _save_progress_message(
                 run_id,
-                f"✅ **Step 5/5 completado**: {len(qualified)} candidatos calificados "
-                f"(de {len(scored)} que pasaron el filtro geográfico). "
-                f"Top score: {qualified[0].get('match_score', 0):.0f}/100",
+                f"✅ Listo. {len(qualified)} creadores calificados para tu campaña. "
+                f"El mejor candidato tiene {qualified[0].get('match_score', 0):.0f}/100 de match.",
             )
 
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
