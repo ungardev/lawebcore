@@ -106,7 +106,7 @@ export function LensChatPage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden">
+    <div className="grid h-full gap-5 overflow-hidden" style={{ gridTemplateRows: 'auto minmax(0, 1fr)' }}>
       <header className="flex shrink-0 flex-col gap-4 border-b border-divider pb-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-3">
@@ -139,7 +139,7 @@ export function LensChatPage() {
           </div>
         </aside>
 
-        <section className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-divider bg-panel" aria-label="Conversación con Lens" aria-busy={isLoading}>
+        <section className="grid min-w-0 overflow-hidden rounded-lg border border-divider bg-panel" style={{ gridTemplateRows: 'minmax(0, 1fr) auto auto' }} aria-label="Conversación con Lens" aria-busy={isLoading}>
           {!conversation && !isLoading ? (
             <div className="flex flex-1 flex-col items-center justify-center px-6 py-10 text-center">
               <LensEmptyState variant="no_conversations" />

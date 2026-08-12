@@ -40,13 +40,13 @@ export function AppLayout() {
         </div>
       </div>
 
-      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="grid h-full min-w-0 flex-1 overflow-hidden" style={{ gridTemplateRows: 'auto minmax(0, 1fr)' }}>
         <Topbar
           collapsed={collapsed}
           onToggleCollapse={toggleCollapsed}
           onOpenMobileMenu={() => setMobileOpen(true)}
         />
-        <main className="min-h-0 flex-1 overflow-hidden">
+        <main className="min-h-0 overflow-hidden">
           <div className="mx-auto h-full w-full max-w-[1680px] px-4 py-5 md:px-6 md:py-7 xl:px-8">
             <Outlet />
           </div>
