@@ -388,15 +388,15 @@ class HikerAPIClient:
         following_count = user.get("following_count", 0) or 0
         media_count = user.get("media_count", 0) or user.get("posts_count", 0) or 0
 
-        hd_pic = (user.get("hd_profile_pic_url_info") or {}).get("url", "")
+        hd_pic = user.get("hd_profile_pic_url_info", {}).get("url", "") if isinstance(user.get("hd_profile_pic_url_info"), dict) else ""
         profile_pic = user.get("profile_pic_url", "") or hd_pic
 
         country_raw = (
             user.get("country_code")
             or user.get("country")
-            or (user.get("account_type") or {}).get("country")
-            or (user.get("user") or {}).get("country_code")
-            or (user.get("hikerapi_country", "") or "").get("iso_code")
+            or ((user.get("account_type") or {}).get("country") if isinstance(user.get("account_type"), dict) else None)
+            or ((user.get("user") or {}).get("country_code") if isinstance(user.get("user"), dict) else None)
+            or ((user.get("hikerapi_country") or {}).get("iso_code") if isinstance(user.get("hikerapi_country"), dict) else None)
             or ""
         )
         country_iso = ""
