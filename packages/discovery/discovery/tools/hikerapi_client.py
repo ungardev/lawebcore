@@ -194,7 +194,7 @@ class HikerAPIClient:
         hashtag_id = info.get("id")
         media_count = info.get("media_count", 0)
         logger.info("hikerapi_hashtag_info", hashtag=clean, media_count=media_count, id=hashtag_id)
-        if media_count < 5:
+        if media_count < 50:
             logger.warning("hikerapi_hashtag_low_volume", hashtag=clean, media_count=media_count)
             return []
 
@@ -220,16 +220,10 @@ class HikerAPIClient:
             for post in raw_items:
                 if len(results) >= limit:
                     break
-                try:
-                    user = self._extract_user_from_post(post)
-                    if not user or not user.get("username"):
-                        continue
-                    normalized = self._normalize_user(user)
-                    if not normalized:
-                        continue
-                except Exception as e:
-                    logger.warning("hikerapi_post_normalize_error", error=str(e), post_type=type(post).__name__, exc_info=True)
+                user = self._extract_user_from_post(post)
+                if not user or not user.get("username"):
                     continue
+                normalized = self._normalize_user(user)
                 normalized["_source_hashtag"] = clean
                 normalized["_post_likers_count"] = post.get("like_count", 0) or post.get("likes_count", 0)
                 normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
@@ -363,9 +357,7 @@ class HikerAPIClient:
                         media_items.append(item)
         return media_items
 
-    def _extract_user_from_post(self, post: Any) -> dict | None:
-        if not isinstance(post, dict):
-            return None
+    def _extract_user_from_post(self, post: dict) -> dict | None:
         user = post.get("user")
         if not user:
             users = post.get("users")
@@ -379,29 +371,21 @@ class HikerAPIClient:
                 user = caption.get("user")
         return user if isinstance(user, dict) else None
 
-    def _normalize_user(self, user: Any) -> dict[str, Any] | None:
-        if not isinstance(user, dict):
-            return None
-        username = user.get("username", "")
-        if not username:
-            return None
+    def _normalize_user(self, user: dict) -> dict[str, Any]:
         pk = user.get("pk") or user.get("id") or user.get("user_id")
         follower_count = user.get("follower_count", 0) or 0
         following_count = user.get("following_count", 0) or 0
         media_count = user.get("media_count", 0) or user.get("posts_count", 0) or 0
 
-        hd_pic_info = user.get("hd_profile_pic_url_info")
-        hd_pic = ""
-        if isinstance(hd_pic_info, dict):
-            hd_pic = hd_pic_info.get("url", "") or ""
+        hd_pic = (user.get("hd_profile_pic_url_info") or {}).get("url", "")
         profile_pic = user.get("profile_pic_url", "") or hd_pic
 
         country_raw = (
             user.get("country_code")
             or user.get("country")
-            or (user.get("account_type") or {}).get("country") if isinstance(user.get("account_type"), dict) else None
-            or (user.get("user") or {}).get("country_code") if isinstance(user.get("user"), dict) else None
-            or (user.get("hikerapi_country") or {}).get("iso_code") if isinstance(user.get("hikerapi_country"), dict) else None
+            or (user.get("account_type") or {}).get("country")
+            or (user.get("user") or {}).get("country_code")
+            or (user.get("hikerapi_country", "") or "").get("iso_code")
             or ""
         )
         country_iso = ""
