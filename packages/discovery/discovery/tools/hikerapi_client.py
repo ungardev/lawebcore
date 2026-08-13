@@ -3,12 +3,10 @@
 import asyncio
 import hashlib
 import json
-import structlog
 from typing import Any
 
 import httpx
-
-from discovery.tools.instagram_source import InstagramSource
+import structlog
 from shared_core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -22,6 +20,7 @@ class HikerAPIClient:
 
     BASE_URL = "https://api.hikerapi.com"
     TIMEOUT = 30.0
+    SAFE_INT = True
 
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or settings.HIKERAPI_API_KEY
@@ -187,7 +186,7 @@ class HikerAPIClient:
         results: list[dict[str, Any]] = []
         cursor = None
 
-        info = await self._get("/v2/hashtag/by/name", params={"name": clean}, cache_ttl=CACHE_TTL_HASHTAG)
+        info = await self._get("/v2/hashtag/by/name", params={"name": clean, "safe_int": self.SAFE_INT}, cache_ttl=CACHE_TTL_HASHTAG)
         if not info:
             logger.warning("hikerapi_hashtag_not_found", hashtag=clean)
             return []
@@ -199,7 +198,7 @@ class HikerAPIClient:
             return []
 
         for _ in range(5):
-            params: dict[str, Any] = {"name": clean}
+            params: dict[str, Any] = {"name": clean, "safe_int": self.SAFE_INT}
             if cursor:
                 params["page_id"] = cursor
 
@@ -238,12 +237,59 @@ class HikerAPIClient:
         logger.info("hikerapi_hashtag_results", hashtag=clean, results=len(results))
         return results
 
+    async def search_hashtag_recent(
+        self,
+        hashtag: str,
+        page_id: str = "",
+        limit: int = 27,
+    ) -> list[dict[str, Any]]:
+        """GET /v2/hashtag/medias/recent — RECOMMENDED: rising stars in the niche.
+
+        Returns recent posts for a hashtag — captures nano/micro creators in growth
+        phase who don't yet appear in top posts. Use alongside search_hashtag (top).
+        """
+        clean = hashtag.lstrip("#")
+        results: list[dict[str, Any]] = []
+        cursor = page_id
+
+        info = await self._get("/v2/hashtag/by/name", params={"name": clean, "safe_int": self.SAFE_INT}, cache_ttl=CACHE_TTL_HASHTAG)
+        if not info:
+            logger.warning("hikerapi_hashtag_recent_not_found", hashtag=clean)
+            return results
+
+        for _ in range(4):
+            params: dict[str, Any] = {"name": clean, "page_id": cursor, "safe_int": self.SAFE_INT}
+            resp = await self._get("/v2/hashtag/medias/recent", params=params, cache_ttl=0)
+            if not resp:
+                break
+
+            raw_items = self._extract_media_items(resp)
+            for post in raw_items:
+                if len(results) >= limit:
+                    break
+                user = self._extract_user_from_post(post)
+                if not user or not user.get("username"):
+                    continue
+                normalized = self._normalize_user(user)
+                normalized["_source_hashtag"] = f"{clean}_recent"
+                normalized["_post_likers_count"] = post.get("like_count", 0) or post.get("likes_count", 0)
+                normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
+                results.append(normalized)
+
+            cursor = resp.get("next_page_id", "")
+            if not cursor:
+                break
+            await asyncio.sleep(0.3)
+
+        logger.info("hikerapi_hashtag_recent_results", hashtag=clean, results=len(results))
+        return results
+
     async def search_keyword(
         self,
         keyword: str,
         limit: int = 20,
     ) -> list[dict[str, Any]]:
-        """GET /v2/fbsearch/accounts — search users by keyword.
+        """GET /v3/fbsearch/accounts — search users by keyword (v3 recommended over v2).
 
         Returns accounts matching the keyword query, filtered to user-type only.
         """
@@ -253,13 +299,11 @@ class HikerAPIClient:
         for _ in range(3):
             params: dict[str, Any] = {
                 "query": keyword,
-                "rank_token": "discovery_pipeline",
-                "search_surface": "(hashtag_search, mentions_search, places_tab)",
+                "page_token": cursor or "",
+                "safe_int": self.SAFE_INT,
             }
-            if cursor:
-                params["page_token"] = cursor
 
-            resp = await self._get("/v2/fbsearch/accounts", params=params)
+            resp = await self._get("/v3/fbsearch/accounts", params=params)
             if not resp:
                 logger.warning("hikerapi_keyword_no_response", keyword=keyword)
                 break
@@ -305,7 +349,7 @@ class HikerAPIClient:
         clean = username.lstrip("@")
         resp = await self._get(
             "/v2/user/by/username",
-            params={"username": clean},
+            params={"username": clean, "safe_int": self.SAFE_INT},
             cache_ttl=CACHE_TTL_PROFILE,
         )
         if not resp:
@@ -325,28 +369,125 @@ class HikerAPIClient:
         query: str,
         limit: int = 15,
     ) -> list[dict[str, Any]]:
-        """GET /v3/fbsearch/topsearch — top Instagram search results for a query.
+        """GET /gql/topsearch?flat=true — RECOMMENDED mixed user+media search.
 
-        Returns the top Instagram accounts matching the query, including follower
-        counts and user objects. Cached 12h since queries are broad.
+        Replaces /v3/fbsearch/topsearch which has pagination bugs.
+        Returns top accounts interleaved with top media. Use flat=true for
+        clean items list; discriminate by __typename: XDTUserDict vs XDTMediaDict.
         """
         results: list[dict[str, Any]] = []
         resp = await self._get(
-            "/v3/fbsearch/topsearch",
-            params={"query": query, "rank_token": "discovery_topsearch"},
+            "/gql/topsearch",
+            params={"query": query, "flat": "true", "safe_int": self.SAFE_INT},
             cache_ttl=43200,
         )
         if not resp:
             return []
-        for u in resp.get("users", [])[:limit]:
-            user = u.get("user", {}) or u
-            if not user.get("username"):
-                continue
-            normalized = self._normalize_user(user)
-            normalized["_source_topsearch"] = query
-            results.append(normalized)
+        rows = resp.get("stream_rows", []) or resp.get("items", []) or []
+        for row in rows:
+            data = row.get("data", {}) if isinstance(row, dict) else row
+            typename = data.get("__typename", "")
+            if typename == "XDTUserDict":
+                user = data.get("user", {}) or data
+                if user.get("username"):
+                    normalized = self._normalize_user(user)
+                    normalized["_source_topsearch"] = query
+                    results.append(normalized)
+                    if len(results) >= limit:
+                        break
+            elif typename == "XDTMediaDict":
+                user = data.get("user", {}) or {}
+                if user.get("username"):
+                    normalized = self._normalize_user(user)
+                    normalized["_source_topsearch_media"] = query
+                    results.append(normalized)
+                    if len(results) >= limit:
+                        break
         logger.info("hikerapi_topsearch_results", query=query, results=len(results))
         return results
+
+    async def gql_topsearch(
+        self,
+        query: str,
+        end_cursor: str | None = None,
+        flat: bool = True,
+    ) -> dict[str, Any]:
+        """GET /gql/topsearch — RECOMMENDED for mixed user+media discovery.
+
+        Returns raw stream_rows structure. Use flat=true to get items[] list.
+        Discriminate by __typename: XDTUserDict (accounts) vs XDTMediaDict (posts).
+        """
+        params: dict[str, Any] = {"query": query, "flat": str(flat).lower(), "safe_int": self.SAFE_INT}
+        if end_cursor:
+            params["end_cursor"] = end_cursor
+        return await self._get("/gql/topsearch", params=params, cache_ttl=0) or {}
+
+    async def search_reels_by_keyword(
+        self,
+        query: str,
+        rank_token: str = "discovery_reels",
+        reels_max_id: str | None = None,
+    ) -> dict[str, Any]:
+        """GET /v2/fbsearch/reels — RECOMMENDED: discover creators via reels by keyword.
+
+        Reels are the #1 discovery channel on IG. Returns creators who post
+        reels matching the query — captures active nano/micro creators.
+        """
+        params: dict[str, Any] = {
+            "query": query,
+            "rank_token": rank_token,
+            "safe_int": self.SAFE_INT,
+        }
+        if reels_max_id:
+            params["reels_max_id"] = reels_max_id
+        return await self._get("/v2/fbsearch/reels", params=params, cache_ttl=0) or {}
+
+    async def search_accounts_v3(
+        self,
+        query: str,
+        page_token: str | None = None,
+    ) -> dict[str, Any]:
+        """GET /v3/fbsearch/accounts — v3 with proper pagination support.
+
+        Recommended over v2 (which doesn't support paging). Returns users list
+        with page_token for next page.
+        """
+        params: dict[str, Any] = {"query": query, "safe_int": self.SAFE_INT}
+        if page_token:
+            params["page_token"] = page_token
+        return await self._get("/v3/fbsearch/accounts", params=params) or {}
+
+    async def search_followers_of(
+        self,
+        user_id: int | str,
+        query: str,
+        force: bool = True,
+    ) -> dict[str, Any]:
+        """GET /v1/user/search/followers — network expansion: find similar VE creators.
+
+        Searches within a user's followers for those matching the query keyword.
+        Key VE discovery technique: take top seed account, find VE-similar
+        creators in their follower base.
+        """
+        params = {
+            "user_id": str(user_id),
+            "query": query,
+            "force": str(force).lower(),
+            "safe_int": self.SAFE_INT,
+        }
+        return await self._get("/v1/user/search/followers", params=params) or {}
+
+    async def web_profile_info(self, user_id: int | str) -> dict[str, Any]:
+        """GET /gql/user/web_profile_info — RECOMMENDED rich profile via GraphQL.
+
+        Best profile info endpoint (raw IG GraphQL). Since Feb 2026, /v1/user/web_profile_info
+        fails ~90% with UserNotFound. Use this instead for richer data including
+        edge_followed_by, bio_links, friendship_status.
+        """
+        return await self._get(
+            "/gql/user/web_profile_info",
+            params={"user_id": str(user_id), "safe_int": self.SAFE_INT},
+        ) or {}
 
     async def suggested_profiles(
         self,
@@ -357,6 +498,8 @@ class HikerAPIClient:
 
         Uses the profile's numeric pk to fetch accounts suggested by Instagram's
         algorithm as similar. No cache — dynamic per query.
+        REQUIRES numeric user_id (pk), not username. Falls back to enrich_profile
+        to resolve pk first.
         """
         profile = await self.enrich_profile(username)
         if not profile or not profile.get("pk"):
@@ -366,7 +509,7 @@ class HikerAPIClient:
         results: list[dict[str, Any]] = []
         resp = await self._get(
             "/v2/user/suggested/profiles",
-            params={"user_id": pk_id, "expand_suggestion": "true"},
+            params={"user_id": str(pk_id), "expand_suggestion": "true", "safe_int": self.SAFE_INT},
         )
         if not resp:
             return []

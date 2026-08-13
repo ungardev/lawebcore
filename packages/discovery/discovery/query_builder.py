@@ -2,9 +2,8 @@
 
 from typing import Any
 
-from discovery.schemas import BriefStructured, DiscoveryPlan
 from discovery.profile_generator import get_or_create_profile
-
+from discovery.schemas import BriefStructured, DiscoveryPlan
 
 TIER_MIN_FOLLOWERS = {
     "nano": 500,
@@ -12,6 +11,83 @@ TIER_MIN_FOLLOWERS = {
     "micro_high": 20_000,
     "mid": 100_000,
 }
+
+
+VE_NICHE_HASHTAGS: dict[str, list[str]] = {
+    "mascotas": [
+        "mascotasvzla", "mascotasvenezuela", "perrosvzla", "gatosvzla",
+        "petloversvzla", "adoptavzla", "rescatedemascotasvzla", "veterinariavzla",
+        "mascotascaracas", "mascotasmaracaibo", "mascotasvalencia",
+        "perroscaracas", "gatoscaracas", "petloverscaracas",
+        "adopcionmascotas", "rescateanimalvzla", "amigospeludos",
+        "cachorrosvzla", "mascotasalatinoamericana",
+    ],
+    "belleza": [
+        "bellezavzla", "makeupvzla", "skincarevzla", "beautyve",
+        "bellezacaracas", "makeupcaracas", "haircaracas",
+        "uñasvzla", "nailsvzla", "cosmeticavzla",
+        "bellezalatina", "makeuplatino", "skincarelatino",
+    ],
+    "food": [
+        "comidavzla", "foodve", "comidavenezolana", "arepavzla",
+        "foodcaracas", "comidacaracas", "gastronomiavzla",
+        "foodiesvzla", "foodpornvzla", "cocinavzla",
+        "recetasvzla", "cocina Latina", "comidastipicasvzla",
+    ],
+    "fitness": [
+        "fitnessvzla", "gymvzla", "gymcaracas", "fitnesscaracas",
+        "gimnasiovzla", "entrenadorvzla", "fitve",
+        "fitnesslatino", "gymlifestyle", "workoutvzla",
+        "healthyvzla", "deportevzla", "atletismovzla",
+    ],
+    "moda": [
+        "modavzla", "fashionve", "modacaracas", "fashioncaracas",
+        "outfitvzla", "modalatina", "fashionvzla",
+        "ropavzla", "estilovzla", "tendenciasvzla",
+    ],
+    "tecnologia": [
+        "techvzla", "tecnologiavzla", "techcaracas", "gadgetsvzla",
+        "innovacionvzla", "digitalvzla", "tecnologialatina",
+    ],
+    "turismo": [
+        "turismovzla", "viajesvzla", "turismocaracas", "viajescaracas",
+        "viajesvenezuela", "turismolatino", "exploravzla",
+        "viajeslatinos", "destinosvzla", "aventuravzla",
+    ],
+    "entretenimiento": [
+        "entretenimientovzla", "musicavzla", "cinevzla",
+        "entretenimientolatino", "culturavzla", "artistasvzla",
+    ],
+    "educacion": [
+        "educacionvzla", "cursosvzla", "aprendizajevzla",
+        "educacionlatina", "universidadvzla", "educacioncaracas",
+    ],
+    "finanzas": [
+        "finanzasvzla", "negociosvzla", "emprendedurismovzla",
+        "negocioslatinos", "finanzaslatinas", "inversionvzla",
+    ],
+    "hogar": [
+        "hogartzla", "decoracionvzla", "interiorismovzla",
+        "casavzla", "hogarcaracas", "decoracioncaracas",
+    ],
+    "deportes": [
+        "deportesvzla", "futbolvzla", "beisbolvzla",
+        "deportistasvzla", "ligavzla", "seleccionvzla",
+    ],
+}
+
+
+def auto_hashtags_for_brief(brief: BriefStructured) -> list[str]:
+    """Returns VE-specific hashtags auto-generated for the brief's industry.
+
+    These hashtags are prepended to the hashtag list to boost VE-native
+    creator discovery. Falls back to generic VE hashtags if industry unknown.
+    """
+    industry = (brief.industry or "default").lower().strip()
+    return VE_NICHE_HASHTAGS.get(industry, [
+        "vzla", "venezuela", "caracas", "vzlatex",
+        "vzlan", "venezolano", "mascotasvzla",
+    ])
 
 
 class QueryBuilder:
@@ -73,6 +149,11 @@ class QueryBuilder:
                 seen.add(cleaned)
                 hashtags.append(cleaned)
         for tag in profile.get("hashtags", []):
+            cleaned = f"#{tag.lstrip('#').strip()}"
+            if cleaned not in seen:
+                seen.add(cleaned)
+                hashtags.append(cleaned)
+        for tag in auto_hashtags_for_brief(brief):
             cleaned = f"#{tag.lstrip('#').strip()}"
             if cleaned not in seen:
                 seen.add(cleaned)

@@ -124,6 +124,34 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
               </span>
             )}
             {candidate.country && <CountryFlag countryCode={candidate.country} size="sm" />}
+            {candidate.city && (
+              <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                📍 {candidate.city}
+              </span>
+            )}
+            {!candidate.city && candidate.country === 'VE' && (
+              <span className="rounded border border-info/30 bg-info/10 px-1.5 py-0.5 text-[10px] font-medium text-info">
+                📍 Venezuela
+              </span>
+            )}
+            {(() => {
+              const followers = candidate.followers ?? 0;
+              const er = candidate.engagement_rate ?? 0;
+              const TIER_ER_BENCHMARKS: Record<string, number> = {
+                NANO: 0.08,
+                MICRO: 0.05,
+                MID: 0.03,
+                MACRO: 0.015,
+              };
+              const tierKey = tier as string;
+              const benchmark = TIER_ER_BENCHMARKS[tierKey] ?? 0.03;
+              const isRising = er > benchmark && followers > 0 && followers < 100_000;
+              return isRising ? (
+                <span className="rounded border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-medium text-success">
+                  🆕 Rising star
+                </span>
+              ) : null;
+            })()}
             {isTienda(candidate.bio) && (
               <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                 Tienda

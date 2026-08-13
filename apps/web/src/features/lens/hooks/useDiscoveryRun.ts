@@ -44,7 +44,7 @@ export function useDiscoveryRun() {
     }
   }, []);
 
-  const pollRun = useCallback(async (runId: string, intervalMs = 3000, maxAttempts = 60) => {
+  const pollRun = useCallback(async (runId: string, intervalMs = 3000, maxAttempts = 200) => {
     cancelledRef.current = false;
     let attempts = 0;
     while (attempts < maxAttempts) {

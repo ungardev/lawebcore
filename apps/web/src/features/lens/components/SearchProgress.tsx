@@ -73,6 +73,9 @@ export function SearchProgress({ progress, className }: SearchProgressProps) {
             })}
           </div>
           <span className="shrink-0 text-xs text-muted-foreground">{progress.candidates_found} candidatos</span>
+          {!isComplete && !isFailed && (
+            <span className="shrink-0 text-[10px] text-muted-foreground/60">· puede tardar 3-6 min</span>
+          )}
         </div>
       </div>
     </Card>

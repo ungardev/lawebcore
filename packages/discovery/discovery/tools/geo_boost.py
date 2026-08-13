@@ -59,9 +59,6 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
     username = (profile.get("username") or profile.get("handle") or "").lower()
     full_name = (profile.get("full_name") or profile.get("fullName") or "").lower()
     location = (profile.get("locationName") or profile.get("location") or "").lower()
-    followers = profile.get("followersCount") or profile.get("follower_count") or 0
-    is_business = profile.get("is_business") or profile.get("isBusinessAccount") or False
-    er = profile.get("engagement_rate") or 0.0
 
     search_text = f"{bio} {full_name} {username} {location}"
 
@@ -200,6 +197,46 @@ def has_hard_geo_signal(profile: dict, target_iso: str = "VE") -> bool:
         ]
         return any(sig in search_text for sig in ve_signals)
     return False
+
+
+def geo_pre_filter_keywords(
+    niches: list[str],
+    geo_terms: list[str] | None = None,
+    max_per_niche: int = 3,
+) -> list[tuple[str, str]]:
+    """Generate (niche, geo_term) tuples for pre-filter geographic discovery.
+
+    Instead of searching "fitness" globally and filtering post-hoc to VE,
+    this generates query pairs that incorporate geo context from the start:
+    - ("fitness", "caracas")
+    - ("mascotas", "vzla")
+    - ("belleza", "maracaibo")
+
+    This dramatically improves recall for VE discovery because the search
+    API biases toward the geo context in results.
+
+    Args:
+        niches: list of niche keywords (from brief.niches)
+        geo_terms: optional geo terms to combine; if None, uses hard-coded VE cities
+        max_per_niche: cap of geo terms per niche to avoid query explosion
+
+    Returns:
+        List of (niche, geo_term) tuples. Can be used to build discovery queries
+        like "fitness caracas" or to tag profiles with geographic context.
+    """
+    if not niches:
+        return []
+
+    default_geo = [
+        "caracas", "maracaibo", "valencia", "barquisimeto",
+        "maracay", "mérida", "maturín", "vzla", "venezuela",
+    ]
+    geo_pool = geo_terms[:max_per_niche] if geo_terms else default_geo[:max_per_niche]
+    results: list[tuple[str, str]] = []
+    for niche in niches:
+        for geo in geo_pool:
+            results.append((niche, geo))
+    return results
 
 
 def _detect_niches(profile: dict) -> list[str]:
