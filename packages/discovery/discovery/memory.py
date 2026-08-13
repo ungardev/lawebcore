@@ -56,7 +56,7 @@ _COLUMNS = {
 
 async def migrate_discovery_conversations_schema() -> None:
     """Add missing columns to discovery_conversations and discovery_runs if they don't exist."""
-from shared_core.railway_pg import railway_pg
+    from shared_core.railway_pg import railway_pg
 
     pool = await railway_pg._ensure_pool()
     async with pool.acquire() as conn:
