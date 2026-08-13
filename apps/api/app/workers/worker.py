@@ -653,8 +653,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             geo_indicators = profile_data.get("geo_indicators", [])
             geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
-            if geo_indicators and geo == 0.0:
-                if not has_hard_geo_signal(p, target_country):
+            if geo_indicators:
+                hikerapi_country = (p.get("country") or "").upper()
+                if hikerapi_country == "VE":
+                    geo = max(geo, 0.85)
+                if geo < 0.4 and not has_hard_geo_signal(p, target_country):
                     geo_no_signal += 1
                     continue
 
