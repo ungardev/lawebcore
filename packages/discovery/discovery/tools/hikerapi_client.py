@@ -251,7 +251,11 @@ class HikerAPIClient:
         cursor = None
 
         for _ in range(3):
-            params: dict[str, Any] = {"query": keyword, "rank_token": "discovery_pipeline"}
+            params: dict[str, Any] = {
+                "query": keyword,
+                "rank_token": "discovery_pipeline",
+                "search_surface": "(hashtag_search, mentions_search, places_tab)",
+            }
             if cursor:
                 params["page_token"] = cursor
 
