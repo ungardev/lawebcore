@@ -464,7 +464,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
 
     try:
         from shared_core.db import db_session
-        from shared_core.railway_pg import supabase_rest
+        from shared_core.railway_pg import railway_pg
         async with db_session():
             rows = await railway_pg.select(
                 table="discovery_profiles",
@@ -532,7 +532,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
 
     try:
         from shared_core.db import db_session
-        from shared_core.railway_pg import supabase_rest
+        from shared_core.railway_pg import railway_pg
         async with db_session():
             existing = await railway_pg.select(
                 table="discovery_profiles",

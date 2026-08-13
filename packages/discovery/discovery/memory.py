@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from shared_core.railway_pg import supabase_rest
+from shared_core.railway_pg import railway_pg
 from discovery.schemas import ConversationStep, DiscoverySearchRequest
 
 logger = logging.getLogger(__name__)
