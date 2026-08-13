@@ -441,3 +441,5 @@ def get_railway_pg() -> RailwayPg:
     return _railway_pg
 
 
+railway_pg: RailwayPg = RailwayPg()
+
