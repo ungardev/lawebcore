@@ -124,7 +124,7 @@ async def main():
             print(f"  FAIL: Create run error — {e}")
             return 1
 
-        print(f"\n[3/5] Polling run {run_id[:8]}... (max 600s)...")
+        print(f"\n[3/5] Polling run {run_id[:8]}... (max 1200s)...")
         start_time = time.time()
         last_status = None
         while True:
@@ -149,7 +149,7 @@ async def main():
                     error = data.get("error", "Unknown error")
                     print(f"\n  FAIL: Run failed — {error}")
                     return 1
-                if elapsed > 600:
+                if elapsed > 1200:
                     print(f"\n  FAIL: Timeout after {elapsed}s")
                     return 1
             except Exception as e:

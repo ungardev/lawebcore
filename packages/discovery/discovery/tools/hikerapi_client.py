@@ -198,7 +198,7 @@ class HikerAPIClient:
             logger.warning("hikerapi_hashtag_low_volume", hashtag=clean, media_count=media_count)
             return []
 
-        for _ in range(5):
+        for _ in range(3):
             params: dict[str, Any] = {"name": clean, "safe_int": self.SAFE_INT}
             if cursor:
                 params["page_id"] = cursor
@@ -258,7 +258,7 @@ class HikerAPIClient:
             logger.warning("hikerapi_hashtag_recent_not_found", hashtag=clean)
             return results
 
-        for _ in range(4):
+        for _ in range(2):
             params: dict[str, Any] = {"name": clean, "page_id": cursor, "safe_int": self.SAFE_INT}
             resp = await self._get("/v2/hashtag/medias/recent", params=params, cache_ttl=0)
             if not resp:
@@ -528,7 +528,7 @@ class HikerAPIClient:
         """
         resp = await self._get(
             "/v1/location/search",
-            params={"query": query, "safe_int": self.SAFE_INT},
+            params={"query": query},
             cache_ttl=CACHE_TTL_LOCATION,
         )
         if not resp:
@@ -550,7 +550,7 @@ class HikerAPIClient:
         """
         resp = await self._get(
             "/v1/location/medias/top",
-            params={"id": str(location_id), "safe_int": self.SAFE_INT},
+            params={"id": str(location_id)},
         )
         if not resp:
             return []
@@ -570,7 +570,7 @@ class HikerAPIClient:
         """
         resp = await self._get(
             "/v1/location/medias/recent/chunk",
-            params={"id": str(location_id), "safe_int": self.SAFE_INT},
+            params={"id": str(location_id)},
         )
         if not resp:
             return []

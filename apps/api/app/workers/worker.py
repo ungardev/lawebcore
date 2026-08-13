@@ -54,8 +54,8 @@ TIER_DISTRIBUTION = {"NANO": 0.55, "MICRO": 0.30, "MID": 0.10, "MACRO": 0.05}
 
 VE_GEO_SUFFIXES = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "barquisimeto"]
 
-MAX_REELS_PER_QUERY = 20
-MAX_FOLLOWER_EXPANSION_PER_SEED = 30
+MAX_REELS_PER_QUERY = 10
+MAX_FOLLOWER_EXPANSION_PER_SEED = 15
 
 
 def _tier_of(followers: int) -> str:
@@ -285,7 +285,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1():
             results = []
-            for tag in plan.hashtag_queries:
+            for tag in plan.hashtag_queries[:6]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
@@ -295,9 +295,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1_recent():
             results = []
-            for tag in plan.hashtag_queries[:6]:
+            for tag in plan.hashtag_queries[:3]:
                 try:
-                    items = await instagram_source.search_hashtag_recent(tag, limit=27)
+                    items = await instagram_source.search_hashtag_recent(tag, limit=20)
                     results.extend(items)
                 except Exception as e:
                     logger.warning("source_hashtag_recent_error", source=source_name, hashtag=tag, error=str(e))
@@ -306,10 +306,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         async def _fetch_step2():
             results = []
             target_country = (brief.audience_countries or ["VE"])[0].upper()
-            geo_suffixes = VE_GEO_SUFFIXES[:3]
-            for kw in plan.keyword_queries:
+            geo_suffixes = VE_GEO_SUFFIXES[:2]
+            for kw in plan.keyword_queries[:8]:
                 try:
-                    items = await instagram_source.search_keyword(kw, limit=15)
+                    items = await instagram_source.search_keyword(kw, limit=10)
                     results.extend(items)
                 except Exception as e:
                     logger.warning("source_keyword_error", source=source_name, keyword=kw, error=str(e))
@@ -317,7 +317,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     for geo in geo_suffixes:
                         combined_kw = f"{kw} {geo}"
                         try:
-                            items = await instagram_source.search_keyword(combined_kw, limit=15)
+                            items = await instagram_source.search_keyword(combined_kw, limit=10)
                             results.extend(items)
                         except Exception as e:
                             logger.warning("source_keyword_geo_error", keyword=combined_kw, error=str(e))
@@ -325,16 +325,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step3():
             results = []
-            for kw in plan.keyword_queries[:5]:
+            for kw in plan.keyword_queries[:2]:
                 try:
-                    items = await instagram_source.search_top_accounts(kw, limit=12)
+                    items = await instagram_source.search_top_accounts(kw, limit=10)
                     results.extend(items)
                 except Exception as e:
                     logger.warning("hikerapi_topsearch_error", keyword=kw, error=str(e))
             return results
 
         async def _fetch_step4():
-            seeds = list(step1_handles | step2_handles)[:5]
+            seeds = list(step1_handles | step2_handles)[:2]
             results = []
             for handle in seeds:
                 try:
@@ -347,7 +347,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2p5():
             results = []
-            seeds = (plan.keyword_queries or [])[:4]
+            seeds = (plan.keyword_queries or [])[:2]
             for kw in seeds:
                 try:
                     data = await instagram_source.search_reels_by_keyword(kw)
@@ -367,8 +367,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2p6():
             results = []
-            seeds = list(step1_handles | step2_handles)[:5]
-            niche_kws = (plan.keyword_queries or [])[:3]
+            seeds = list(step1_handles | step2_handles)[:2]
+            niche_kws = (plan.keyword_queries or [])[:1]
             for handle in seeds:
                 try:
                     profile = await instagram_source.enrich_profile(handle)
