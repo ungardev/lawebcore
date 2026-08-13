@@ -489,6 +489,36 @@ class HikerAPIClient:
             params={"user_id": str(user_id), "safe_int": self.SAFE_INT},
         ) or {}
 
+    async def get_user_about(self, user_id: int | str) -> dict[str, Any] | None:
+        """GET /gql/user/about — fraud detection signals for a user.
+
+        Returns structural signals that complement AI-based bot detection:
+        - former_usernames: list of previous usernames (bots frequently change username)
+        - account_age_days: days since account creation (new accounts = higher risk)
+        - country: ISO country code from account registration
+
+        Cost: $0.0006 per call. Call for top 20 ranked candidates per run.
+        """
+        resp = await self._get(
+            "/gql/user/about",
+            params={"user_id": str(user_id), "safe_int": self.SAFE_INT},
+            cache_ttl=86400,
+        )
+        if not resp:
+            logger.warning("hikerapi_user_about_not_found", user_id=user_id)
+            return None
+        user_data = resp.get("user", {}) or resp
+        if not user_data.get("pk") and not user_data.get("id"):
+            logger.warning("hikerapi_user_about_no_pk", user_id=user_id)
+            return None
+        former_usernames = user_data.get("former_usernames", []) or []
+        return {
+            "former_usernames": former_usernames,
+            "former_usernames_count": len(former_usernames),
+            "account_age_days": user_data.get("account_age_days") or user_data.get("account_age") or 0,
+            "country": user_data.get("country") or "",
+        }
+
     async def suggested_profiles(
         self,
         username: str,

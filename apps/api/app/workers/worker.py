@@ -769,6 +769,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     try:
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
+                        if profile and profile.get("pk") and hasattr(instagram_source, "get_user_about"):
+                            try:
+                                about_data = await instagram_source.get_user_about(profile["pk"])
+                                if about_data:
+                                    profile["about"] = about_data
+                            except Exception as e:
+                                logger.warning("hikerapi_user_about_error", handle=handle, error=str(e))
                         return profile
                     except Exception as e:
                         logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
@@ -809,6 +816,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             handle = e.get("username", "")
             if not handle or handle not in profiles:
                 continue
+            about_data = e.get("about")
             profiles[handle].update({
                 "follower_count": e.get("followersCount", 0) or 0,
                 "followersCount": e.get("followersCount", 0) or 0,
@@ -832,6 +840,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "latestPosts": e.get("latestPosts", []),
                 "engagement_rate": e.get("engagement_rate"),
             })
+            if about_data:
+                profiles[handle]["about"] = about_data
 
         logger.info(
             "step3_enrichment_done",
@@ -982,6 +992,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             cross_referenced = hashtag_appearances.get(handle, 0) >= 2
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
+
+            about = p.get("about") or {}
+            former_usernames_count = about.get("former_usernames_count", 0) or 0
+            account_age_days = about.get("account_age_days", 0) or 0
+            fraud_penalty = 1.0
+            if former_usernames_count >= 3:
+                fraud_penalty = 0.80
+            elif former_usernames_count == 2:
+                fraud_penalty = 0.90
+            elif account_age_days > 0 and account_age_days < 90:
+                fraud_penalty = 0.90
+            if fraud_penalty < 1.0:
+                score_val = round(score_val * fraud_penalty, 1)
+                logger.debug("fraud_penalty_applied", handle=handle, former_usernames=former_usernames_count, account_age_days=account_age_days, penalty=fraud_penalty, original_score=score_val / fraud_penalty, final_score=score_val)
+
             tier = classify_tier(followers)
             real_niche = niche_relevance(p, profile_data)
             tienda_keywords_hard = (
@@ -1096,6 +1121,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "avg_comments_calc": round(comments_avg) if latest else None,
                     "posts_analyzed": len(latest) if latest else 0,
                     "engagement_analytics": p.get("engagement_analytics"),
+                    "fraud_signals": {
+                        "former_usernames_count": former_usernames_count,
+                        "account_age_days": account_age_days,
+                        "fraud_penalty": fraud_penalty,
+                    },
                 },
                 "fetched_at": datetime.now(UTC),
             })

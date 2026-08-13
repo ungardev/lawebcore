@@ -61,6 +61,17 @@ class InstagramSource(Protocol):
         """
         ...
 
+    async def get_user_about(
+        self,
+        user_id: int | str,
+    ) -> dict[str, Any] | None:
+        """Fetch fraud detection signals: former_usernames, account_age_days.
+
+        Optional method — only implemented by HikerAPI.
+        Returns: {former_usernames: list, former_usernames_count: int, account_age_days: int, country: str}
+        """
+        ...
+
     async def close(self) -> None:
         """Cleanup resources (http clients, redis, etc.)."""
         ...
