@@ -491,7 +491,7 @@ class HikerAPIClient:
         ) or {}
 
     async def get_user_about(self, user_id: int | str) -> dict[str, Any] | None:
-        """GET /gql/user/about — fraud detection signals for a user.
+        """GET /v1/user/about — fraud detection signals for a user.
 
         Returns structural signals that complement AI-based bot detection:
         - former_usernames: list of previous usernames (bots frequently change username)
@@ -501,8 +501,8 @@ class HikerAPIClient:
         Cost: $0.0006 per call. Call for top 20 ranked candidates per run.
         """
         resp = await self._get(
-            "/gql/user/about",
-            params={"user_id": str(user_id), "safe_int": self.SAFE_INT},
+            "/v1/user/about",
+            params={"id": str(user_id)},
             cache_ttl=86400,
         )
         if not resp:
@@ -521,20 +521,20 @@ class HikerAPIClient:
         }
 
     async def search_location(self, query: str) -> list[dict[str, Any]]:
-        """GET /v1/location/search — Find location IDs by city/country query.
+        """GET /v1/fbsearch/places — Find location IDs by city/country query.
 
         Returns a list of location objects with pk (location ID) needed for
         location_medias_top and location_medias_recent.
         """
         resp = await self._get(
-            "/v1/location/search",
+            "/v1/fbsearch/places",
             params={"query": query},
             cache_ttl=CACHE_TTL_LOCATION,
         )
         if not resp:
             logger.warning("hikerapi_location_search_empty", query=query)
             return []
-        items = resp.get("items", []) or []
+        items = resp if isinstance(resp, list) else []
         logger.info("hikerapi_location_search_done", query=query, locations_found=len(items))
         return items
 
@@ -550,7 +550,7 @@ class HikerAPIClient:
         """
         resp = await self._get(
             "/v1/location/medias/top",
-            params={"id": str(location_id)},
+            params={"location_pk": str(location_id)},
         )
         if not resp:
             return []
@@ -570,7 +570,7 @@ class HikerAPIClient:
         """
         resp = await self._get(
             "/v1/location/medias/recent/chunk",
-            params={"id": str(location_id)},
+            params={"location_pk": str(location_id)},
         )
         if not resp:
             return []

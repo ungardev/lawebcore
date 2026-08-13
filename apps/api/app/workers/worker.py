@@ -1258,13 +1258,24 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             top_5=top_5_summary,
         )
 
-        min_match_score = 10
+        min_match_score = 5
         exclude_stores = getattr(brief, "exclude_stores", True)
-        qualified = [
-            c for c in scored
-            if (c.get("match_score") or 0) >= min_match_score
-            and (not exclude_stores or not c.get("is_tienda"))
-        ]
+
+        passed_score = [c for c in scored if (c.get("match_score") or 0) >= min_match_score]
+        passed_store = [c for c in passed_score if not c.get("is_tienda")]
+        qualified = [c for c in passed_score if (not exclude_stores or not c.get("is_tienda"))]
+
+        logger.info(
+            "scoring_filter_breakdown",
+            run_id=run_id,
+            total_scored=len(scored),
+            passed_score_min=len(passed_score),
+            passed_tienda_filter=len(passed_store),
+            qualified_final=len(qualified),
+            exclude_stores=exclude_stores,
+            min_match_score=min_match_score,
+        )
+        print(f"[SCORING] {len(scored)} scored → {len(passed_score)} score≥{min_match_score} → {len(qualified)} qualified (tienda_excluded={exclude_stores})", flush=True)
 
         target_n = 80
         to_analyze = _rerank_diversified(qualified, target_n)

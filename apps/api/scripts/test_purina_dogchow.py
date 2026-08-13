@@ -38,9 +38,9 @@ PURINA_BRIEF = {
         "cachorrosvzla", "mascotasfelices", "petloversvzla", "veterinario",
     ],
     "hashtags": [
-        "perrosvenezuela", "mascotasvzla", "perrosvzla", "dogchowve",
-        "cachorrosvzla", "mascotasfelices", "petloversvzla", "adopcioncanina",
-        "rescateanimal", "mascotasencasa", "perrolover", "cachorro",
+        "dogmomvzla", "dogdadvzla", "perrosdeinstagram", "cachorrovzla",
+        "mascotafelizve", "adoptavzla", "perrosaludablevzla", "cachorrosbonitos",
+        "petloversve", "mascotasdevenezuela", "duenoperro", "cachorrosdeinstagram",
     ],
     "audience_countries": ["VE"],
     "audience_cities": ["Caracas", "Maracaibo", "Valencia", "Barquisimeto", "Maracay", "Ciudad Guayana"],
