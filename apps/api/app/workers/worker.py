@@ -50,7 +50,7 @@ TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
-TIER_DISTRIBUTION = {"NANO": 0.40, "MICRO": 0.35, "MID": 0.15, "MACRO": 0.10}
+TIER_DISTRIBUTION = {"NANO": 0.55, "MICRO": 0.30, "MID": 0.10, "MACRO": 0.05}
 
 VE_GEO_SUFFIXES = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "barquisimeto"]
 
@@ -197,6 +197,91 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step4_handles: set[str] = set()
         source_name = os.getenv("INSTAGRAM_SOURCE", "hikerapi")
         instagram_source = get_instagram_source(source_name)
+
+        location_items: list[dict] = []
+        step0_handles: set[str] = set()
+        step0_api_calls = 0
+
+        if hasattr(instagram_source, "search_location") and brief.audience_cities:
+            logger.info("step0_location_search_starting", cities=brief.audience_cities)
+            print(f"[STEP0] Location search starting with cities={brief.audience_cities}", flush=True)
+
+            location_profiles: dict[str, dict] = {}
+            cities_searched = 0
+            locations_found = 0
+
+            for city in brief.audience_cities[:6]:
+                query = f"{city} Venezuela"
+                try:
+                    locations = await instagram_source.search_location(query)
+                    step0_api_calls += 1
+                    cities_searched += 1
+                    if not locations:
+                        continue
+
+                    for loc in locations[:3]:
+                        loc_pk = loc.get("location", {}).get("pk") or loc.get("pk")
+                        if not loc_pk:
+                            continue
+                        locations_found += 1
+
+                        for media_func, limit, src_label in [
+                            (instagram_source.location_medias_top, 20, "top"),
+                            (instagram_source.location_medias_recent, 20, "recent"),
+                        ]:
+                            try:
+                                medias = await media_func(loc_pk, limit=limit)
+                                step0_api_calls += 1
+                                for media in medias:
+                                    user = instagram_source._extract_user_from_post(media) if hasattr(instagram_source, "_extract_user_from_post") else (media.get("user") or {})
+                                    if not user or not user.get("username"):
+                                        continue
+                                    normalized = instagram_source._normalize_user(user)
+                                    normalized["_source_location"] = f"{city}__{src_label}"
+                                    normalized["_source_city"] = city
+                                    location_profiles[normalized["username"]] = normalized
+                            except Exception as e:
+                                logger.warning("step0_location_media_error", city=city, loc_pk=loc_pk, error=str(e))
+                except Exception as e:
+                    logger.warning("step0_location_search_error", city=city, error=str(e))
+
+            for handle, p in location_profiles.items():
+                step0_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": p.get("full_name", ""),
+                    "fullName": p.get("full_name", ""),
+                    "bio": p.get("bio", ""),
+                    "biography": p.get("bio", ""),
+                    "avatar_url": p.get("avatar_url", "") or p.get("profilePicUrl", ""),
+                    "profilePicUrl": p.get("profilePicUrl", "") or p.get("avatar_url", ""),
+                    "follower_count": p.get("follower_count", 0),
+                    "followersCount": p.get("followersCount", 0),
+                    "following_count": p.get("following_count", 0),
+                    "followsCount": p.get("followsCount", 0),
+                    "posts_count": p.get("posts_count", 0),
+                    "postsCount": p.get("postsCount", 0),
+                    "is_business": p.get("is_business", False),
+                    "isBusinessAccount": p.get("isBusinessAccount", False),
+                    "is_verified": p.get("is_verified", False),
+                    "verified": p.get("verified", False),
+                    "pk": p.get("pk"),
+                    "locationName": p.get("_source_city", ""),
+                    "_source_location": p.get("_source_location", ""),
+                }
+
+            location_items = list(location_profiles.values())
+            logger.info(
+                "step0_location_search_done",
+                cities_searched=cities_searched,
+                locations_found=locations_found,
+                profiles_added=len(location_items),
+                api_calls_used=step0_api_calls,
+            )
+            print(f"[STEP0] Location search done: {len(location_items)} profiles from {cities_searched} cities, {locations_found} locations, {step0_api_calls} API calls", flush=True)
+
 
         async def _fetch_step1():
             results = []

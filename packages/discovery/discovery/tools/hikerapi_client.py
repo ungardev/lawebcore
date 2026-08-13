@@ -13,6 +13,7 @@ logger = structlog.get_logger(__name__)
 
 CACHE_TTL_HASHTAG = 43200
 CACHE_TTL_PROFILE = 86400
+CACHE_TTL_LOCATION = 30 * 86400
 
 
 class HikerAPIClient:
@@ -518,6 +519,64 @@ class HikerAPIClient:
             "account_age_days": user_data.get("account_age_days") or user_data.get("account_age") or 0,
             "country": user_data.get("country") or "",
         }
+
+    async def search_location(self, query: str) -> list[dict[str, Any]]:
+        """GET /v1/location/search — Find location IDs by city/country query.
+
+        Returns a list of location objects with pk (location ID) needed for
+        location_medias_top and location_medias_recent.
+        """
+        resp = await self._get(
+            "/v1/location/search",
+            params={"query": query, "safe_int": self.SAFE_INT},
+            cache_ttl=CACHE_TTL_LOCATION,
+        )
+        if not resp:
+            logger.warning("hikerapi_location_search_empty", query=query)
+            return []
+        items = resp.get("items", []) or []
+        logger.info("hikerapi_location_search_done", query=query, locations_found=len(items))
+        return items
+
+    async def location_medias_top(
+        self,
+        location_id: int | str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """GET /v1/location/medias/top — Top posts at a specific location.
+
+        Gets the most popular posts geotagged at a specific location.
+        Use search_location first to get location_id.
+        """
+        resp = await self._get(
+            "/v1/location/medias/top",
+            params={"id": str(location_id), "safe_int": self.SAFE_INT},
+        )
+        if not resp:
+            return []
+        items = resp.get("response", {}).get("items", []) if isinstance(resp, dict) else []
+        logger.info("hikerapi_location_medias_top_done", location_id=location_id, items=len(items))
+        return items[:limit]
+
+    async def location_medias_recent(
+        self,
+        location_id: int | str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """GET /v1/location/medias/recent/chunk — Recent posts at a specific location.
+
+        Gets the most recent posts geotagged at a specific location.
+        Captures nano/micro creators who recently posted from that location.
+        """
+        resp = await self._get(
+            "/v1/location/medias/recent/chunk",
+            params={"id": str(location_id), "safe_int": self.SAFE_INT},
+        )
+        if not resp:
+            return []
+        items = resp.get("response", {}).get("items", []) if isinstance(resp, dict) else []
+        logger.info("hikerapi_location_medias_recent_done", location_id=location_id, items=len(items))
+        return items[:limit]
 
     async def suggested_profiles(
         self,

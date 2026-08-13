@@ -32,16 +32,27 @@ from discovery.tools.hikerapi_client import HikerAPIClient
 PURINA_BRIEF = {
     "product_name": "Purina Dog Chow",
     "industry": "mascotas",
-    "niches": ["mascotas", "perros", "pet care", "adopcion animal"],
+    "niches": [
+        "mascotas", "perros", "pet care", "mascotas Venezuela", "perrosvzla",
+        "vet Venezuela", "adopcion", "rescate animal", "dog mom", "pet parent",
+        "cachorrosvzla", "mascotasfelices", "petloversvzla", "veterinario",
+    ],
+    "hashtags": [
+        "perrosvenezuela", "mascotasvzla", "perrosvzla", "dogchowve",
+        "cachorrosvzla", "mascotasfelices", "petloversvzla", "adopcioncanina",
+        "rescateanimal", "mascotasencasa", "perrolover", "cachorro",
+    ],
     "audience_countries": ["VE"],
-    "audience_cities": ["Caracas", "Valencia", "Maracay"],
+    "audience_cities": ["Caracas", "Maracaibo", "Valencia", "Barquisimeto", "Maracay", "Ciudad Guayana"],
+    "audience_states": ["Distrito Capital", "Miranda", "Carabobo", "Lara", "Zulia", "Aragua", "Bolivar"],
     "platforms": ["instagram"],
     "audience_gender": "all",
-    "audience_age_min": 18,
-    "audience_age_max": 45,
-    "tone": ["warm and authentic"],
+    "audience_age_min": 25,
+    "audience_age_max": 55,
+    "tone": ["familiar", "educativo", "autentico"],
+    "additional_context": "Solo creadores de contenido individuales, NO tiendas. Engagement autentico > produccion profesional. Audiencia duena de perros en Venezuela.",
     "exclude_stores": True,
-    "analyze_with_ai": True,
+    "analyze_with_ai": False,
 }
 
 API_BASE_URL = os.getenv("API_BASE_URL", "https://lawebcore-production.up.railway.app")
