@@ -56,6 +56,38 @@ TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
+TIER_DISTRIBUTION = {"NANO": 0.40, "MICRO": 0.35, "MID": 0.15, "MACRO": 0.10}
+
+
+def _tier_of(followers: int) -> str:
+    if followers < 10_000:
+        return "NANO"
+    if followers < 100_000:
+        return "MICRO"
+    if followers < 500_000:
+        return "MID"
+    return "MACRO"
+
+
+def _rerank_diversified(scored: list[dict], target_n: int = 80) -> list[dict]:
+    buckets: dict[str, list[dict]] = {"NANO": [], "MICRO": [], "MID": [], "MACRO": []}
+    for c in scored:
+        buckets[_tier_of(c.get("followers") or 0)].append(c)
+    for bucket in buckets.values():
+        bucket.sort(key=lambda x: x.get("match_score") or 0, reverse=True)
+    final: list[dict] = []
+    for tier, pct in TIER_DISTRIBUTION.items():
+        quota = max(1, int(target_n * pct))
+        final.extend(buckets[tier][:quota])
+    if len(final) < target_n:
+        remaining = sorted(
+            [c for b in buckets.values() for c in b if c not in final],
+            key=lambda x: x.get("match_score") or 0,
+            reverse=True,
+        )
+        final.extend(remaining[: target_n - len(final)])
+    return final[:target_n]
+
 
 async def startup(ctx):
     """Initialize worker context (DB, Redis) and start health server."""
@@ -831,8 +863,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             and (not exclude_stores or not c.get("is_tienda"))
         ]
 
-        TARGET_CANDIDATES = 50
-        to_analyze = qualified[:TARGET_CANDIDATES]
+        target_n = 80
+        to_analyze = _rerank_diversified(qualified, target_n)
 
         analyze_with_ai = getattr(brief, "analyze_with_ai", True)
         if analyze_with_ai:
