@@ -30,20 +30,15 @@ CREATE INDEX IF NOT EXISTS idx_discovery_profiles_vertical
 CREATE INDEX IF NOT EXISTS idx_discovery_profiles_fingerprint
     ON discovery_profiles(fingerprint);
 
-ALTER TABLE discovery_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE discovery_profiles DISABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE discovery_profiles ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+
+-- NOTE: RLS is disabled. Policies below are kept as comments for documentation only.
 
 -- SELECT: open to any authenticated user (agency-shared knowledge)
-CREATE POLICY discovery_profiles_select ON discovery_profiles
-    FOR SELECT USING (true);
+-- DISABLED: CREATE POLICY discovery_profiles_select ON discovery_profiles FOR SELECT USING (true);
 
 -- INSERT/UPDATE/DELETE: restricted to service role and admin_general role
--- Service role bypasses RLS automatically; for user-level admins check role
-CREATE POLICY discovery_profiles_admin ON discovery_profiles
-    FOR ALL USING (
-        auth.jwt() ->> 'app_role' IN ('admin_general', 'service_role')
-    )
-    WITH CHECK (
-        auth.jwt() ->> 'app_role' IN ('admin_general', 'service_role')
-    );
+-- DISABLED: CREATE POLICY discovery_profiles_admin ON discovery_profiles FOR ALL USING (...);
 
 COMMIT;

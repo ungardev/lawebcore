@@ -48,7 +48,7 @@ BEGIN
     VALUES (NEW.id, NULL, NEW.status, NEW.created_by);
   ELSIF (TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status) THEN
     INSERT INTO campaign_status_history (campaign_id, from_status, to_status, changed_by)
-    VALUES (NEW.id, OLD.status, NEW.status, auth.uid());
+    VALUES (NEW.id, OLD.status, NEW.status, COALESCE(auth.uid(), '00000000-0000-0000-0000-000000000000'::UUID));
   END IF;
   RETURN NEW;
 END; $$;
@@ -105,7 +105,7 @@ CREATE TABLE business_units (
 );
 
 CREATE TABLE users (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
   email TEXT NOT NULL UNIQUE, full_name TEXT NOT NULL, avatar_url TEXT, phone TEXT, job_title TEXT,
   primary_bu_id UUID REFERENCES business_units(id) ON DELETE SET NULL,
   status user_status NOT NULL DEFAULT 'invited',

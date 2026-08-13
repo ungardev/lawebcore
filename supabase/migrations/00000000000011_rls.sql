@@ -1,8 +1,58 @@
 -- =================================================================
 -- LA WEB CORE - Migration 0011: Row Level Security (RLS)
 -- =================================================================
--- Defense in depth: defense at the DB level, not just backend.
--- RLS policies enforce visibility per business unit, role, and ownership.
+-- NOTE: RLS is DISABLED for this migration. The app connects as the
+-- postgres superuser which bypasses RLS. RLS policies are maintained
+-- in the schema for documentation but are never enforced.
+-- All RLS-related statements below are no-ops in Railway PostgreSQL.
+
+-- Disable RLS on all tables covered by this migration (idempotent)
+ALTER TABLE business_units          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE users                   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE roles                   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE permissions             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE role_permissions        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE user_roles              DISABLE ROW LEVEL SECURITY;
+ALTER TABLE teams                  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE team_members            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE clients                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE brands                 DISABLE ROW LEVEL SECURITY;
+ALTER TABLE brand_contacts         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE client_contracts       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE influencers            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE influencer_social_accounts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE influencer_metrics_snapshot DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns              DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_status_history DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_influencers   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_links         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_documents     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kpi_definitions        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_kpi_values    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE benchmarks             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE insights              DISABLE ROW LEVEL SECURITY;
+ALTER TABLE winning_formats        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE budgets                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE budget_items           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE tasks                  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE forms                  DISABLE ROW LEVEL SECURITY;
+ALTER TABLE form_submissions       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE automations            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE automation_logs         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE documents              DISABLE ROW LEVEL SECURITY;
+ALTER TABLE document_chunks        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_conversations       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_messages            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_jobs                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE ai_prompts             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE notifications          DISABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboards             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE widgets                DISABLE ROW LEVEL SECURITY;
+ALTER TABLE scheduled_reports      DISABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs             DISABLE ROW LEVEL SECURITY;
+ALTER TABLE integrations           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE webhooks               DISABLE ROW LEVEL SECURITY;
+ALTER TABLE exports                DISABLE ROW LEVEL SECURITY;
 
 -- ---------- Helper: get current user's roles + BUs ----------
 CREATE OR REPLACE FUNCTION public.current_user_role_codes()
@@ -33,59 +83,59 @@ RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER AS $$
 $$;
 
 -- ---------- Enable RLS on all tables ----------
-ALTER TABLE business_units          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE users                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE roles                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE permissions             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE role_permissions        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE user_roles              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE teams                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE team_members            ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE business_units          ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE users                   ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE roles                   ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE permissions             ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE role_permissions        ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE user_roles              ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE teams                   ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE team_members            ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE clients                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE brands                  ENABLE ROW LEVEL SECURITY;
-ALTER TABLE brand_contacts          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE client_contracts        ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE clients                 ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE brands                  ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE brand_contacts          ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE client_contracts        ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE influencers             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE influencer_social_accounts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE influencer_metrics_snapshot ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE influencers             ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE influencer_social_accounts ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE influencer_metrics_snapshot ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE campaigns               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_status_history ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_influencers    ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_links          ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_documents      ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE campaigns               ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE campaign_status_history ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE campaign_influencers    ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE campaign_links          ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE campaign_documents      ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE kpi_definitions         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE campaign_kpi_values     ENABLE ROW LEVEL SECURITY;
-ALTER TABLE benchmarks              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE insights                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE winning_formats         ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE kpi_definitions         ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE campaign_kpi_values     ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE benchmarks              ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE insights                ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE winning_formats         ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE budgets                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE budget_items            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE forms                   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE form_submissions        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE automations             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE automation_logs         ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE budgets                 ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE budget_items            ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE tasks                   ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE forms                   ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE form_submissions        ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE automations             ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE automation_logs         ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE documents               ENABLE ROW LEVEL SECURITY;
-ALTER TABLE document_chunks         ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_conversations        ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_messages             ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_jobs                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE ai_prompts              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications           ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE documents               ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE document_chunks         ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE ai_conversations        ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE ai_messages             ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE ai_jobs                 ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE ai_prompts              ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE notifications           ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
-ALTER TABLE dashboards              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE widgets                 ENABLE ROW LEVEL SECURITY;
-ALTER TABLE scheduled_reports       ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs              ENABLE ROW LEVEL SECURITY;
-ALTER TABLE integrations            ENABLE ROW LEVEL SECURITY;
-ALTER TABLE webhooks                ENABLE ROW LEVEL SECURITY;
-ALTER TABLE exports                 ENABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE dashboards              ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE widgets                 ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE scheduled_reports       ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE audit_logs              ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE integrations            ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE webhooks                ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
+-- DISABLED: ALTER TABLE exports                 ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
 -- =================================================================
 -- Policies: identity

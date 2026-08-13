@@ -29,7 +29,8 @@ CREATE INDEX idx_dqi_severity ON data_quality_issues(severity);
 COMMENT ON TABLE data_quality_issues IS 'Issues detectados en la importacion de datos (Excel, integraciones, etc.)';
 
 -- ---------- RLS ----------
-ALTER TABLE data_quality_issues ENABLE ROW LEVEL SECURITY;
+ALTER TABLE data_quality_issues DISABLE ROW LEVEL SECURITY;
+-- DISABLED: ALTER TABLE data_quality_issues ENABLE ROW LEVEL SECURITY; -- RLS bypassed: app connects as postgres superuser
 
 CREATE POLICY dqi_read ON data_quality_issues FOR SELECT TO authenticated
   USING (public.is_admin_general() OR 'analista' = ANY(public.current_user_role_codes()));
