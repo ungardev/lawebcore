@@ -44,18 +44,20 @@ from app.core.metrics import (
 
 logger = structlog.get_logger(__name__)
 
-MAX_HANDLES_TO_ENRICH = 500
-MAX_POSTS_PER_HASHTAG = 30
+MAX_HANDLES_TO_ENRICH = 50
+MAX_POSTS_PER_HASHTAG = 20
 TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
 TIER_DISTRIBUTION = {"NANO": 0.55, "MICRO": 0.30, "MID": 0.10, "MACRO": 0.05}
 
-VE_GEO_SUFFIXES = ["venezuela", "vzla", "caracas", "maracaibo", "valencia", "barquisimeto"]
+VE_GEO_SUFFIXES = ["venezuela", "vzla"]
 
-MAX_REELS_PER_QUERY = 10
-MAX_FOLLOWER_EXPANSION_PER_SEED = 15
+MAX_REELS_PER_QUERY = 3
+MAX_FOLLOWER_EXPANSION_PER_SEED = 5
+
+ENRICHMENT_INCLUDE_ABOUT = os.getenv("HIKERAPI_INCLUDE_ABOUT", "false").lower() == "true"
 
 
 def _tier_of(followers: int) -> str:
@@ -201,8 +203,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         location_items: list[dict] = []
         step0_handles: set[str] = set()
         step0_api_calls = 0
+        step0_enabled = os.getenv("HIKERAPI_STEP0_LOCATION", "false").lower() == "true"
 
-        if hasattr(instagram_source, "search_location") and brief.audience_cities:
+        if step0_enabled and hasattr(instagram_source, "search_location") and brief.audience_cities:
             logger.info("step0_location_search_starting", cities=brief.audience_cities)
             print(f"[STEP0] Location search starting with cities={brief.audience_cities}", flush=True)
 
@@ -285,7 +288,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1():
             results = []
-            for tag in plan.hashtag_queries[:6]:
+            for tag in plan.hashtag_queries[:3]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
@@ -295,7 +298,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1_recent():
             results = []
-            for tag in plan.hashtag_queries[:3]:
+            for tag in plan.hashtag_queries[:2]:
                 try:
                     items = await instagram_source.search_hashtag_recent(tag, limit=20)
                     results.extend(items)
@@ -307,7 +310,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             results = []
             target_country = (brief.audience_countries or ["VE"])[0].upper()
             geo_suffixes = VE_GEO_SUFFIXES[:2]
-            for kw in plan.keyword_queries[:8]:
+            for kw in plan.keyword_queries[:3]:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=10)
                     results.extend(items)
@@ -325,7 +328,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step3():
             results = []
-            for kw in plan.keyword_queries[:2]:
+            for kw in plan.keyword_queries[:1]:
                 try:
                     items = await instagram_source.search_top_accounts(kw, limit=10)
                     results.extend(items)
@@ -334,7 +337,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             return results
 
         async def _fetch_step4():
-            seeds = list(step1_handles | step2_handles)[:2]
+            seeds = list(step1_handles | step2_handles)[:1]
             results = []
             for handle in seeds:
                 try:
@@ -347,7 +350,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2p5():
             results = []
-            seeds = (plan.keyword_queries or [])[:2]
+            seeds = (plan.keyword_queries or [])[:1]
             for kw in seeds:
                 try:
                     data = await instagram_source.search_reels_by_keyword(kw)
@@ -367,8 +370,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2p6():
             results = []
-            seeds = list(step1_handles | step2_handles)[:2]
-            niche_kws = (plan.keyword_queries or [])[:1]
+            seeds = list(step1_handles | step2_handles)[:1]
+            niche_kws: list[str] = []
             for handle in seeds:
                 try:
                     profile = await instagram_source.enrich_profile(handle)
@@ -854,7 +857,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     try:
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
-                        if profile and profile.get("pk") and hasattr(instagram_source, "get_user_about"):
+                        if profile and profile.get("pk") and ENRICHMENT_INCLUDE_ABOUT and hasattr(instagram_source, "get_user_about"):
                             try:
                                 about_data = await instagram_source.get_user_about(profile["pk"])
                                 if about_data:
