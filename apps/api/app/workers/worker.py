@@ -50,8 +50,8 @@ from discovery.candidate_analyzer import candidate_analyzer
 
 logger = structlog.get_logger(__name__)
 
-MAX_HANDLES_TO_ENRICH = 30
-MAX_POSTS_PER_HASHTAG = 20
+MAX_HANDLES_TO_ENRICH = 80
+MAX_POSTS_PER_HASHTAG = 30
 TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
@@ -166,7 +166,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step1():
             results = []
-            for tag in plan.hashtag_queries[:5]:
+            for tag in plan.hashtag_queries:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
@@ -176,7 +176,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         async def _fetch_step2():
             results = []
-            for kw in plan.keyword_queries[:5]:
+            for kw in plan.keyword_queries:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=15)
                     results.extend(items)
@@ -442,69 +442,53 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         enriched_profiles: list[dict] = []
         step3_degraded = False
         step3_error: str | None = None
+        HIKERAPI_ENRICH_SEMAPHORE = asyncio.Semaphore(5)
 
         if handles_to_enrich:
-            enrichment_source_used = None
+            enrichment_source_used = "hikerapi"
+            logger.info(
+                "step3_hikerapi_pure_enrichment_start",
+                handles_count=len(handles_to_enrich),
+            )
             try:
-                if source_name in ("apify", "hybrid"):
-                    logger.info("step3_using_apify_enrichment", handles_count=len(handles_to_enrich))
+                async def _enrich_one(handle: str) -> dict | None:
                     try:
-                        apify_enriched = await apify_client.search_instagram_profiles_batch(
-                            usernames=handles_to_enrich,
-                            discovery_run_id=run_id,
-                        )
-                        if apify_enriched:
-                            enriched_profiles = apify_enriched
-                            enrichment_source_used = "apify"
-                            logger.info(
-                                "step3_apify_enrichment_done",
-                                enriched=len(enriched_profiles),
-                                requested=len(handles_to_enrich),
-                            )
-                        else:
-                            logger.warning("step3_apify_returned_empty", requested=len(handles_to_enrich))
+                        async with HIKERAPI_ENRICH_SEMAPHORE:
+                            profile = await instagram_source.enrich_profile(handle)
+                        return profile
                     except Exception as e:
-                        logger.warning("step3_apify_enrichment_failed", error=str(e))
+                        logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
+                        return None
 
-                if not enriched_profiles and source_name in ("hikerapi", "hybrid"):
-                    logger.info("step3_using_hikerapi_enrichment", handles_count=len(handles_to_enrich))
-                    for handle in handles_to_enrich:
-                        try:
-                            profile = await hikerapi_client.enrich_profile(handle)
-                            if profile:
-                                enriched_profiles.append(profile)
-                            await asyncio.sleep(1.0)
-                        except Exception as e:
-                            logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
-                    if enriched_profiles:
-                        enrichment_source_used = "hikerapi"
-                        logger.info(
-                            "step3_hikerapi_enrichment_done",
-                            enriched=len(enriched_profiles),
-                            requested=len(handles_to_enrich),
-                        )
-
-                if not enriched_profiles:
-                    step3_degraded = True
-                    step3_error = "Both Apify and HikerAPI enrichment failed"
-                    await _save_progress_message(
-                        run_id,
-                        "⚠️ No pude enriquecer perfiles. Continuando con datos básicos...",
-                    )
-                else:
-                    source_label = enrichment_source_used or "unknown"
-                    await _save_progress_message(
-                        run_id,
-                        f"✅ Enriquecí {len(enriched_profiles)} perfiles con datos reales vía {source_label}...",
-                    )
+                enrichment_results = await asyncio.gather(
+                    *[_enrich_one(h) for h in handles_to_enrich],
+                    return_exceptions=True,
+                )
+                enriched_profiles = [
+                    p for p in enrichment_results
+                    if isinstance(p, dict) and p.get("username")
+                ]
+                logger.info(
+                    "step3_hikerapi_enrichment_done",
+                    enriched=len(enriched_profiles),
+                    requested=len(handles_to_enrich),
+                )
             except Exception as e:
                 step3_degraded = True
                 step3_error = str(e)
-                logger.warning("step3_enrichment_failed", run_id=run_id, error=str(e))
+                logger.warning("step3_enrichment_failed", error=str(e))
+
+            if not enriched_profiles:
+                step3_degraded = True
+                step3_error = "HikerAPI enrichment returned empty"
                 await _save_progress_message(
                     run_id,
-                    "⚠️ Tuve un problema técnico con algunos perfiles. "
-                    "Continuando con los datos que tenemos...",
+                    "⚠️ No pude enriquecer perfiles vía HikerAPI. Continuando con datos básicos...",
+                )
+            else:
+                await _save_progress_message(
+                    run_id,
+                    f"✅ Enriquecí {len(enriched_profiles)} perfiles con HikerAPI...",
                 )
 
         for e in enriched_profiles:
