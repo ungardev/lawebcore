@@ -316,6 +316,66 @@ class HikerAPIClient:
         logger.info("hikerapi_profile_enriched", username=clean, followers=normalized.get("follower_count"))
         return normalized
 
+    async def search_top_accounts(
+        self,
+        query: str,
+        limit: int = 15,
+    ) -> list[dict[str, Any]]:
+        """GET /v3/fbsearch/topsearch — top Instagram search results for a query.
+
+        Returns the top Instagram accounts matching the query, including follower
+        counts and user objects. Cached 12h since queries are broad.
+        """
+        results: list[dict[str, Any]] = []
+        resp = await self._get(
+            "/v3/fbsearch/topsearch",
+            params={"query": query, "rank_token": "discovery_topsearch"},
+            cache_ttl=43200,
+        )
+        if not resp:
+            return []
+        for u in resp.get("users", [])[:limit]:
+            user = u.get("user", {}) or u
+            if not user.get("username"):
+                continue
+            normalized = self._normalize_user(user)
+            normalized["_source_topsearch"] = query
+            results.append(normalized)
+        logger.info("hikerapi_topsearch_results", query=query, results=len(results))
+        return results
+
+    async def suggested_profiles(
+        self,
+        username: str,
+        limit: int = 20,
+    ) -> list[dict[str, Any]]:
+        """GET /v2/user/suggested/profiles — 'Similar accounts' via IG algorithm.
+
+        Uses the profile's numeric pk to fetch accounts suggested by Instagram's
+        algorithm as similar. No cache — dynamic per query.
+        """
+        profile = await self.enrich_profile(username)
+        if not profile or not profile.get("pk"):
+            logger.warning("hikerapi_suggested_no_pk", username=username)
+            return []
+        pk_id = profile["pk"]
+        results: list[dict[str, Any]] = []
+        resp = await self._get(
+            "/v2/user/suggested/profiles",
+            params={"user_id": pk_id, "expand_suggestion": "true"},
+        )
+        if not resp:
+            return []
+        for sp in resp.get("suggested_profiles", [])[:limit]:
+            username_val = sp.get("username") or (sp.get("user", {}) or {}).get("username", "")
+            if not username_val:
+                continue
+            normalized = self._normalize_user(sp.get("user", sp) if sp.get("user") else sp)
+            normalized["_source_suggested"] = username
+            results.append(normalized)
+        logger.info("hikerapi_suggested_results", seed=username, results=len(results))
+        return results
+
     def _extract_media_items(self, resp: dict) -> list[dict]:
         """Extrae media objects de la estructura anidada de /v2/hashtag/medias/top.
 
