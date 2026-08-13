@@ -148,7 +148,7 @@ async def index_publicacion(
     """Index or re-index a single publicacion in the vector store."""
     if pub_data is None:
         from shared_core import supabase_rest
-        rows = await supabase_rest.table(
+        rows = await railway_pg.table(
             "publicaciones", select="*", eq_filters={"id": pub_id}, limit=1
         )
         if not rows:
@@ -178,7 +178,7 @@ async def index_publicaciones_by_campaign(
 ) -> int:
     """Re-index all publicaciones for a campaign."""
     from shared_core import supabase_rest
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "publicaciones",
         select="*",
         eq_filters={"campaign_id": campaign_id},
@@ -217,7 +217,7 @@ async def index_influencer_score(
 async def index_benchmarks(db: AsyncSession) -> int:
     """Index all LWFA benchmarks."""
     from shared_core import supabase_rest
-    rows = await supabase_rest.table("tier_benchmarks", select="*", limit=20)
+    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)
     total = 0
     for row in rows:
         subtier = str(row["subtier"])
@@ -249,7 +249,7 @@ async def reindex_all_piar(db: AsyncSession, limit: int = 1000) -> dict[str, int
 
     from shared_core import supabase_rest
 
-    pubs = await supabase_rest.table("publicaciones", select="id", limit=limit)
+    pubs = await railway_pg.table("publicaciones", select="id", limit=limit)
     pub_total = 0
     for row in pubs[:100]:
         try:

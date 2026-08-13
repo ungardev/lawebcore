@@ -36,7 +36,7 @@ from typing import Any
 
 import structlog
 
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 logger = structlog.get_logger(__name__)
 
@@ -92,7 +92,7 @@ class ScoreBreakdown:
 
 async def get_benchmarks() -> dict[str, dict[str, Any]]:
     """Carga todos los benchmarks LWFA en memoria."""
-    rows = await supabase_rest.table("tier_benchmarks", select="*", limit=20)
+    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)
     result = {}
     for row in rows:
         result[str(row["subtier"])] = {
@@ -132,7 +132,7 @@ async def obtener_benchmark_por_followers(followers: int | None) -> dict[str, An
     """Consulta la DB para obtener el benchmark de un follower count."""
     if followers is None:
         return None
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "tier_benchmarks",
         select="*",
         limit=10,
@@ -234,14 +234,14 @@ async def obtener_publicaciones_influencer(
 ) -> list[dict[str, Any]]:
     """Obtiene publicaciones de un influencer, opcionalmente filtradas por campaña."""
     if campaign_id:
-        rows = await supabase_rest.table(
+        rows = await railway_pg.table(
             "publicaciones",
             select="*,campaigns!inner(start_date)",
             eq_filters={"influencer_id": influencer_id, "campaign_id": campaign_id},
             limit=5000,
         )
     else:
-        rows = await supabase_rest.table(
+        rows = await railway_pg.table(
             "publicaciones",
             select="*",
             eq_filters={"influencer_id": influencer_id},
@@ -369,7 +369,7 @@ async def calcular_score_profile(influencer_id: str) -> ScoreBreakdown:
     if not publicaciones:
         return ScoreBreakdown(mode=ScoringMode.BY_PROFILE)
 
-    follower_row = await supabase_rest.table(
+    follower_row = await railway_pg.table(
         "influencer_metrics_snapshot",
         select="followers",
         eq_filters={"influencer_id": influencer_id},
@@ -478,7 +478,7 @@ async def calcular_score(
     if mode == ScoringMode.BY_POST:
         if not campaign_id:
             return ScoreBreakdown(mode=ScoringMode.BY_POST)
-        pub_rows = await supabase_rest.table(
+        pub_rows = await railway_pg.table(
             "publicaciones",
             select="*",
             eq_filters={"influencer_id": influencer_id, "campaign_id": campaign_id},

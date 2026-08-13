@@ -1,6 +1,6 @@
 """Brands endpoints."""
 from fastapi import APIRouter, HTTPException, Query
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas import BrandRead, BrandCreate
 
@@ -15,7 +15,7 @@ async def list_brands(
     is_active: bool | None = Query(True),
     limit: int = Query(100, le=500),
 ):
-    all_rows = await supabase_rest.table("brands", select="*", limit=10000)
+    all_rows = await railway_pg.table("brands", select="*", limit=10000)
     if client_id:
         all_rows = [r for r in all_rows if str(r.get("client_id") or "") == client_id]
     if is_active is not None:
@@ -30,5 +30,5 @@ async def list_brands(
 async def create_brand(payload: BrandCreate, user: CurrentUserDep):
     data = payload.model_dump()
     data["client_id"] = str(payload.client_id)
-    result = await supabase_rest.insert("brands", data)
+    result = await railway_pg.insert("brands", data)
     return BrandRead.model_validate(result[0])

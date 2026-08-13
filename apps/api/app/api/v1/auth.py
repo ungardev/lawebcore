@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.security import CurrentUserDep, create_access_token, get_current_user
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 
 router = APIRouter()
@@ -15,7 +15,7 @@ router = APIRouter()
 
 async def get_user_role(user_id: UUID) -> str:
     """Get user's primary role from user_roles table."""
-    rows = await supabase_rest.select(
+    rows = await railway_pg.select(
         table="user_roles",
         select="role_id",
         filters=[f"user_id={user_id}"],
@@ -27,7 +27,7 @@ async def get_user_role(user_id: UUID) -> str:
     role_id = rows[0].get("role_id")
     if not role_id:
         return "authenticated"
-    role_rows = await supabase_rest.select(
+    role_rows = await railway_pg.select(
         table="roles",
         select="code",
         filters=[f"id={role_id}"],
@@ -64,7 +64,7 @@ class UserRead(BaseModel):
 @router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest):
     """Authenticate user with email + password. Returns HS256 JWT."""
-    rows = await supabase_rest.select(
+    rows = await railway_pg.select(
         table="users",
         select="id,email,full_name,status,password_hash",
         filters=[f"email={body.email}"],
@@ -119,7 +119,7 @@ async def login(body: LoginRequest):
 @router.get("/me", response_model=UserRead)
 async def get_me(user: CurrentUserDep):
     """Returns the profile of the authenticated user."""
-    rows = await supabase_rest.select(
+    rows = await railway_pg.select(
         table="users",
         select="id,email,full_name,status,created_at",
         filters=[f"id={user.id}"],

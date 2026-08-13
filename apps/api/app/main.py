@@ -80,7 +80,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("lawebcore_api_stopping")
     await close_worker_pool()
-    await supabase_rest.close()
+    await railway_pg.close()
     await close_db()
 
 

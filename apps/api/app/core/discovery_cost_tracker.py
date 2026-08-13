@@ -20,7 +20,7 @@ from uuid import UUID
 
 import structlog
 
-from shared_core.supabase_rest import supabase_rest
+from shared_core.railway_pg import railway_pg
 
 logger = structlog.get_logger(__name__)
 
@@ -140,7 +140,7 @@ class DiscoveryCostTracker:
         deepseek_records = self._deepseek_costs.pop(run_id, [])
 
         for record in apify_records:
-            await supabase_rest.insert("api_costs", {
+            await railway_pg.insert("api_costs", {
                 "provider": "apify",
                 "operation": record.actor_id,
                 "entity_id": run_id,
@@ -150,7 +150,7 @@ class DiscoveryCostTracker:
             })
 
         for record in deepseek_records:
-            await supabase_rest.insert("api_costs", {
+            await railway_pg.insert("api_costs", {
                 "provider": "deepseek",
                 "operation": record.operation,
                 "entity_id": run_id,

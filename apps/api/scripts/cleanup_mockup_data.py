@@ -15,7 +15,7 @@ from uuid import uuid4
 sys.path.insert(0, ".")
 sys.path.insert(0, "apps/api")
 
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 
 KNOWN_REAL_HANDLES = {
@@ -30,7 +30,7 @@ KNOWN_REAL_HANDLES = {
 
 async def cleanup_discovery_candidates() -> dict:
     """Delete discovery_candidates that are not from known real handles."""
-    all_candidates = await supabase_rest.select(
+    all_candidates = await railway_pg.select(
         table="discovery_candidates",
         select="id,handle,run_id",
         limit=1000,
@@ -42,7 +42,7 @@ async def cleanup_discovery_candidates() -> dict:
         handle = (c.get("handle") or "").lstrip("@").lower()
         if handle not in KNOWN_REAL_HANDLES:
             try:
-                await supabase_rest.delete(
+                await railway_pg.delete(
                     table="discovery_candidates",
                     filters=[f"id=eq.{c['id']}"],
                 )
@@ -57,7 +57,7 @@ async def cleanup_discovery_candidates() -> dict:
 
 async def cleanup_mockup_influencers() -> dict:
     """Mark influencers that have not been enriched via Apify as legacy_mockup."""
-    all_influencers = await supabase_rest.select(
+    all_influencers = await railway_pg.select(
         table="influencers",
         select="id,full_name,primary_handle",
         limit=1000,
@@ -68,7 +68,7 @@ async def cleanup_mockup_influencers() -> dict:
         handle = (inf.get("primary_handle") or "").lstrip("@").lower()
         if handle not in KNOWN_REAL_HANDLES:
             try:
-                await supabase_rest.update(
+                await railway_pg.update(
                     table="influencers",
                     filters=[f"id=eq.{inf['id']}"],
                     values={"tags": ["legacy_mockup"]},
@@ -82,7 +82,7 @@ async def cleanup_mockup_influencers() -> dict:
 
 async def cleanup_discovery_runs() -> dict:
     """Delete mockup discovery_runs (status=completed but mockup=true in metadata)."""
-    all_runs = await supabase_rest.select(
+    all_runs = await railway_pg.select(
         table="discovery_runs",
         select="id,status,metadata",
         limit=100,
@@ -93,7 +93,7 @@ async def cleanup_discovery_runs() -> dict:
         metadata = run.get("metadata") or {}
         if metadata.get("mockup") is True:
             try:
-                await supabase_rest.delete(
+                await railway_pg.delete(
                     table="discovery_runs",
                     filters=[f"id=eq.{run['id']}"],
                 )

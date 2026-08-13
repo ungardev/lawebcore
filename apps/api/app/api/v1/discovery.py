@@ -18,7 +18,7 @@ from discovery.schemas import (
 )
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 from app.core.security import CurrentUserDep
 
@@ -185,7 +185,7 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
     )
 
     if body.initial_brief:
-        await supabase_rest.insert(
+        await railway_pg.insert(
             table="discovery_messages",
             values={
                 "conversation_id": str(conversation_id),
@@ -196,7 +196,7 @@ async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUs
         )
 
     if assistant_content:
-        await supabase_rest.insert(
+        await railway_pg.insert(
             table="discovery_messages",
             values={
                 "conversation_id": str(conversation_id),
@@ -243,7 +243,7 @@ async def list_conversations(
     if status_filter:
         filters.append(f"status=eq.{status_filter}")
 
-    result = await supabase_rest.select(
+    result = await railway_pg.select(
         table="discovery_conversations",
         select="id,user_id,current_step,status,message_count,started_at,last_message_at,title",
         filters=filters,
@@ -263,7 +263,7 @@ async def get_conversation(conversation_id: UUID):
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    messages = await supabase_rest.select(
+    messages = await railway_pg.select(
         table="discovery_messages",
         select="id,role,content,tool_calls,tool_results,reasoning,cost_usd,latency_ms,created_at",
         filters=[f"conversation_id=eq.{conversation_id}"],
@@ -283,7 +283,7 @@ async def send_message(
     """Procesa un mensaje del usuario y retorna la respuesta IA."""
     from discovery.memory import conversation_memory
 
-    user_message_record = await supabase_rest.insert(
+    user_message_record = await railway_pg.insert(
         table="discovery_messages",
         values={
             "conversation_id": str(conversation_id),
@@ -357,7 +357,7 @@ async def send_message(
                     "Intenta de nuevo o contacta al administrador."
                 )
 
-    assistant_record = await supabase_rest.insert(
+    assistant_record = await railway_pg.insert(
         table="discovery_messages",
         values={
             "conversation_id": str(conversation_id),
@@ -372,7 +372,7 @@ async def send_message(
         returning="representation",
     )
 
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_conversations",
         filters=[f"id=eq.{conversation_id}"],
         values={
@@ -540,7 +540,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
         id_list = ",".join(f'"{i}"' for i in body.influencer_ids)
         filters.append(f"id=in.({id_list})")
 
-    influencers = await supabase_rest.select(
+    influencers = await railway_pg.select(
         table="influencers",
         select="id,full_name,primary_handle",
         filters=filters,
@@ -631,7 +631,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
             updates = enriched_map[inf_id]
             updates["enriched_at"] = datetime.now(timezone.utc)
             try:
-                await supabase_rest.update(
+                await railway_pg.update(
                     table="influencers",
                     filters=[f"id=eq.{inf_id}"],
                     values=updates,
@@ -666,7 +666,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
     total_cost += apify_cost
 
     with contextlib.suppress(Exception):
-        await supabase_rest.insert("api_costs", {
+        await railway_pg.insert("api_costs", {
             "provider": "apify",
             "cost_usd": apify_cost,
             "request_count": enriched_count,
@@ -685,7 +685,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
 @router.get("/runs")
 async def list_discovery_runs(limit: int = 20, offset: int = 0):
     """Lista todos los runs de búsqueda paginados."""
-    results = await supabase_rest.select(
+    results = await railway_pg.select(
         table="discovery_runs",
         select="id,status,total_candidates,accepted,actual_cost_usd,error,started_at,completed_at,created_at,metadata",
         order="created_at.desc",
@@ -698,7 +698,7 @@ async def list_discovery_runs(limit: int = 20, offset: int = 0):
 @router.get("/runs/{run_id}", response_model=DiscoveryRunResponse)
 async def get_discovery_run(run_id: UUID):
     """Obtiene el estado de un run de búsqueda."""
-    result = await supabase_rest.select_one(
+    result = await railway_pg.select_one(
         table="discovery_runs",
         select="id,status,total_candidates,accepted,actual_cost_usd,error,started_at,completed_at,created_at,metadata",
         filters=[f"id=eq.{run_id}"],
@@ -725,7 +725,7 @@ async def list_run_candidates(
     if min_score is not None:
         filters.append(f"match_score=gte.{min_score}")
 
-    rows = await supabase_rest.select(
+    rows = await railway_pg.select(
         table="discovery_candidates",
         select="*",
         filters=filters,
@@ -742,7 +742,7 @@ async def download_proposal_csv(run_id: UUID):
     from fastapi.responses import StreamingResponse
     from app.services.proposal_generator import generate_proposal_csv
 
-    candidates = await supabase_rest.select(
+    candidates = await railway_pg.select(
         table="discovery_candidates",
         select="*",
         filters=[f"run_id=eq.{run_id}", "status=eq.saved"],
@@ -756,7 +756,7 @@ async def download_proposal_csv(run_id: UUID):
             detail="No hay candidatos guardados. Guarda al menos 1 candidato primero.",
         )
 
-    run = await supabase_rest.select_one(
+    run = await railway_pg.select_one(
         table="discovery_runs",
         select="product_name",
         filters=[f"id=eq.{run_id}"],
@@ -781,7 +781,7 @@ async def download_proposal_csv(run_id: UUID):
 @router.post("/candidates/{candidate_id}/save")
 async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     """Convierte un discovery_candidate a influencer real."""
-    candidate = await supabase_rest.select_one(
+    candidate = await railway_pg.select_one(
         table="discovery_candidates",
         select="*",
         filters=[f"id=eq.{candidate_id}"],
@@ -790,7 +790,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    influencer = await supabase_rest.insert(
+    influencer = await railway_pg.insert(
         table="influencers",
         values={
             "full_name": candidate.get("full_name", ""),
@@ -811,7 +811,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
         returning="representation",
     )
 
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_candidates",
         filters=[f"id=eq.{candidate_id}"],
         values={
@@ -826,7 +826,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
 @router.post("/candidates/{candidate_id}/dismiss")
 async def dismiss_candidate(candidate_id: UUID, reason: str | None = None, user: CurrentUserDep = None):
     """Descarta un candidato."""
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_candidates",
         filters=[f"id=eq.{candidate_id}"],
         values={
@@ -863,7 +863,7 @@ async def get_api_costs(
     if to_date:
         filters.append(f"occurred_at.lte.{to_date}T23:59:59Z")
 
-    rows = await supabase_rest.select(
+    rows = await railway_pg.select(
         table="api_costs",
         select="provider,operation,cost_usd,request_count,tokens_input,tokens_output",
         filters=filters,
@@ -921,7 +921,7 @@ async def get_api_costs(
 @router.get("/metrics")
 async def get_discovery_metrics():
     """Dashboard de métricas del módulo de discovery."""
-    runs = await supabase_rest.select(
+    runs = await railway_pg.select(
         table="discovery_runs",
         select="id,status,total_candidates,accepted,actual_cost_usd,created_at",
         filters=[],

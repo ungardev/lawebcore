@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 from fastapi import APIRouter, Query
 
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas import DashboardKPIs
 
@@ -24,7 +24,7 @@ async def _safe_table(
 ) -> list[dict[str, Any]]:
     """Query a table, returning [] if it doesn't exist or errors."""
     try:
-        return await supabase_rest.table(
+        return await railway_pg.table(
             table,
             select=select,
             eq_filters=eq_filters,

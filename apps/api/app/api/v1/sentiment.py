@@ -6,14 +6,14 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.ai.sentiment_analyzer import analyze_comments_full, SentimentDistribution
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 
 
 def _pub_exists(pub_id: str) -> dict[str, Any]:
-    rows = supabase_rest.table(
+    rows = railway_pg.table(
         "publicaciones",
         select="id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados,sentimiento_analizado_at",
         eq_filters={"id": pub_id},
@@ -49,7 +49,7 @@ async def analyze_comments(
     comment_texts: list[str] | None = payload.get("comentarios")
 
     if comment_texts is None:
-        rows = supabase_rest.table(
+        rows = railway_pg.table(
             "comentarios",
             select="id,texto",
             eq_filters={"publicacion_id": pub_id, "analyzed_sentiment": None},
@@ -73,7 +73,7 @@ async def analyze_comments(
         "sentimiento_negativo": dist.negativo,
         "sentimiento_analizado_at": now,
     }
-    await supabase_rest.update("publicaciones", updates, eq_filters={"id": pub_id})
+    await railway_pg.update("publicaciones", updates, eq_filters={"id": pub_id})
 
     return {
         "publicacion_id": pub_id,
@@ -109,7 +109,7 @@ async def campaign_sentiment_aggregate(
     user: CurrentUserDep,
 ) -> dict[str, Any]:
     """Agrega sentimiento de todas las publicaciones de una campaña."""
-    rows = supabase_rest.table(
+    rows = railway_pg.table(
         "publicaciones",
         select="id,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo,comentarios_analizados",
         eq_filters={"campaign_id": campaign_id},
@@ -164,7 +164,7 @@ async def reanalyze_campaign(
     Fuerza el re-análisis de TODAS las publicaciones con comentarios
     pendientes de una campaña. Se ejecuta en background.
     """
-    rows = supabase_rest.table(
+    rows = railway_pg.table(
         "publicaciones",
         select="id",
         eq_filters={"campaign_id": campaign_id},
@@ -190,7 +190,7 @@ async def _background_reanalyze(pub_ids: list[str], job_id: str) -> None:
 
     for pub_id in pub_ids:
         try:
-            comment_rows = supabase_rest.table(
+            comment_rows = railway_pg.table(
                 "comentarios",
                 select="id,texto",
                 eq_filters={"publicacion_id": pub_id},
@@ -210,10 +210,10 @@ async def _background_reanalyze(pub_ids: list[str], job_id: str) -> None:
                 "sentimiento_negativo": dist.negativo,
                 "sentimiento_analizado_at": now,
             }
-            await supabase_rest.update("publicaciones", updates, eq_filters={"id": pub_id})
+            await railway_pg.update("publicaciones", updates, eq_filters={"id": pub_id})
 
             for r, c in zip(comment_rows, dist.comentarios):
-                await supabase_rest.update("comentarios", {
+                await railway_pg.update("comentarios", {
                     "analyzed_sentiment": c.sentiment.value,
                     "analyzed_confidence": c.confidence,
                 }, eq_filters={"id": r["id"]})

@@ -1,6 +1,6 @@
 """Influencers endpoints."""
 from fastapi import APIRouter, HTTPException, Query
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas import InfluencerRead, InfluencerCreate, InfluencerMetricsRead
 
@@ -16,7 +16,7 @@ async def list_influencers(
     status: str | None = Query("active"),
     limit: int = Query(100, le=500),
 ):
-    all_rows = await supabase_rest.table("influencers", select="*", limit=10000)
+    all_rows = await railway_pg.table("influencers", select="*", limit=10000)
     if tier:
         all_rows = [r for r in all_rows if (r.get("primary_tier") or "").upper() == tier.upper()]
     if status:
@@ -37,13 +37,13 @@ async def create_influencer(payload: InfluencerCreate, user: CurrentUserDep):
     data = payload.model_dump()
     data["primary_tier"] = payload.primary_tier.upper()
     data["created_by"] = str(user.id)
-    result = await supabase_rest.insert("influencers", data)
+    result = await railway_pg.insert("influencers", data)
     return InfluencerRead.model_validate(result[0])
 
 
 @router.get("/{influencer_id}/metrics", response_model=list[InfluencerMetricsRead])
 async def get_metrics(influencer_id: str, user: CurrentUserDep):
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "influencer_metrics_snapshot",
         select="*",
         eq_filters={"influencer_id": influencer_id},
@@ -55,7 +55,7 @@ async def get_metrics(influencer_id: str, user: CurrentUserDep):
 
 @router.get("/{influencer_id}", response_model=InfluencerRead)
 async def get_influencer(influencer_id: str, user: CurrentUserDep):
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "influencers",
         select="*",
         eq_filters={"id": influencer_id},

@@ -1,7 +1,7 @@
 """Publicaciones endpoints — metrics per influencer post (P.I.A.R)."""
 
 from fastapi import APIRouter, Query
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 
 router = APIRouter()
@@ -17,7 +17,7 @@ async def list_publicaciones(
     """
     Lista publicaciones con filtros opcionales.
     """
-    all_rows = await supabase_rest.table("publicaciones", select="*", limit=limit)
+    all_rows = await railway_pg.table("publicaciones", select="*", limit=limit)
 
     if campaign_id:
         all_rows = [r for r in all_rows if str(r.get("campaign_id") or "") == campaign_id]
@@ -37,7 +37,7 @@ async def stats_publicaciones(
     Agregados de publicaciones para una campaña.
     Útil para los gráficos de la ficha de campaña.
     """
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "publicaciones",
         select="fecha_publicacion,vistas,alcance,likes,comentarios,guardados,er_alcance,er_vistas,retencion,sentimiento_positivo,sentimiento_neutro,sentimiento_negativo",
         eq_filters={"campaign_id": campaign_id},

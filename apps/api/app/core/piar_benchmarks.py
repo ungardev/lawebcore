@@ -17,7 +17,7 @@ from typing import Any
 
 import structlog
 
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 logger = structlog.get_logger(__name__)
 
@@ -44,13 +44,13 @@ class BenchmarkStatus:
 
 async def get_all_benchmarks() -> list[dict[str, Any]]:
     """Obtiene todos los benchmarks LWFA desde Supabase."""
-    rows = await supabase_rest.table("tier_benchmarks", select="*", limit=20)
+    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)
     return rows
 
 
 async def get_benchmark_by_subtier(subtier: str) -> dict[str, Any] | None:
     """Obtiene un benchmark específico por sub-tier."""
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "tier_benchmarks",
         select="*",
         eq_filters={"subtier": subtier},
@@ -63,7 +63,7 @@ async def get_benchmark_by_followers(followers: int | None) -> dict[str, Any] | 
     """Resuelve el benchmark más apropiado para un follower count."""
     if followers is None:
         return None
-    rows = await supabase_rest.table("tier_benchmarks", select="*", limit=20)
+    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)
     for row in rows:
         fmin = int(row.get("followers_min") or 0)
         fmax = int(row.get("followers_max") or 0)
@@ -179,7 +179,7 @@ async def get_benchmark_status_for_influencer(
     3. Calcula los promedios de ER y V/F de sus publicaciones
     4. Retorna el semáforo
     """
-    snapshot_rows = await supabase_rest.table(
+    snapshot_rows = await railway_pg.table(
         "influencer_metrics_snapshot",
         select="followers",
         eq_filters={"influencer_id": influencer_id},
@@ -192,7 +192,7 @@ async def get_benchmark_status_for_influencer(
     if not benchmark:
         return BenchmarkStatus(), None
 
-    pub_rows = await supabase_rest.table(
+    pub_rows = await railway_pg.table(
         "publicaciones",
         select="er_vistas,vistas,likes,comentarios,guardados,compartidos",
         eq_filters={"influencer_id": influencer_id},

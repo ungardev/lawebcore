@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas import (
     CampaignRead, CampaignCreate, CampaignUpdate,
@@ -28,7 +28,7 @@ async def list_campaigns(
     limit: int = Query(100, le=500),
 ):
     """List campaigns with filters. Returns lightweight projection."""
-    all_rows = await supabase_rest.table("campaigns", select="*", limit=10000)
+    all_rows = await railway_pg.table("campaigns", select="*", limit=10000)
     filtered = []
     for r in all_rows:
         if r.get("deleted_at") is not None:
@@ -57,7 +57,7 @@ async def kanban_view(
     brand_id: str | None = Query(None),
 ):
     """Returns campaigns grouped by status, for the Kanban board."""
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "campaigns",
         select="id,code,name,status,objective,brand_id,client_id,num_influencers,budget_total,end_date,updated_at",
         is_null_filters=["deleted_at"],
@@ -91,7 +91,7 @@ async def kanban_view(
 
 @router.get("/{campaign_id}", response_model=CampaignDetail)
 async def get_campaign(campaign_id: str, user: CurrentUserDep):
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "campaigns",
         select="*",
         eq_filters={"id": campaign_id},
@@ -101,19 +101,19 @@ async def get_campaign(campaign_id: str, user: CurrentUserDep):
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign = rows[0]
 
-    brand_rows = await supabase_rest.table("brands", select="*", eq_filters={"id": str(campaign.get("brand_id") or "")})
+    brand_rows = await railway_pg.table("brands", select="*", eq_filters={"id": str(campaign.get("brand_id") or "")})
     brand = brand_rows[0] if brand_rows else None
 
-    client_rows = await supabase_rest.table("clients", select="*", eq_filters={"id": str(campaign.get("client_id") or "")})
+    client_rows = await railway_pg.table("clients", select="*", eq_filters={"id": str(campaign.get("client_id") or "")})
     client = client_rows[0] if client_rows else None
 
-    kpi_values = await supabase_rest.table(
+    kpi_values = await railway_pg.table(
         "campaign_kpi_values",
         select="value,kpi_definition_id,source,recorded_at",
         eq_filters={"campaign_id": campaign_id},
         limit=500,
     )
-    kpi_defs_resp = await supabase_rest.table("kpi_definitions", select="id,code,name,category", limit=500)
+    kpi_defs_resp = await railway_pg.table("kpi_definitions", select="id,code,name,category", limit=500)
     kpi_defs = {str(k["id"]): k for k in kpi_defs_resp}
 
     kpis = []
@@ -129,14 +129,14 @@ async def get_campaign(campaign_id: str, user: CurrentUserDep):
                 recorded_at=v.get("recorded_at") or "",
             ))
 
-    links = await supabase_rest.table(
+    links = await railway_pg.table(
         "campaign_links",
         select="*",
         eq_filters={"campaign_id": campaign_id},
         order="link_type",
     )
 
-    insights = await supabase_rest.table(
+    insights = await railway_pg.table(
         "insights",
         select="*",
         eq_filters={"campaign_id": campaign_id},
@@ -155,7 +155,7 @@ async def get_campaign(campaign_id: str, user: CurrentUserDep):
 
 @router.post("", response_model=CampaignRead, status_code=201)
 async def create_campaign(payload: CampaignCreate, user: CurrentUserDep):
-    all_campaigns = await supabase_rest.table("campaigns", select="code", limit=10000)
+    all_campaigns = await railway_pg.table("campaigns", select="code", limit=10000)
     camp_codes = [c.get("code") or "" for c in all_campaigns if c.get("code", "").startswith("CAMP-")]
     nums = [int(c.split("-")[1]) for c in camp_codes if c.split("-")[1].isdigit()]
     next_num = max(nums) + 1 if nums else 1
@@ -173,7 +173,7 @@ async def create_campaign(payload: CampaignCreate, user: CurrentUserDep):
     data["tags"] = list(payload.tags)
     data["budget_currency"] = "USD"
 
-    result = await supabase_rest.insert("campaigns", data)
+    result = await railway_pg.insert("campaigns", data)
     return CampaignRead.model_validate(result[0])
 
 
@@ -185,12 +185,12 @@ async def update_campaign(
 ):
     updates = {k: v for k, v in payload.model_dump(exclude_unset=True).items() if v is not None}
     if not updates:
-        rows = await supabase_rest.table("campaigns", select="*", eq_filters={"id": campaign_id})
+        rows = await railway_pg.table("campaigns", select="*", eq_filters={"id": campaign_id})
         if not rows:
             raise HTTPException(status_code=404, detail="Campaign not found")
         return CampaignRead.model_validate(rows[0])
 
-    result = await supabase_rest.update("campaigns", updates, {"id": campaign_id})
+    result = await railway_pg.update("campaigns", updates, {"id": campaign_id})
     return CampaignRead.model_validate(result[0])
 
 
@@ -202,13 +202,13 @@ async def change_status(
 ):
     if payload.to_status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {sorted(VALID_STATUSES)}")
-    result = await supabase_rest.update("campaigns", {"status": payload.to_status}, {"id": campaign_id})
+    result = await railway_pg.update("campaigns", {"status": payload.to_status}, {"id": campaign_id})
     return CampaignRead.model_validate(result[0])
 
 
 @router.delete("/{campaign_id}", status_code=204)
 async def delete_campaign(campaign_id: str, user: CurrentUserDep):
-    await supabase_rest.update(
+    await railway_pg.update(
         "campaigns",
         {"deleted_at": datetime.now(timezone.utc).isoformat()},
         eq_filters={"id": campaign_id},

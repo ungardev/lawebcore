@@ -42,8 +42,10 @@ class Settings(BaseSettings):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
-    SUPABASE_URL: str = ""
-    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    POSTGRES_URL: str = ""
+    SUPABASE_URL: str = ""  # deprecated alias for POSTGRES_URL
+    POSTGRES_SERVICE_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""  # deprecated alias for POSTGRES_SERVICE_KEY
 
     DATABASE_URL: str = ""
 

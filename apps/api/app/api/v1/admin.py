@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from shared_core.config import settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -45,7 +45,7 @@ class EnrichResponse(BaseModel):
 
 async def _upsert_batch(table: str, rows: list[dict], on_conflict_col: str | None = None) -> int:
     """Insert or update multiple rows concurrently via Supabase REST API."""
-    from shared_core import supabase_rest
+    from shared_core import railway_pg
 
     semaphore = asyncio.Semaphore(20)
 
@@ -55,18 +55,18 @@ async def _upsert_batch(table: str, rows: list[dict], on_conflict_col: str | Non
                 if on_conflict_col:
                     filter_val = row.get(on_conflict_col)
                     if filter_val is not None:
-                        existing = await supabase_rest.select(
+                        existing = await railway_pg.select(
                             table=table, select="id",
                             filters=[f"{on_conflict_col}=eq.{filter_val}"], limit=1
                         )
                         if existing:
-                            await supabase_rest.update(
+                            await railway_pg.update(
                                 table=table,
                                 filters=[f"{on_conflict_col}=eq.{filter_val}"],
                                 values=row
                             )
                             return True
-                await supabase_rest.insert(table=table, values=row)
+                await railway_pg.insert(table=table, values=row)
                 return True
             except Exception as e:
                 print(f"  Error inserting {table} row: {e}")
@@ -376,7 +376,7 @@ async def enrich_influencers(
         id_list = ",".join(f'"{i}"' for i in body.influencer_ids)
         filters.append(f"id=in.({id_list})")
 
-    influencers = await supabase_rest.select(
+    influencers = await railway_pg.select(
         table="influencers",
         select="id,full_name,primary_handle",
         filters=filters,
@@ -468,7 +468,7 @@ async def enrich_influencers(
             updates = enriched_map[inf_id]
             updates["enriched_at"] = datetime.now(timezone.utc)
             try:
-                await supabase_rest.update(
+                await railway_pg.update(
                     table="influencers",
                     filters=[f"id=eq.{inf_id}"],
                     values=updates,
@@ -496,7 +496,7 @@ async def enrich_influencers(
                 failed_count += 1
 
     try:
-        await supabase_rest.insert("api_costs", {
+        await railway_pg.insert("api_costs", {
             "provider": "apify",
             "cost_usd": apify_cost,
             "request_count": enriched_count,
@@ -530,7 +530,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
     bu_id = "00000000-0000-0000-0000-000000000001"
 
     try:
-        users = await supabase_rest.select("users", select="id", limit=1)
+        users = await railway_pg.select("users", select="id", limit=1)
         if users and len(users) > 0:
             user_id = str(users[0]["id"])
             logger.info(f"Using real user_id from DB: {user_id}")
@@ -625,7 +625,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
         step = demo.pop("step", "brief")
 
         try:
-            conv_record = await supabase_rest.insert(
+            conv_record = await railway_pg.insert(
                 table="discovery_conversations",
                 values={
                     "id": str(conv_id),
@@ -645,7 +645,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
 
         for msg in messages:
             try:
-                await supabase_rest.insert(
+                await railway_pg.insert(
                     table="discovery_messages",
                     values={
                         "id": str(uuid.uuid4()),
@@ -777,7 +777,7 @@ async def seed_rag_knowledge(x_admin_token: str | None = Header(None)):
     if x_admin_token != settings.ADMIN_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
-    from shared_core import supabase_rest
+    from shared_core import railway_pg
 
     def _chunk_text(text: str, max_len: int = 400) -> list[str]:
         words = text.split()
@@ -798,7 +798,7 @@ async def seed_rag_knowledge(x_admin_token: str | None = Header(None)):
     for doc in RAG_DOCUMENTS:
         doc_id = str(uuid.uuid4())
         try:
-            await supabase_rest.insert(table="documents", values={
+            await railway_pg.insert(table="documents", values={
                 "id": doc_id,
                 "title": doc["title"],
                 "doc_type": doc.get("document_type", "other"),
@@ -813,7 +813,7 @@ async def seed_rag_knowledge(x_admin_token: str | None = Header(None)):
         chunks_text = _chunk_text(doc["content"])
         for idx, chunk_text in enumerate(chunks_text):
             try:
-                await supabase_rest.insert(table="document_chunks", values={
+                await railway_pg.insert(table="document_chunks", values={
                     "document_id": doc_id,
                     "content": chunk_text,
                     "metadata": doc.get("metadata", {}),

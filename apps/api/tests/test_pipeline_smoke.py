@@ -213,7 +213,7 @@ class TestUpsertManyReturning:
     @pytest.mark.asyncio
     async def test_upsert_many_adds_returning_clause(self):
         """Verify RETURNING is always added, even for 'minimal'."""
-        from shared_core.supabase_rest import RailwayPg
+        from shared_core.railway_pg import RailwayPg
         mock_pool = AsyncMock()
         mock_conn = MagicMock()
         mock_row = MagicMock()
@@ -224,7 +224,7 @@ class TestUpsertManyReturning:
         pg = RailwayPg(dsn="postgresql://test")
         pg._pool = mock_pool
 
-        with patch("shared_core.supabase_rest.logger") as mock_logger:
+        with patch("shared_core.railway_pg.logger") as mock_logger:
             await pg.upsert_many(
                 table="test_table",
                 records=[{"id": 1, "name": "test"}],

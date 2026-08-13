@@ -7,25 +7,24 @@
 ## Despliegue a produccion
 
 ### Pre-requisitos
-1. Proyecto Supabase creado en [supabase.com](https://supabase.com) (region recomendada: South America - Sao Paulo)
-2. Proyecto en [railway.app](https://railway.app) conectado al repo
-3. Proyecto en [vercel.com](https://vercel.com) conectado al repo
+1. Railway PostgreSQL creado en [railway.app](https://railway.app) (region: cualquiera — luego se replica)
+2. Proyecto en [railway.app](https://railway.app) conectado al repo (para API + workers)
+3. Proyecto en [vercel.com](https://vercel.com) conectado al repo (para frontend)
 4. Cuenta en [openai.com](https://openai.com) (o Anthropic) con API key
 
-### Paso 1: Base de datos (Supabase)
+### Paso 1: Base de datos (Railway PostgreSQL)
 ```bash
-# Conectar a la DB remota
-psql "$DATABASE_URL_SYNC" -f supabase/migrations/00000000000001_extensions.sql
-psql "$DATABASE_URL_SYNC" -f supabase/migrations/00000000000002_enums.sql
+# Conectar a la DB remota via psql
+psql "$DATABASE_URL" -f supabase/migrations/00000000000001_extensions.sql
+psql "$DATABASE_URL" -f supabase/migrations/00000000000002_enums.sql
 # ... aplicar 03 al 11 en orden ...
-psql "$DATABASE_URL_SYNC" -f supabase/seed.sql
-psql "$DATABASE_URL_SYNC" -f supabase/seed_excel_data.sql
+psql "$DATABASE_URL" -f supabase/seed.sql
+psql "$DATABASE_URL" -f supabase/seed_excel_data.sql
 ```
 
-O via Supabase CLI (preferido):
+Tambien puedes aplicar todo de una vez con el schema consolidado:
 ```bash
-supabase link --project-ref <your-ref>
-supabase db push
+psql "$DATABASE_URL" -f supabase/schema.sql
 ```
 
 ### Paso 2: Backend (Railway)
@@ -41,13 +40,16 @@ supabase db push
 3. Framework: Vite
 4. Variables de entorno:
    - `VITE_API_URL`: URL publica de Railway (ej: `https://api.lawebcore.railway.app`)
-   - `VITE_SUPABASE_URL`: URL del proyecto Supabase
-   - `VITE_SUPABASE_ANON_KEY`: anon key
    - `VITE_APP_NAME`: "La Web Core"
 
 ### Paso 4: Crear primer usuario admin
-1. Registrar usuario via Supabase Auth (ej: `admin@lawebfigital.com`)
-2. En SQL Editor de Supabase, ejecutar:
+1. Obtener un token via `POST /api/v1/auth/login` con credenciales de ADMIN_TOKEN
+2. EIseg SQL via psql (con `POSTGRES_URL`):
+```sql
+UPDATE users SET status = 'active', full_name = 'Admin General', job_title = 'Administrador' WHERE email = 'admin@tuemail.com';
+INSERT INTO user_roles (user_id, role_id, granted_by)
+SELECT id, (SELECT id FROM roles WHERE code = 'admin_general'), id FROM users WHERE email = 'admin@tuemail.com';
+```
 ```sql
 UPDATE users SET status = 'active', full_name = 'Admin General', job_title = 'Administrador' WHERE email = 'admin@lawebfigital.com';
 INSERT INTO user_roles (user_id, role_id, granted_by)
@@ -65,7 +67,6 @@ SELECT id, (SELECT id FROM roles WHERE code = 'admin_general'), id FROM users WH
 ### Logs
 - Railway: tab "Logs" en cada servicio
 - Vercel: tab "Logs" del deployment
-- Supabase: tab "Logs" del proyecto
 
 ### Metricas clave a observar
 - API latency p95, p99
@@ -79,13 +80,12 @@ SELECT id, (SELECT id FROM roles WHERE code = 'admin_general'), id FROM users WH
 ## Troubleshooting comun
 
 ### "Invalid token" al hacer login
-- Verificar que `SUPABASE_JWT_SECRET` en el backend coincida con el del proyecto Supabase
-- Verificar que `SUPABASE_URL` y `SUPABASE_ANON_KEY` esten correctos en el frontend
+- Verificar que `ADMIN_TOKEN` en el backend sea correcto
+- Verificar que el token enviado en el header `Authorization: Bearer <token>` sea valido
 
 ### RLS denegando acceso a datos propios
-- Verificar que el usuario tenga al menos un rol en `user_roles`
-- Verificar la policy RLS de la tabla especifica (`SELECT * FROM pg_policies WHERE tablename = 'X'`)
-- Probar con `SET LOCAL role authenticated; SET LOCAL request.jwt.claims TO '{"sub": "...", ...}';` en psql
+- La app conecta como `postgres` superuser, RLS esta deshabilitado por defecto en Railway
+- Si RLS causa problemas: `ALTER TABLE <nombre> DISABLE ROW LEVEL SECURITY;`
 
 ### Embeddings no se generan
 - Verificar `OPENAI_API_KEY` configurada
@@ -101,9 +101,9 @@ SELECT id, (SELECT id FROM roles WHERE code = 'admin_general'), id FROM users WH
 
 ## Backup y recovery
 
-### Backup diario de DB (Supabase)
-Supabase Cloud hace backups automaticos diarios en planes Pro+. Para Point-in-time Recovery:
-- Dashboard > Database > Backups > Enable PITR
+### Backup diario de DB (Railway PostgreSQL)
+Railway PostgreSQL hace backups automaticos. Para Point-in-time Recovery:
+- Railway Dashboard > PostgreSQL > Backups > Enable PITR
 
 ### Backup manual
 ```bash
@@ -133,8 +133,8 @@ pg_dump "$DATABASE_URL_SYNC" > backup_$(date +%Y%m%d).sql
 ## Seguridad
 
 ### Rotacion de secrets
-- Cada 90 dias rotar `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_JWT_SECRET`
-- Cada 180 dias rotar `OPENAI_API_KEY`, `HYPEAUDITOR_API_KEY`
+- Cada 90 dias rotar `POSTGRES_SERVICE_KEY`
+- Cada 180 dias rotar `OPENAI_API_KEY`, `HYPEAUDITOR_API_KEY`, `ADMIN_TOKEN`
 - Usar Railway secrets (no commitear .env)
 
 ### Auditoria

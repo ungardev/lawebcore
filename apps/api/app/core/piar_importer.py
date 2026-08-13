@@ -25,7 +25,7 @@ from typing import Any
 
 import structlog
 
-from shared_core import supabase_rest
+from shared_core import railway_pg
 
 logger = structlog.get_logger(__name__)
 
@@ -368,7 +368,7 @@ async def resolver_campaign_id(
     Retorna None si no se encuentra (el endpoint rejectará con 400).
     """
     if campaign_id_input:
-        rows = await supabase_rest.table(
+        rows = await railway_pg.table(
             "campaigns",
             select="id",
             eq_filters={"id": campaign_id_input},
@@ -379,7 +379,7 @@ async def resolver_campaign_id(
         return None
 
     if campaign_name_input:
-        rows = await supabase_rest.table(
+        rows = await railway_pg.table(
             "campaigns",
             select="id,name,code",
             limit=500,
@@ -398,7 +398,7 @@ async def resolver_campaign_id(
 
 async def obtener_influencers_map() -> dict[str, uuid.UUID]:
     """Construye {handle_lower: uuid} para resolver influencer_id rápidamente."""
-    rows = await supabase_rest.table("influencers", select="id,primary_handle", limit=10000)
+    rows = await railway_pg.table("influencers", select="id,primary_handle", limit=10000)
     result: dict[str, uuid.UUID] = {}
     for row in rows:
         handle = row.get("primary_handle")
@@ -425,14 +425,14 @@ async def insertar_publicacion(
     fecha = fila_normalizada.get("fecha_publicacion")
 
     if url:
-        existing = await supabase_rest.table(
+        existing = await railway_pg.table(
             "publicaciones",
             select="id",
             eq_filters={"url_publicacion": url},
             limit=1,
         )
         if existing:
-            await supabase_rest.update(
+            await railway_pg.update(
                 "publicaciones",
                 fila_normalizada,
                 eq_filters={"id": str(existing[0]["id"])},
@@ -442,7 +442,7 @@ async def insertar_publicacion(
     if campaign_id and fecha:
         inf_id = fila_normalizada.get("influencer_id")
         if inf_id:
-            existing = await supabase_rest.table(
+            existing = await railway_pg.table(
                 "publicaciones",
                 select="id",
                 eq_filters={"campaign_id": campaign_id},
@@ -450,7 +450,7 @@ async def insertar_publicacion(
             )
             for row in existing:
                 if str(row.get("influencer_id")) == inf_id and row.get("fecha_publicacion") == fecha:
-                    await supabase_rest.update(
+                    await railway_pg.update(
                         "publicaciones",
                         fila_normalizada,
                         eq_filters={"id": str(row["id"])},
@@ -459,7 +459,7 @@ async def insertar_publicacion(
 
     fila_normalizada["campaign_id"] = campaign_id
     try:
-        await supabase_rest.insert("publicaciones", fila_normalizada)
+        await railway_pg.insert("publicaciones", fila_normalizada)
         return "inserted", None
     except Exception as e:
         logger.error("piar_import_insert_error", error=str(e), row=fila_normalizada)

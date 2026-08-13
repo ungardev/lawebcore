@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from shared_core.supabase_rest import supabase_rest
+from shared_core.railway_pg import supabase_rest
 from discovery.schemas import ConversationStep, DiscoverySearchRequest
 
 logger = logging.getLogger(__name__)
@@ -56,9 +56,9 @@ _COLUMNS = {
 
 async def migrate_discovery_conversations_schema() -> None:
     """Add missing columns to discovery_conversations and discovery_runs if they don't exist."""
-    from shared_core.supabase_rest import supabase_rest
+from shared_core.railway_pg import railway_pg
 
-    pool = await supabase_rest._ensure_pool()
+    pool = await railway_pg._ensure_pool()
     async with pool.acquire() as conn:
         for col_name, col_type in _COLUMNS.items():
             try:
@@ -154,7 +154,7 @@ async def save_conversation(
     if title:
         values["title"] = title
 
-    return await supabase_rest.insert(
+    return await railway_pg.insert(
         table="discovery_conversations",
         values=values,
         returning="representation",
@@ -162,7 +162,7 @@ async def save_conversation(
 
 
 async def get_conversation(conversation_id: UUID) -> dict[str, Any] | None:
-    return await supabase_rest.select_one(
+    return await railway_pg.select_one(
         table="discovery_conversations",
         select="id,user_id,bu_id,current_step,state,discovery_run_id,accumulated_brief,parsed_brief_json,pending_refinements,status,started_at,last_message_at,title",
         filters=[f"id=eq.{conversation_id}"],
@@ -173,7 +173,7 @@ async def update_conversation(
     conversation_id: UUID,
     updates: dict[str, Any],
 ) -> None:
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_conversations",
         filters=[f"id=eq.{conversation_id}"],
         values=updates,
@@ -201,7 +201,7 @@ async def save_message(
         "latency_ms": latency_ms,
         "created_at": datetime.now(timezone.utc),
     }
-    return await supabase_rest.insert(
+    return await railway_pg.insert(
         table="discovery_messages",
         values=values,
         returning="representation",
@@ -237,7 +237,7 @@ async def launch_discovery_run(
     if bu_id:
         run_values["bu_id"] = str(bu_id)
 
-    run = await supabase_rest.insert(
+    run = await railway_pg.insert(
         table="discovery_runs",
         values=run_values,
         returning="representation",

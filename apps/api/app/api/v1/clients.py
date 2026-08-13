@@ -1,6 +1,6 @@
 """Clients endpoints."""
 from fastapi import APIRouter, HTTPException, Query
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas import ClientRead, ClientCreate
 
@@ -14,7 +14,7 @@ async def list_clients(
     is_active: bool | None = Query(True),
     limit: int = Query(100, le=500),
 ):
-    all_rows = await supabase_rest.table("clients", select="*", limit=10000)
+    all_rows = await railway_pg.table("clients", select="*", limit=10000)
     if is_active is not None:
         all_rows = [r for r in all_rows if r.get("is_active") == is_active]
     if search:
@@ -28,13 +28,13 @@ async def create_client(payload: ClientCreate, user: CurrentUserDep):
     data = payload.model_dump()
     data["code"] = payload.code.upper()
     data["created_by"] = str(user.id)
-    result = await supabase_rest.insert("clients", data)
+    result = await railway_pg.insert("clients", data)
     return ClientRead.model_validate(result[0])
 
 
 @router.get("/{client_id}", response_model=ClientRead)
 async def get_client(client_id: str, user: CurrentUserDep):
-    rows = await supabase_rest.table("clients", select="*",         eq_filters={"id": client_id},
+    rows = await railway_pg.table("clients", select="*",         eq_filters={"id": client_id},
         is_null_filters=["deleted_at"])
     if not rows:
         raise HTTPException(status_code=404, detail="Client not found")

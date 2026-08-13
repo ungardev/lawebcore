@@ -15,7 +15,7 @@ import pytest
 from app.workers.worker import discovery_run_task
 from discovery.memory import conversation_memory
 from discovery.schemas import AudienceGender, BriefStructured, DiscoverySearchRequest, Platform
-from shared_core.supabase_rest import supabase_rest
+from shared_core.railway_pg import railway_pg
 
 
 async def _create_test_conversation(user_id: uuid.UUID) -> str:
@@ -56,7 +56,7 @@ async def _create_test_run(
         created_by=user_id,
     )
 
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_conversations",
         filters=[f"id=eq.{conv_id}"],
         values={"discovery_run_id": str(run["id"])},
@@ -72,7 +72,7 @@ async def _poll_run_status(
 ) -> dict:
     elapsed = 0
     while elapsed < timeout_s:
-        run = await supabase_rest.select_one(
+        run = await railway_pg.select_one(
             table="discovery_runs",
             select="id,status,total_candidates,actual_cost_usd,completed_at",
             filters=[f"id=eq.{run_id}"],
@@ -88,7 +88,7 @@ async def _poll_run_status(
 
 
 async def _get_candidates_count(run_id: str) -> int:
-    result = await supabase_rest.select(
+    result = await railway_pg.select(
         table="discovery_candidates",
         select="id",
         filters=[f"run_id=eq.{run_id}"],
@@ -99,28 +99,28 @@ async def _get_candidates_count(run_id: str) -> int:
 
 async def _cleanup(run_id: str, conv_id: str) -> None:
     try:
-        await supabase_rest.delete(
+        await railway_pg.delete(
             table="discovery_candidates",
             filters=[f"run_id=eq.{run_id}"],
         )
     except Exception:
         pass
     try:
-        await supabase_rest.delete(
+        await railway_pg.delete(
             table="discovery_messages",
             filters=[f"conversation_id=eq.{conv_id}"],
         )
     except Exception:
         pass
     try:
-        await supabase_rest.delete(
+        await railway_pg.delete(
             table="discovery_runs",
             filters=[f"id=eq.{run_id}"],
         )
     except Exception:
         pass
     try:
-        await supabase_rest.delete(
+        await railway_pg.delete(
             table="discovery_conversations",
             filters=[f"id=eq.{conv_id}"],
         )
@@ -249,7 +249,7 @@ async def test_discovery_run_inserts_candidates_to_db(test_user_id, minimal_brie
 
         final_run = await _poll_run_status(run_id, timeout_s=180)
 
-        candidates = await supabase_rest.select(
+        candidates = await railway_pg.select(
             table="discovery_candidates",
             select="id,handle,platform,match_score",
             filters=[f"discovery_run_id=eq.{run_id}"],

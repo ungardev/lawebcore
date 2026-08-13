@@ -34,7 +34,7 @@ from discovery.tools import (
 )
 from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
 from discovery.tools.source_registry import get_instagram_source
-from shared_core import settings, supabase_rest
+from shared_core import settings, railway_pg
 
 from app.core.discovery_cost_tracker import get_discovery_cost_tracker
 from app.core.metrics import (
@@ -114,7 +114,7 @@ async def shutdown(ctx):
 async def _get_conversation_id_for_run(run_id: str) -> str | None:
     """Busca el conversation_id asociado a un discovery_run."""
     try:
-        conv = await supabase_rest.select_one(
+        conv = await railway_pg.select_one(
             table="discovery_conversations",
             select="id",
             filters=[f"discovery_run_id=eq.{run_id}"],
@@ -163,7 +163,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] START run_id={run_id}", flush=True)
 
-        run = await supabase_rest.select_one(
+        run = await railway_pg.select_one(
             table="discovery_runs",
             select="*",
             filters=[f"id=eq.{run_id}"],
@@ -1238,7 +1238,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "step3_error": step3_error,
         })
 
-        conv = await supabase_rest.select_one(
+        conv = await railway_pg.select_one(
             table="discovery_conversations",
             select="id",
             filters=[f"discovery_run_id=eq.{run_id}"],
@@ -1295,7 +1295,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         cost_summary = tracker.get_run_summary(run_id)
         total_cost = cost_summary["total_usd"]
 
-        await supabase_rest.update(
+        await railway_pg.update(
             table="discovery_runs",
             values={"actual_cost_usd": total_cost},
             filters=[f"id=eq.{run_id}"],
@@ -1468,7 +1468,7 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
     failed = 0
 
     try:
-        result = await supabase_rest.upsert_many(
+        result = await railway_pg.upsert_many(
             table="discovery_candidates",
             records=candidates,
             on_conflict=["run_id", "platform", "handle"],
@@ -1491,7 +1491,7 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
         )
         for c in candidates:
             try:
-                await supabase_rest.insert(
+                await railway_pg.insert(
                     table="discovery_candidates",
                     values=c,
                     returning="minimal",
@@ -1522,7 +1522,7 @@ async def _run_set_status(run_id: str, status: str, error: str | None = None) ->
     values = {"status": status, "started_at": datetime.now(UTC)}
     if error:
         values["error"] = error
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_runs",
         filters=[f"id=eq.{run_id}"],
         values=values,
@@ -1530,7 +1530,7 @@ async def _run_set_status(run_id: str, status: str, error: str | None = None) ->
 
 
 async def _run_update(run_id: str, values: dict) -> None:
-    await supabase_rest.update(
+    await railway_pg.update(
         table="discovery_runs",
         filters=[f"id=eq.{run_id}"],
         values=values,
@@ -1540,7 +1540,7 @@ async def _run_update(run_id: str, values: dict) -> None:
 async def _run_update_metadata(run_id: str, metadata: dict) -> None:
     """Atomic metadata update using PostgreSQL JSONB merge operator."""
     try:
-        await supabase_rest.rpc(
+        await railway_pg.rpc(
             "discovery_runs_merge_metadata",
             {"p_run_id": run_id, "p_metadata": metadata},
         )
@@ -1559,7 +1559,7 @@ async def sync_hypeauditor_task(ctx, influencer_id: str) -> dict:
     if not settings.HYPEAUDITOR_API_KEY:
         return {"error": "HYPEAUDITOR_API_KEY not configured"}
 
-    influencer = await supabase_rest.select_one(
+    influencer = await railway_pg.select_one(
         table="influencers",
         select="id,full_name,primary_handle",
         filters=[f"id=eq.{influencer_id}"],
@@ -1596,7 +1596,7 @@ async def scheduled_reports_cron(ctx) -> None:
     """Run scheduled reports daily at 9 AM."""
     logger.info("scheduled_reports_cron_running")
 
-    runs = await supabase_rest.select(
+    runs = await railway_pg.select(
         table="scheduled_reports",
         select="id,name,query_config,delivery_channels",
         filters=["is_active=eq.true"],

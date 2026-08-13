@@ -464,9 +464,9 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
 
     try:
         from shared_core.db import db_session
-        from shared_core.supabase_rest import supabase_rest
+        from shared_core.railway_pg import supabase_rest
         async with db_session():
-            rows = await supabase_rest.select(
+            rows = await railway_pg.select(
                 table="discovery_profiles",
                 filters=[f"fingerprint=eq.{fingerprint}"],
                 limit=1,
@@ -475,7 +475,7 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
                 profile = rows[0]
                 logger.info("profile_db_hit", fingerprint=fingerprint, source=profile.get("source"))
                 _inc_profile_metric(profile.get("source", "unknown"))
-                await supabase_rest.update(
+                await railway_pg.update(
                     table="discovery_profiles",
                     values={"times_used": (profile.get("times_used") or 0) + 1},
                     filters=[f"id=eq.{profile['id']}"],
@@ -532,15 +532,15 @@ async def get_or_create_profile(brief: BriefStructured) -> dict[str, Any]:
 
     try:
         from shared_core.db import db_session
-        from shared_core.supabase_rest import supabase_rest
+        from shared_core.railway_pg import supabase_rest
         async with db_session():
-            existing = await supabase_rest.select(
+            existing = await railway_pg.select(
                 table="discovery_profiles",
                 filters=[f"fingerprint=eq.{fingerprint}"],
                 limit=1,
             )
             if not existing:
-                saved = await supabase_rest.insert(
+                saved = await railway_pg.insert(
                     table="discovery_profiles",
                     values=profile,
                     returning="representation",

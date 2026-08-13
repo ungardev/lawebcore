@@ -14,7 +14,7 @@ from app.core.piar_benchmarks import (
     compare_with_benchmark,
     get_benchmark_by_followers,
 )
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 
 router = APIRouter()
@@ -93,7 +93,7 @@ async def get_benchmark_by_tier(subtier: str, user: CurrentUserDep):
     Ejemplo: NANO_BAJO, MICRO_MEDIO, MACRO_ALTO
     """
     benchmark = await get_benchmark_by_followers(None)
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "tier_benchmarks",
         select="*",
         eq_filters={"subtier": subtier.upper()},
@@ -125,7 +125,7 @@ async def list_influencers_with_score(
     Opcionalmente filtra por decisión (ESCALAR/OPTIMIZAR/DESCARTAR)
     o por sub-tier (NANO_BAJO, MICRO_MEDIO, etc.)
     """
-    rows = await supabase_rest.table(
+    rows = await railway_pg.table(
         "influencers",
         select="id,full_name,primary_handle,primary_tier,sub_tier,status",
         eq_filters={"status": "active"},

@@ -24,7 +24,7 @@ from discovery.schemas import (
     Platform,
 )
 from discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
-from shared_core.supabase_rest import supabase_rest
+from shared_core.railway_pg import railway_pg
 
 _AFFIRMATIVE_KEYWORDS = {
     "si", "sí", "sii", "siii", "siiii", "confirmo", "confirmar", "confirmado",
@@ -438,7 +438,7 @@ class DiscoveryOrchestrator:
     async def _get_delivered_handles(self, conversation_id: UUID) -> list[str]:
         """Extrae handles ya entregados en mensajes anteriores del assistant."""
         try:
-            messages = await supabase_rest.select(
+            messages = await railway_pg.select(
                 table="discovery_messages",
                 select="content",
                 filters=[f"conversation_id=eq.{conversation_id}", "role=eq.assistant"],

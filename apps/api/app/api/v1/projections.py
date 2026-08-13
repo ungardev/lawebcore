@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException
 
 from app.core.piar_engine import PiarEngine
-from shared_core import supabase_rest
+from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas.projections import (
     ProjectionCalculateRequest,
@@ -26,7 +26,7 @@ async def calcular_proyeccion(
 
     Si la marca tiene menos de 3 campañas con datos, usa fallback a sector (industry).
     """
-    engine = PiarEngine(supabase_rest)
+    engine = PiarEngine(railway_pg)
 
     try:
         resultado = await engine.calcular_proyeccion(
