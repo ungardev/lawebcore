@@ -10,43 +10,37 @@ Handles:
 """
 
 import asyncio
-from datetime import datetime, timedelta, timezone
 import os
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
 from arq import cron
 from arq.connections import RedisSettings
-
-from shared_core import settings
-from shared_core import supabase_rest
+from discovery.candidate_analyzer import candidate_analyzer
+from discovery.memory import conversation_memory
+from discovery.query_builder import query_builder
+from discovery.schemas import BriefStructured, Platform
+from discovery.scoring.lens_score import lens_score
+from discovery.scoring.niche import niche_relevance
+from discovery.tools import (
+    apify_client,
+    build_rationale,
+    classify_tier,
+    meta_client,
+    metricool_client,
+    tiktok_client,
+    youtube_client,
+)
+from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
+from discovery.tools.source_registry import get_instagram_source
+from shared_core import settings, supabase_rest
 
 from app.core.discovery_cost_tracker import get_discovery_cost_tracker
 from app.core.metrics import (
     lens_active_runs,
     lens_candidates_total,
-    lens_pipeline_duration_seconds,
 )
-from discovery.query_builder import query_builder
-from discovery.schemas import BriefStructured, Platform
-from discovery.memory import conversation_memory
-from discovery.tools import (
-    apify_client,
-    hikerapi_client,
-    meta_client,
-    metricool_client,
-    multi_actor_instagram_client,
-    tiktok_client,
-    youtube_client,
-    classify_tier,
-    build_rationale,
-)
-from discovery.tools.source_registry import get_instagram_source
-from discovery.scoring.lens_score import lens_score
-from discovery.scoring.niche import niche_relevance
-from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
-from discovery.profile_generator import get_or_create_profile
-from discovery.candidate_analyzer import candidate_analyzer
 
 logger = structlog.get_logger(__name__)
 
@@ -94,8 +88,9 @@ async def startup(ctx):
     logger.info("workers_starting", env=settings.API_ENV, version="0.1.0")
     ctx["redis"] = RedisSettings.from_dsn(settings.ARQ_REDIS_URL)
     if os.environ.get("STANDALONE_WORKER") == "true":
-        from app.workers.health_server import run_health_server
         import asyncio
+
+        from app.workers.health_server import run_health_server
         asyncio.create_task(run_health_server())
 
 
@@ -471,7 +466,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             elite_data: dict[str, Any] | None = None,
         ) -> list[tuple[str, float]]:
             from discovery.scoring.niche import niche_relevance
-            from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
+            from discovery.tools.geo_boost import geo_score
 
             anti_bot_signals: list[str] = []
             niche_benchmarks: dict[str, Any] = {}
@@ -582,10 +577,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         enriched_profiles: list[dict] = []
         step3_degraded = False
         step3_error: str | None = None
-        HIKERAPI_ENRICH_SEMAPHORE = asyncio.Semaphore(5)
+        hikerapi_enrich_semaphore = asyncio.Semaphore(5)
 
         if handles_to_enrich:
-            enrichment_source_used = "hikerapi"
             logger.info(
                 "step3_hikerapi_pure_enrichment_start",
                 handles_count=len(handles_to_enrich),
@@ -593,7 +587,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             try:
                 async def _enrich_one(handle: str) -> dict | None:
                     try:
-                        async with HIKERAPI_ENRICH_SEMAPHORE:
+                        async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
                         return profile
                     except Exception as e:
@@ -923,7 +917,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "posts_analyzed": len(latest) if latest else 0,
                     "engagement_analytics": p.get("engagement_analytics"),
                 },
-                "fetched_at": datetime.now(timezone.utc),
+                "fetched_at": datetime.now(UTC),
             })
 
         scored.sort(key=lambda c: c.get("match_score") or 0, reverse=True)
@@ -999,7 +993,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 if candidate.get("ai_rationale"):
                     candidate["rationale"] = candidate["ai_rationale"]
         else:
-            print(f"[discovery_run_task] STEP 5: Skipping AI analysis (analyze_with_ai=False), using rule-based scores", flush=True)
+            print("[discovery_run_task] STEP 5: Skipping AI analysis (analyze_with_ai=False), using rule-based scores", flush=True)
             analyzed = to_analyze
 
         await _run_update_metadata(run_id, {
@@ -1051,12 +1045,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _run_update(run_id, {
             "status": final_status,
             "total_candidates": total,
-            "completed_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(UTC),
         })
         await _run_update_metadata(run_id, {
             "current_step": "completed",
             "candidates_found": total,
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "step3_degraded": step3_degraded,
             "step3_error": step3_error,
         })
@@ -1068,6 +1062,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         )
         if conv:
             from uuid import UUID as pyUUID
+
             from discovery.memory import conversation_memory
             top_candidates = qualified[:10]
             summary_lines = [
@@ -1341,7 +1336,7 @@ async def _deduplicate_and_insert_candidates(candidates: list[dict], run_id: str
 
 
 async def _run_set_status(run_id: str, status: str, error: str | None = None) -> None:
-    values = {"status": status, "started_at": datetime.now(timezone.utc)}
+    values = {"status": status, "started_at": datetime.now(UTC)}
     if error:
         values["error"] = error
     await supabase_rest.update(
