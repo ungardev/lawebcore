@@ -193,6 +193,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         profiles: dict[str, dict] = {}
         step1_handles: set[str] = set()
         step2_handles: set[str] = set()
+        step3_handles: set[str] = set()
+        step4_handles: set[str] = set()
         source_name = os.getenv("INSTAGRAM_SOURCE", "hikerapi")
         instagram_source = get_instagram_source(source_name)
 
@@ -216,7 +218,29 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     logger.warning("source_keyword_error", source=source_name, keyword=kw, error=str(e))
             return results
 
-        print(f"[discovery_run_task] STEP 1+2: Running with source={source_name}", flush=True)
+        async def _fetch_step3():
+            results = []
+            for kw in plan.keyword_queries[:3]:
+                try:
+                    items = await instagram_source.search_top_accounts(kw, limit=12)
+                    results.extend(items)
+                except Exception as e:
+                    logger.warning("hikerapi_topsearch_error", keyword=kw, error=str(e))
+            return results
+
+        async def _fetch_step4():
+            seeds = list(step1_handles | step2_handles)[:5]
+            results = []
+            for handle in seeds:
+                try:
+                    items = await instagram_source.suggested_profiles(handle, limit=10)
+                    results.extend(items)
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.warning("hikerapi_suggested_error", handle=handle, error=str(e))
+            return results
+
+        print(f"[discovery_run_task] STEP 1+2+3+4: Running with source={source_name}", flush=True)
         step1_result, step2_result = await asyncio.gather(
             _fetch_step1(),
             _fetch_step2(),
@@ -225,8 +249,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         hashtag_items: list[dict] = []
         keyword_items: list[dict] = []
+        topsearch_items: list[dict] = []
+        suggested_items: list[dict] = []
         step1_failed = False
         step2_failed = False
+        step3_failed = False
+        step4_failed = False
 
         if isinstance(step1_result, Exception):
             logger.error("step1_hashtag_failed", error=str(step1_result))
@@ -304,9 +332,89 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "pk": item.get("pk"),
             }
 
+        step3_result, step4_result = await asyncio.gather(
+            _fetch_step3(),
+            _fetch_step4(),
+            return_exceptions=True,
+        )
+
+        if isinstance(step3_result, Exception):
+            logger.error("step3_topsearch_failed", error=str(step3_result))
+            step3_failed = True
+        else:
+            topsearch_items = step3_result
+            print(f"[STEP3] {len(topsearch_items)} accounts from topsearch", flush=True)
+            logger.info("step3_topsearch_done", topsearch_accounts=len(topsearch_items))
+
+        if isinstance(step4_result, Exception):
+            logger.error("step4_suggested_failed", error=str(step4_result))
+            step4_failed = True
+        else:
+            suggested_items = step4_result
+            print(f"[STEP4] {len(suggested_items)} accounts from suggested", flush=True)
+            logger.info("step4_suggested_done", suggested_accounts=len(suggested_items))
+
+        for item in topsearch_items:
+            handle = item.get("username", "")
+            if not handle:
+                continue
+            step3_handles.add(handle)
+            if handle in profiles:
+                continue
+            profiles[handle] = {
+                "username": handle,
+                "full_name": item.get("full_name", ""),
+                "fullName": item.get("full_name", ""),
+                "bio": item.get("bio", ""),
+                "biography": item.get("biography", ""),
+                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                "follower_count": item.get("follower_count", 0),
+                "followersCount": item.get("followersCount", 0),
+                "following_count": item.get("following_count", 0),
+                "followsCount": item.get("followsCount", 0),
+                "posts_count": item.get("posts_count", 0),
+                "postsCount": item.get("postsCount", 0),
+                "is_business": item.get("is_business", False),
+                "isBusinessAccount": item.get("isBusinessAccount", False),
+                "is_verified": item.get("is_verified", False),
+                "verified": item.get("verified", False),
+                "pk": item.get("pk"),
+                "locationName": item.get("locationName", "") or "",
+            }
+
+        for item in suggested_items:
+            handle = item.get("username", "")
+            if not handle:
+                continue
+            step4_handles.add(handle)
+            if handle in profiles:
+                continue
+            profiles[handle] = {
+                "username": handle,
+                "full_name": item.get("full_name", ""),
+                "fullName": item.get("full_name", ""),
+                "bio": item.get("bio", ""),
+                "biography": item.get("biography", ""),
+                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                "follower_count": item.get("follower_count", 0),
+                "followersCount": item.get("followersCount", 0),
+                "following_count": item.get("following_count", 0),
+                "followsCount": item.get("followsCount", 0),
+                "posts_count": item.get("posts_count", 0),
+                "postsCount": item.get("postsCount", 0),
+                "is_business": item.get("is_business", False),
+                "isBusinessAccount": item.get("isBusinessAccount", False),
+                "is_verified": item.get("is_verified", False),
+                "verified": item.get("verified", False),
+                "pk": item.get("pk"),
+                "locationName": item.get("locationName", "") or "",
+            }
+
         unique_handles = list(profiles.keys())
-        print(f"[DIAG] step1+2 complete: hashtag_items={len(hashtag_items)}, keyword_items={len(keyword_items)}, unique_handles={len(unique_handles)}", flush=True)
-        logger.info("step1_and_2_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items))
+        print(f"[DIAG] steps 1-4 complete: hashtag_items={len(hashtag_items)}, keyword_items={len(keyword_items)}, topsearch_items={len(topsearch_items)}, suggested_items={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
+        logger.info("steps_1_to_4_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), keyword_users=len(keyword_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items))
         step_status = "completados" if not (step1_failed or step2_failed) else "parcialmente completados"
 
         prefiltered_handles = []
