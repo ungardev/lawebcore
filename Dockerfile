@@ -15,6 +15,7 @@ COPY packages/shared-core ./packages/shared-core
 COPY packages/shared-ai ./packages/shared-ai
 COPY packages/discovery ./packages/discovery
 COPY apps/api ./apps/api
+COPY scripts/ ./scripts/
 
 RUN pip install --upgrade pip && \
     pip install -e ./packages/shared-core \
