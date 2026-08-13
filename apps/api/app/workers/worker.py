@@ -44,7 +44,7 @@ from app.core.metrics import (
 
 logger = structlog.get_logger(__name__)
 
-MAX_HANDLES_TO_ENRICH = 80
+MAX_HANDLES_TO_ENRICH = 500
 MAX_POSTS_PER_HASHTAG = 30
 TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
@@ -793,6 +793,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "step3_hikerapi_enrichment_done",
                     enriched=len(enriched_profiles),
                     requested=len(handles_to_enrich),
+                    with_about_country=sum(1 for p in enriched_profiles if (p.get("about") or {}).get("country")),
+                    ve_countries=sum(1 for p in enriched_profiles if (p.get("about") or {}).get("country", "").upper() == "VE"),
                 )
             except Exception as e:
                 step3_degraded = True
@@ -897,6 +899,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         geo_country_mismatch = 0
         geo_no_signal = 0
         political_filtered = 0
+        geo_passed = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
         political_keywords = (
             "político", "política", "politología", "politólogo",
@@ -946,9 +949,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 bots_filtered += 1
                 continue
 
-            bio = p.get("biography") or p.get("bio") or ""
-            profile_country = (p.get("country") or "").strip().upper()
-            if profile_country and profile_country != target_country:
+            about = p.get("about") or {}
+            about_country = (about.get("country") or "").strip().upper()
+            handle_lower = handle.lower().lstrip("@")
+
+            non_ve_handle_tlds = (
+                ".rd", ".do", ".mx", ".ar", ".co", ".cl", ".pe",
+                ".ec", ".pa", ".uy", ".py", ".bo", ".cr",
+                "_rd", "_do", "_mx", "_ar", "_co", "_cl", "_pe",
+                "_ec", "_pa", "_uy", "_py", "_bo", "_cr",
+                "rd_", "do_", "mx_", "ar_", "co_", "cl_", "pe_",
+                "mx_", "ar_", "co_", "pe_", "cl_",
+            )
+            if any(handle_lower.endswith(tld) for tld in non_ve_handle_tlds):
+                geo_country_mismatch += 1
+                continue
+
+            if about_country and about_country != target_country:
                 geo_country_mismatch += 1
                 continue
 
@@ -959,41 +976,29 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "estados unidos", "usa ", "miami", "nyc", "texas",
                 "kenwood españa", "embajador kenwood",
             )
+            bio = p.get("biography") or p.get("bio") or ""
             bio_geo = f"{bio.lower()} {handle.lower()} {p.get('full_name', '').lower()}"
             if any(sig in bio_geo for sig in non_ve_signals):
                 geo_country_mismatch += 1
                 continue
 
-            handle_lower = handle.lower()
-            non_ve_handle_tlds = (
-                ".rd", ".do", ".mx", ".ar", ".co", ".cl", ".pe",
-                ".ec", ".pa", ".uy", ".py", ".bo", ".cr",
-                "_rd", "_do", "_mx", "_ar", "_co", "_cl", "_pe",
-                "_ec", "_pa", "_uy", "_py", "_bo", "_cr",
-            )
-            if any(handle_lower.endswith(tld) for tld in non_ve_handle_tlds):
-                geo_country_mismatch += 1
-                continue
-
             geo_indicators = profile_data.get("geo_indicators", [])
             geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
-            if geo_indicators:
-                hikerapi_country = (p.get("country") or "").upper()
-                if hikerapi_country == "VE":
-                    geo = max(geo, 0.85)
-                if geo < 0.4 and not has_hard_geo_signal(p, target_country):
-                    geo_no_signal += 1
-                    continue
+            if about_country == "VE":
+                geo = max(geo, 0.85)
+            if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country):
+                geo_no_signal += 1
+                continue
 
             bio_or_username = f"{bio.lower()} {handle.lower()}"
             if any(kw in bio_or_username for kw in political_keywords):
                 political_filtered += 1
                 continue
 
+            geo_passed += 1
             cross_referenced = hashtag_appearances.get(handle, 0) >= 2
             score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
 
-            about = p.get("about") or {}
             former_usernames_count = about.get("former_usernames_count", 0) or 0
             account_age_days = about.get("account_age_days", 0) or 0
             fraud_penalty = 1.0
@@ -1163,11 +1168,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "geo_country_mismatch": geo_country_mismatch,
                 "geo_no_signal": geo_no_signal,
                 "political_filtered": political_filtered,
+                "geo_passed": geo_passed,
             },
             top_5=top_5_summary,
         )
 
-        min_match_score = 20
+        min_match_score = 10
         exclude_stores = getattr(brief, "exclude_stores", True)
         qualified = [
             c for c in scored
