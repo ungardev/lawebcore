@@ -39,7 +39,7 @@ _ISO2_PATTERNS = {
 }
 
 
-def geo_score(profile: dict, geo_indicators: list[str]) -> float:
+def geo_score(profile: dict, geo_indicators: list[str], target_country: str | None = None) -> float:
     """Universal geographic relevance score (0.0 – 1.0).
 
     Tier 1.0: Ciudad específica o país (ISO) encontrado en geo_indicators
@@ -62,17 +62,8 @@ def geo_score(profile: dict, geo_indicators: list[str]) -> float:
 
     search_text = f"{bio} {full_name} {username} {location}"
 
-    target_iso2 = None
-    for iso2 in _ISO2_PATTERNS:
-        if any(iso2.lower() == c.lower() for c in geo_indicators if len(c) == 2):
-            target_iso2 = iso2
-            break
-
-    if target_iso2 and country == target_iso2:
-        return 1.0
-
-    if target_iso2 and country and country != target_iso2:
-        return 0.0
+    if target_country and country:
+        return 1.0 if country == target_country.upper() else 0.0
 
     def _word_match(text: str, keywords: list[str]) -> int:
         count = 0

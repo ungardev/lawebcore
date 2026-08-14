@@ -10,19 +10,19 @@ Tests the critical paths that were broken:
   - F-3.8: batch prompt no duplicate elite_context
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 from discovery.schemas import BriefStructured
-from discovery.tools.geo_boost import geo_score, _get_country_keywords
 from discovery.scoring.lens_score import lens_score
+from discovery.tools.geo_boost import _get_country_keywords, geo_score
 
 
 class TestGeoBoostFixes:
-    """F-1.3: Country declared should NOT disqualify candidate when no ISO2 in geo_indicators."""
+    """geo_score with explicit target_country parameter."""
 
-    def test_profile_with_country_but_no_iso2_in_geo_indicators(self):
-        """When target country is 'CO' but geo_indicators has only city names (no ISO2),
-        the candidate should NOT be immediately disqualified by the country check."""
+    def test_profile_with_country_match(self):
+        """When target_country is explicitly passed and matches profile country, return 1.0."""
         profile = {
             "biography": "gamer youtuber",
             "country": "CO",
@@ -32,25 +32,11 @@ class TestGeoBoostFixes:
             "is_business": False,
         }
         geo_indicators = ["bogota", "medellin"]
-        score = geo_score(profile, geo_indicators)
-        assert score > 0.0, "Candidate with declared country but city-only geo_indicators should NOT get 0.0"
+        score = geo_score(profile, geo_indicators, target_country="CO")
+        assert score == 1.0, "Profile country matching target_country should return 1.0"
 
-    def test_country_match_when_iso2_present(self):
-        """When ISO2 is in geo_indicators AND country matches, return 1.0."""
-        profile = {
-            "biography": "colombiano",
-            "country": "CO",
-            "username": "col_handle",
-            "followersCount": 10000,
-            "engagement_rate": 0.03,
-            "is_business": False,
-        }
-        geo_indicators = ["CO", "bogota"]
-        score = geo_score(profile, geo_indicators)
-        assert score == 1.0
-
-    def test_country_mismatch_when_iso2_present(self):
-        """When ISO2 is in geo_indicators but country doesn't match, return 0.0."""
+    def test_profile_with_country_mismatch(self):
+        """When target_country is explicitly passed but doesn't match profile country, return 0.0."""
         profile = {
             "biography": "venezolano",
             "country": "VE",
@@ -59,9 +45,25 @@ class TestGeoBoostFixes:
             "engagement_rate": 0.03,
             "is_business": False,
         }
-        geo_indicators = ["CO"]
+        geo_indicators = ["bogota", "medellin"]
+        score = geo_score(profile, geo_indicators, target_country="CO")
+        assert score == 0.0, "Profile country not matching target_country should return 0.0"
+
+    def test_no_target_country_falls_through_to_city_match(self):
+        """When target_country is None, city matching still works."""
+        profile = {
+            "biography": "",
+            "country": "",
+            "username": "user",
+            "full_name": "",
+            "locationName": "Cali, Colombia",
+            "followersCount": 50000,
+            "engagement_rate": 0.035,
+            "is_business": False,
+        }
+        geo_indicators = ["cali"]
         score = geo_score(profile, geo_indicators)
-        assert score == 0.0
+        assert score >= 1.0, "City match should return 1.0"
 
 
 class TestGeoBoostCityMatching:
@@ -126,9 +128,10 @@ class TestLensScoreWeights:
 
     def test_weights_are_normalized(self):
         """Verify the constants in the source sum to 1.0."""
-        import re
-        from discovery.scoring.lens_score import lens_score
         import inspect
+        import re
+
+        from discovery.scoring.lens_score import lens_score
         source = inspect.getsource(lens_score)
         weights = [float(w) for w in re.findall(r"(\d+\.\d+)\s*\*\s*(?:tier_er_norm|geo|niche|biz)", source)]
         total = sum(weights)
@@ -241,6 +244,7 @@ class TestWorkerTyping:
     def test_worker_module_imports_any(self):
         """worker.py must import Any for the elite_data: dict[str, Any] annotation."""
         from pathlib import Path
+
         import app.workers.worker as worker_mod
         source = Path(worker_mod.__file__).read_text()
         assert "from typing import Any" in source, "worker.py must have 'from typing import Any'"

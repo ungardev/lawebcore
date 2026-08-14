@@ -737,6 +737,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 geo = geo_score(
                     {"biography": bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
                     geo_indicators,
+                    target_country=brief.audience_countries[0] if brief.audience_countries else None,
                 )
                 niche = niche_relevance(
                     {"biography": bio, "username": handle, "full_name": p.get("full_name", "")},
@@ -1060,7 +1061,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
 
             geo_indicators = profile_data.get("geo_indicators", [])
-            geo = geo_score(p, geo_indicators) if geo_indicators else 0.5
+            geo = geo_score(p, geo_indicators, target_country=brief.audience_countries[0] if brief.audience_countries else None) if geo_indicators else 0.5
             if about_country == "VE":
                 geo = max(geo, 0.85)
             if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country):
@@ -1074,7 +1075,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
             geo_passed += 1
             cross_referenced = hashtag_appearances.get(handle, 0) >= 2
-            score_val = lens_score(p, profile_data, cross_referenced=cross_referenced)
+            score_val = lens_score(
+                p, profile_data,
+                cross_referenced=cross_referenced,
+                target_country=brief.audience_countries[0] if brief.audience_countries else None,
+            )
 
             former_usernames_count = about.get("former_usernames_count", 0) or 0
             account_age_days = about.get("account_age_days", 0) or 0

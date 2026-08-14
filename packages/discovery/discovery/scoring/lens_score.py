@@ -19,6 +19,7 @@ def lens_score(
     profile_data: dict[str, Any],
     *,
     cross_referenced: bool = False,
+    target_country: str | None = None,
 ) -> float:
     """Compute unified Lens score (0-100) for a discovery candidate.
 
@@ -39,7 +40,7 @@ def lens_score(
     tier_er_norm = _tier_normalized_er(er, tier_key)
 
     geo_indicators = profile_data.get("geo_indicators", [])
-    geo = geo_score(profile, geo_indicators) if geo_indicators else 0.5
+    geo = geo_score(profile, geo_indicators, target_country=target_country) if geo_indicators else 0.5
 
     niche = niche_relevance(profile, profile_data)
 

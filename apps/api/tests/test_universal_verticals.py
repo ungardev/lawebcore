@@ -5,11 +5,11 @@ Validates 4 verticals produce non-empty profiles without VE artifacts.
 """
 
 import pytest
-from discovery.schemas import BriefStructured
 from discovery.profile_generator import compute_fingerprint
-from discovery.tools.geo_boost import geo_score
-from discovery.scoring.niche import niche_relevance
+from discovery.schemas import BriefStructured
 from discovery.scoring.lens_score import lens_score
+from discovery.scoring.niche import niche_relevance
+from discovery.tools.geo_boost import geo_score
 
 
 class TestUniversalVerticals:
@@ -235,7 +235,7 @@ class TestUniversalVerticals:
             "hashtags": ["#belleza", "#haircare"],
             "keywords": ["belleza bogota", "haircare"],
         }
-        geo = geo_score(co_profile, profile_data["geo_indicators"])
+        geo = geo_score(co_profile, profile_data["geo_indicators"], target_country="CO")
         niche = niche_relevance(co_profile, profile_data)
         score = lens_score(co_profile, profile_data, cross_referenced=False)
 
