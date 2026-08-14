@@ -55,7 +55,11 @@ async def enqueue_discovery_run(run_id: str) -> bool:
             return False
 
     try:
-        await _pool.enqueue_job("discovery_run_task", run_id)
+        await _pool.enqueue_job(
+            "discovery_run_task",
+            run_id,
+            en_id=f"discovery:{run_id}",
+        )
         logger.info("discovery_run_enqueued", run_id=run_id)
         return True
     except Exception as e:
