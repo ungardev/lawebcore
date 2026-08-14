@@ -162,7 +162,7 @@ class HikerAPIClient:
                 )
             if response.status_code == 404:
                 return None
-            if response.status_code in (401, 403):
+            if response.status_code in (401, 402, 403):
                 logger.error(
                     "hikerapi_auth_error",
                     path=path,

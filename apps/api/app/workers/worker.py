@@ -428,12 +428,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             _fetch_step2(),
             return_exceptions=True,
         )
+        for res in (step1_result, step2_result):
+            if isinstance(res, SourceUnavailable):
+                raise res
 
         step1_recent_result, step2p5_result = await asyncio.gather(
             _fetch_step1_recent(),
             _fetch_step2p5(),
             return_exceptions=True,
         )
+        for res in (step1_recent_result, step2p5_result):
+            if isinstance(res, SourceUnavailable):
+                raise res
 
         hashtag_items: list[dict] = []
         keyword_items: list[dict] = []
@@ -536,6 +542,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             _fetch_step4(),
             return_exceptions=True,
         )
+        for res in (step3_result, step4_result):
+            if isinstance(res, SourceUnavailable):
+                raise res
 
         if isinstance(step3_result, Exception):
             logger.error("step3_topsearch_failed", error=str(step3_result))
@@ -844,6 +853,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     *[_enrich_one(h) for h in handles_to_enrich],
                     return_exceptions=True,
                 )
+                for res in enrichment_results:
+                    if isinstance(res, SourceUnavailable):
+                        raise res
                 enriched_profiles = [
                     p for p in enrichment_results
                     if isinstance(p, dict) and p.get("username")
