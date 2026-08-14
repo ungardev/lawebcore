@@ -1,9 +1,9 @@
-# La Web Core — Arquitectura Técnica (versión 3.0 post-auditoría LENS)
+# La Web Core — Arquitectura Técnica (versión 3.1 post-segunda-auditoría LENS)
 
-> **Versión:** 3.0 — 2026-08-14
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v2.0 (`a250b0c`)
-> **Commit de referencia:** `85c3433` (todos los hitos aplicados)
-> **Auditoría original:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`
+> **Versión:** 3.1 — 2026-08-14
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.0 (`27ed99f`)
+> **Commit de referencia:** `cc3f57c` (Hitos 8-12 aplicados: en_id, 402, breaker, apify, target_country, replay)
+> **Auditoría segunda-pass:** `LENS_AUDIT2_2026-08-14.md`
 
 ---
 

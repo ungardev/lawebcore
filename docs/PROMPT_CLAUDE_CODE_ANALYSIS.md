@@ -1,8 +1,8 @@
-# Segunda Auditoría — LENS Discovery Module (Post-Fixes)
+# Tercera Auditoría — LENS Discovery Module (Post-Second-Pass Fixes)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Solicitud:** **SEGUNDA AUDITORÍA** — la primera auditoría (2026-08-14) identificó 7 issues críticos; los hitos 1–7 fueron aplicados y commitados. Pedimos que validen los fixes, identifiquen regresiones y propongan los próximos mejoras.
+> **Solicitud:** **TERCERA AUDITORÍA** — la segunda auditoría (2026-08-14) identificó 6 issues críticos en Hitos 8-12; todos fueron aplicados y commitados (`2f7b06b`, `390277b`, `950d475`, `06a952e`, `cc3f57c`). Pedimos que validen los fixes, identifiquen regresiones y confirmen que el sistema está listo para usar en producción.
 > **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI + DeepSeek
 
 ---
@@ -19,6 +19,11 @@ La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 dí
 | 5 | `766cfee` | ARQ idempotency key `discovery:{run_id}` |
 | 6 | `2da78ab` | `is_private` en merge + cache TTL 30min |
 | 7 | `9b43316` | Documentación actualizada |
+| 8 | `2f7b06b` | `en_id` → `_job_id` en worker_enqueuer; docs actualizadas |
+| 9 | `390277b` | 402 a `(401,402,403)`; re-raise post `asyncio.gather` |
+| 10 | `950d475` | `can_make_call` check; `record_call` en `_get`; breaker singleton; TTL×3; `apify_client` muerto |
+| 11 | `06a952e` | `geo_score(profile, geo_indicators, target_country=None)`; `lens_score` actualizado; tests corregidos |
+| 12 | `cc3f57c` | `ReplayMiss` exception; `RUN_MODE=replay`; `_get` en modo replay |
 
 **Pedimos:**
 1. Validar que los fixes no introdujeron regressions
@@ -223,7 +228,7 @@ Sé brutalmente honesto. Enfócate en:
 | `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker |
 | `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency |
 | `supabase/migrations/00000000000104_...sql` | 11 | Enum partial — **ejecutar manualmente** |
-| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.0 completa |
+| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.1 completa |
 
 ### Información del proyecto
 - **Cliente actual:** Nestlé Venezuela / Purina Dog Chow
@@ -235,15 +240,16 @@ Sé brutalmente honesto. Enfócate en:
 
 ## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` (v3.0 — refleja el estado actual)
-2. Lee `apps/api/app/workers/worker.py` — enfócate en las secciones de budget_fuse, circuit_breaker y enrichment
-3. Lee `packages/discovery/discovery/scoring/geo_boost.py` — busca el bug que hace fallar los tests
-4. Revisa `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida el circuit breaker integration
-5. Identifica gaps en los fixes aplicados y propone los próximos hitos
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.1 — refleja el estado actual con Hitos 8-12)
+2. Lee `apps/api/app/workers/worker.py` — enfócate en las secciones de budget_fuse, circuit_breaker, replay mode y enrichment
+3. Lee `packages/discovery/discovery/scoring/geo_boost.py` — valida que `target_country` param取代了 `target_iso2` inference
+4. Revisa `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida que `record_call`, `can_make_call`, breaker singleton y replay mode están correctos
+5. **Ejecuta `pytest` y reporta 31/31 pass** — los 3 failures de geo_score deben estar resueltos
+6. Confirma que el sistema está listo para usar en producción
 
 **Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 
 ---
 
-*Documento generado: 2026-08-14 — Segunda auditoría post-LENS fixes*
+*Documento generado: 2026-08-14 — Tercera auditoría post-Hitos 8-12*
 *Para: Claude Code Opus 5 / Senior Full-Stack Developer*
