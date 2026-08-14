@@ -58,6 +58,47 @@ MAX_FOLLOWER_EXPANSION_PER_SEED = 5
 
 ENRICHMENT_INCLUDE_ABOUT = os.getenv("HIKERAPI_INCLUDE_ABOUT", "false").lower() == "true"
 
+DEFAULT_COMMERCE_SIGNAL_KEYWORDS = [
+    ["tienda", "shop"],
+    ["ventas", "pedidos"],
+    ["catálogo", "mayor y detal"],
+    ["envíos", "delivery"],
+    ["comprar", "adquirir"],
+    ["whatsapp", "telf", "teléfono"],
+    ["precio", "oferta", "descuento"],
+    ["horario", "sucursal", "local"],
+    ["market", "boutique", "almacén"],
+]
+DEFAULT_CREATOR_SIGNAL_KEYWORDS = [
+    ["creador", "content creator", "reviewer"],
+    ["vlogger", "youtuber", "tiktoker"],
+    ["streamer", "entrenador", "coach"],
+    ["atleta", "deportista", "fitness"],
+    ["influencer", "blogger", "periodista"],
+    ["presentador", "comunicador", "actor"],
+    ["cantante", "músico", "artista"],
+    ["creativo", "emprendedor"],
+    ["diseñador", "fotógrafo"],
+]
+DEFAULT_EXCLUSION_KEYWORDS = [
+    "político", "política", "politología", "politólogo",
+    "gobierno", "gobierno de", "gobierno nacional",
+    "maduro", "madurista", "maduristas",
+    "chavismo", "chavista", "chavistas", "chávez", "chavez",
+    "oposición", "opositor", "opositores",
+    "ventevenezuela", "vente venezuela",
+    "voluntadpopular", "voluntad popular",
+    "asambleanacional", "asamblea nacional",
+    "tribunalsupremo", "tribunal supremo",
+    "elecciones", "fraude electoral", "fraude",
+    "votar", "voto", "candidato", "candidata",
+    "protesta", "manifestación", "marcha",
+    "dictadura", "dictador", "régimen", "regimen",
+    "embargo", "sanción", "sanciones", "bloqueo",
+    "libertad", "libertades",
+    "venezuelalibre", "venezuela libre",
+]
+
 
 def _tier_of(followers: int) -> str:
     if followers < 10_000:
@@ -757,27 +798,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
                 is_business = p.get("isBusinessAccount") or p.get("is_business")
                 bio_lower = bio.lower()
-                commerce_signals = (
-                    ("tienda" in bio_lower or "shop" in bio_lower) +
-                    ("ventas" in bio_lower or "pedidos" in bio_lower) +
-                    ("catálogo" in bio_lower or "mayor y detal" in bio_lower) +
-                    ("envíos" in bio_lower or "delivery" in bio_lower) +
-                    ("comprar" in bio_lower or "adquirir" in bio_lower) +
-                    ("whatsapp" in bio_lower or "telf" in bio_lower or "teléfono" in bio_lower) +
-                    ("precio" in bio_lower or "oferta" in bio_lower or "descuento" in bio_lower) +
-                    ("horario" in bio_lower or "sucursal" in bio_lower or "local" in bio_lower) +
-                    ("market" in bio_lower or "boutique" in bio_lower or "almacén" in bio_lower)
+
+                commerce_keyword_groups = profile_data.get(
+                    "commerce_signal_keywords", DEFAULT_COMMERCE_SIGNAL_KEYWORDS
                 )
-                creator_signals = (
-                    ("creador" in bio_lower or "content creator" in bio_lower or "reviewer" in bio_lower) +
-                    ("vlogger" in bio_lower or "youtuber" in bio_lower or "tiktoker" in bio_lower) +
-                    ("streamer" in bio_lower or "entrenador" in bio_lower or "coach" in bio_lower) +
-                    ("atleta" in bio_lower or "deportista" in bio_lower or "fitness" in bio_lower) +
-                    ("influencer" in bio_lower or "blogger" in bio_lower or "periodista" in bio_lower) +
-                    ("presentador" in bio_lower or "comunicador" in bio_lower or "actor" in bio_lower) +
-                    ("cantante" in bio_lower or "músico" in bio_lower or "artista" in bio_lower) +
-                    ("creativo" in bio_lower or "emprendedor" in bio_lower and not commerce_signals) +
-                    ("diseñador" in bio_lower or "fotógrafo" in bio_lower or "artista" in bio_lower)
+                commerce_signals = sum(
+                    any(kw in bio_lower for kw in group)
+                    for group in commerce_keyword_groups
+                )
+
+                creator_keyword_groups = profile_data.get(
+                    "creator_signal_keywords", DEFAULT_CREATOR_SIGNAL_KEYWORDS
+                )
+                creator_signals = sum(
+                    any(kw in bio_lower for kw in group)
+                    for group in creator_keyword_groups
                 )
                 if is_business and commerce_signals > 0:
                     rough *= 0.35
@@ -981,23 +1016,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         political_filtered = 0
         geo_passed = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
-        political_keywords = (
-            "político", "política", "politología", "politólogo",
-            "gobierno", "gobierno de", "gobierno nacional",
-            "maduro", "madurista", "maduristas",
-            "chavismo", "chavista", "chavistas", "chávez", "chavez",
-            "oposición", "opositor", "opositores", "oposición",
-            "ventevenezuela", "vente venezuela",
-            "voluntadpopular", "voluntad popular",
-            "asambleanacional", "asamblea nacional",
-            "tribunalsupremo", "tribunal supremo",
-            "elecciones", "fraude electoral", "fraude",
-            "votar", "voto", "candidato", "candidata",
-            "protesta", "manifestación", "marcha",
-            "dictadura", "dictador", "régimen", "regimen",
-            "embargo", "sanción", "sanciones", "bloqueo",
-            "libertad", "libertades",
-            "venezuelalibre", "venezuela libre",
+        exclusion_keywords = profile_data.get(
+            "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
             followers = p.get("followersCount") or p.get("follower_count") or 0
@@ -1071,7 +1091,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
 
             bio_or_username = f"{bio.lower()} {handle.lower()}"
-            if any(kw in bio_or_username for kw in political_keywords):
+            if any(kw in bio_or_username for kw in exclusion_keywords):
                 political_filtered += 1
                 continue
 
