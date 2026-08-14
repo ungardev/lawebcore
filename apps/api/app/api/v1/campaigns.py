@@ -1,15 +1,20 @@
 """Campaigns endpoints - CRUD + Kanban + Status changes + KPIs + links."""
 
-from datetime import datetime, timezone
-from typing import Optional
-from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException, Query
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, HTTPException, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
 from app.schemas import (
-    CampaignRead, CampaignCreate, CampaignUpdate,
-    CampaignStatusChange, CampaignDetail, CampaignLinkRead,
-    CampaignKPIRead, InsightRead,
+    CampaignCreate,
+    CampaignDetail,
+    CampaignKPIRead,
+    CampaignLinkRead,
+    CampaignRead,
+    CampaignStatusChange,
+    CampaignUpdate,
+    InsightRead,
 )
 
 router = APIRouter()
@@ -165,7 +170,7 @@ async def create_campaign(payload: CampaignCreate, user: CurrentUserDep):
     data["code"] = code
     data["owner_user_id"] = str(user.id)
     data["created_by"] = str(user.id)
-    data["business_unit_id"] = "00000000-0000-0000-0000-000000000003"
+    data["business_unit_id"] = str(user.business_unit_id) if user.business_unit_id else "00000000-0000-0000-0000-000000000003"
     data["client_id"] = str(payload.client_id)
     data["brand_id"] = str(payload.brand_id)
     data["secondary_objectives"] = list(payload.secondary_objectives)
@@ -210,7 +215,7 @@ async def change_status(
 async def delete_campaign(campaign_id: str, user: CurrentUserDep):
     await railway_pg.update(
         "campaigns",
-        {"deleted_at": datetime.now(timezone.utc).isoformat()},
+        {"deleted_at": datetime.now(UTC).isoformat()},
         eq_filters={"id": campaign_id},
     )
     return None
