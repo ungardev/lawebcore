@@ -1,8 +1,9 @@
-# La Web Core — Arquitectura Técnica
+# La Web Core — Arquitectura Técnica (versión corregida)
 
-> **Versión:** 1.0 — Última actualización: 2026-08-13
-> **Proyecto:** LENS Discovery Module — Influencer Discovery Pipeline
-> **Cliente:** Nestlé Venezuela / Purina Dog Chow (demo)
+> **Versión:** 2.0 — 2026-08-14
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v1.0 (2026-08-13)
+> **Commit de referencia:** `a250b0c`
+> **Correcciones marcadas con** ⚠️ **respecto a la v1.0**
 
 ---
 
@@ -10,343 +11,308 @@
 
 ### Backend
 - **Framework:** FastAPI (Python 3.12 async) con Uvicorn
-- **Workers:** ARQ sobre Redis para jobs asíncronos
-- **ORM:** SQLAlchemy 2.0 + asyncpg
+- **Workers:** ARQ sobre Redis
+- **Acceso a datos:** asyncpg directo vía `shared_core.railway_pg` (SQLAlchemy presente pero no en el camino de discovery)
 - **Validación:** Pydantic v2
-- **Rate Limiting:** SlowAPI (300/min general, 30/min discovery)
-- **Monitoreo:** Prometheus (`/metrics`), Sentry (producción)
-- **Ubicación:** `apps/api/` — Deployado en Railway
+- **Rate limiting:** SlowAPI
+- **Monitoreo:** Prometheus (`/metrics`), Sentry
+- **Ubicación:** `apps/api/` — Railway
 
 ### Frontend
-- **Framework:** React 19 + TypeScript
-- **Build:** Vite
-- **Estilos:** Tailwind CSS + shadcn/ui
-- **Estado:** TanStack Query + Zustand
-- **Routing:** React Router v7
-- **Gráficos:** Recharts
-- **Ubicación:** `apps/web/` — Deployado en Vercel (`lawebcore.vercel.app`)
+- React 19 + TypeScript + Vite + Tailwind + shadcn/ui + TanStack Query + Zustand + React Router v7 — Vercel
 
-### Base de Datos
-- **Motor:** PostgreSQL 16 via Supabase Cloud
+### Base de datos
+⚠️ **Corrección v1.0:** la v1.0 afirmaba "PostgreSQL 16 via Supabase Cloud" en §1 y "postgres.railway.internal" en §4.4. Son afirmaciones incompatibles.
+
+- **Motor real en producción:** PostgreSQL en **Railway** (`postgres.railway.internal:5432/railway`), accedido con asyncpg desde `railway_pg`
+- **Supabase:** legado. Las migraciones viven en `supabase/migrations/` por historia del proyecto, pero el camino de datos de discovery no pasa por Supabase
 - **Extensiones:** `uuid-ossp`, `pgcrypto`, `pg_trgm`, `vector` (pgvector)
-- **Tablas:** 30+ incluyendo `discovery_runs`, `discovery_candidates`, `influencers`, `campaigns`
-- **RLS:** Row-level security por `business_unit_id`, `client_id`, `team_id`
 
-### Infraestructura
-- **Backend:** Railway (`lawebcore-production.up.railway.app`)
-- **Frontend:** Vercel (`lawebcore.vercel.app`)
-- **Cache/Queue:** Redis via Railway
-- **Container:** Docker (Python 3.12-slim)
+⚠️ **Corrección importante sobre RLS:** la v1.0 afirmaba "Row-level security por `business_unit_id`, `client_id`, `team_id`". Las políticas existen en las migraciones, pero **no protegen el camino de datos actual**: la aplicación se conecta con la credencial propietaria de la base, y RLS no se aplica al propietario salvo `FORCE ROW LEVEL SECURITY` (y aun así el service role la evade).
+
+**Estado real de multi-tenancy: no implementado.** El aislamiento entre inquilinos tendría que hacerse por filtrado explícito en las queries de la aplicación o con un rol de base distinto del propietario. Debe resolverse antes de incorporar un segundo cliente en la misma instancia.
 
 ---
 
-## 2. Arquitectura del Sistema
+## 2. Arquitectura del sistema
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          FRONTEND (Vercel)                         │
-│   React 19 + TypeScript + TanStack Query + Tailwind + shadcn/ui    │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼ HTTPS
-┌─────────────────────────────────────────────────────────────────────┐
-│                      BACKEND API (Railway)                          │
-│                   FastAPI + Uvicorn + ARQ Workers                   │
-│                                                                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────────┐  │
-│  │  /api/v1/*  │  │   /health    │  │   /metrics (Prometheus)  │  │
-│  │  (40+ ep)   │  │   /ready     │  │                          │  │
-│  └──────────────┘  └──────────────┘  └──────────────────────────┘  │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐  │
-│  │                    ARQ WORKER (Redis)                         │  │
-│  │   discovery_run_task() ← Pipeline principal de LENS          │  │
-│  └──────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-         │                    │                    │
-         ▼                    ▼                    ▼
-┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  HikerAPI   │    │   DeepSeek-V3   │    │   Supabase DB   │
-│ (Instagram) │    │   (AI/LLM)      │    │  (PostgreSQL)   │
-└─────────────┘    └─────────────────┘    └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│     Redis       │
-│  (Cache/Queue)  │
-└─────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                    FRONTEND (Vercel)                     │
+│      React 19 + TanStack Query + Tailwind + shadcn       │
+└──────────────────────────────────────────────────────────┘
+                            │ HTTPS
+                            ▼
+┌──────────────────────────────────────────────────────────┐
+│                  BACKEND API (Railway)                   │
+│                   FastAPI + Uvicorn                      │
+│   /api/v1/*  ·  /health  ·  /ready  ·  /metrics          │
+│                            │                             │
+│                   encola vía ARQ                         │
+│                            ▼                             │
+│              ARQ WORKER  —  discovery_run_task()         │
+└──────────────────────────────────────────────────────────┘
+        │                  │                    │
+        ▼                  ▼                    ▼
+┌─────────────┐   ┌────────────────┐   ┌──────────────────┐
+│  HikerAPI   │   │  DeepSeek-V3   │   │ Railway Postgres │
+│ (Instagram) │   │    (LLM)       │   │   + pgvector     │
+└─────────────┘   └────────────────┘   └──────────────────┘
+        │
+        ▼
+┌─────────────┐
+│    Redis    │  cola ARQ + caché de respuestas
+└─────────────┘
 ```
 
 ---
 
-## 3. Módulos Principales
+## 3. Pipeline de descubrimiento
 
-### 3.1 LENS Discovery Module (`packages/discovery/`)
+⚠️ **Corrección v1.0:** la numeración de steps de la v1.0 no coincide con el código. En `worker.py`, `_fetch_step3()` es **top search** y `_fetch_step4()` es **suggested profiles**, mientras que los comentarios y logs del mismo archivo llaman "STEP 3" al enrichment y "STEP 4" al scoring. Hay dos significados simultáneos para los mismos números.
 
-Pipeline de descubrimiento de influencers para campañas de marketing.
+Esta tabla describe el pipeline **por función**, que es como se recomienda renombrarlo en el código:
 
-```
-[BRIEF INPUT]
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 0: Location Search (Opcional)                         │
-│  - search_location() por ciudad                             │
-│  - location_medias_top() + location_medias_recent()        │
-│  - Output: perfiles geolocalizados                         │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 1: Hashtag Search                                    │
-│  - search_hashtag() → top posts por hashtag               │
-│  - search_hashtag_recent() → nano/micro creators          │
-│  - Fuente: HikerAPI                                        │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 2: Keyword Search                                    │
-│  - search_keyword() con sufijos geo ("perros vzla")       │
-│  - search_top_accounts() → cuentas trending               │
-│  - search_reels_by_keyword() → creadores de Reels        │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 2.5: Network Expansion                               │
-│  - suggested_profiles() → algoritmo de IG                 │
-│  - search_followers_of() → red de seguidores             │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 3: Profile Enrichment  ★ COSTO PRINCIPAL            │
-│  - enrich_profile() por handle (followers, bio, etc.)     │
-│  - get_user_about() → país, account_age, former_usernames│
-│  - Anti-bot: ff_ratio > 10, bajo posts, señales commerce  │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 4: Scoring (LWFA KPIs)                              │
-│  - geo_score: geotags × idioma del caption               │
-│  - ica: buy intent en comentarios                         │
-│  - velocity: (likes + comments) / posts / días           │
-│  - business_intent: multilink + fb page + business       │
-│  - Bot filter: ER > 30% = bot                            │
-│  - Country mismatch: .rd, .do, .mx TLDs descartados     │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-┌─────────────────────────────────────────────────────────────┐
-│  STEP 5: AI Analysis (DeepSeek) [OPCIONAL]                │
-│  - content_quality, audience_quality, brand_fit (0-100)  │
-│  - elite_data para scoring contextual                     │
-└─────────────────────────────────────────────────────────────┘
-     │
-     ▼
-[TOP CANDIDATES] → discovery_candidates (DB)
-```
+| Fase | Función en código | Fuente HikerAPI | Estado por defecto | Datos que devuelve |
+|---|---|---|---|---|
+| Ubicación | `search_location` + `location_medias_*` | `/v1/fbsearch/places`, `/v1/location/medias/*` | **Desactivado** (`HIKERAPI_STEP0_LOCATION=false`) | Usuario reducido |
+| Hashtag top | `_fetch_step1` | `/v2/hashtag/medias/top` | Activo — 3 hashtags | ⚠️ Usuario **reducido**: sin bio ni seguidores |
+| Hashtag recientes | `_fetch_step1_recent` | `/v2/hashtag/medias/recent` | Activo — 2 hashtags | ⚠️ Usuario **reducido** |
+| Keyword | `_fetch_step2` | `/v2/fbsearch/accounts` | Activo — 3 keywords × (1 + 2 sufijos geo) | Perfil **completo** |
+| Reels | `_fetch_step2p5` | reels serp | Activo — 1 keyword | Usuario reducido |
+| Expansión de seguidores | `_fetch_step2p6` | `search_followers_of` | ⚠️ **Roto**: gasta 1 `enrich_profile` y devuelve siempre vacío | — |
+| Top search | `_fetch_step3` | `/v3/fbsearch/topsearch` | Activo — 1 keyword | Perfil **completo** |
+| Sugeridos | `_fetch_step4` | `/v2/user/suggested/profiles` | Activo — 1 semilla | Perfil completo |
+| **Enrichment** | `enrich_profile` por handle | `/v1/user/by/username` | **Activo — mayor costo**, 50 handles | Perfil completo + posts |
+| Fraude (opcional) | `get_user_about` | `/v1/user/about` | **Desactivado** (`HIKERAPI_INCLUDE_ABOUT=false`) | país, antigüedad, alias previos |
+| Scoring | `lens_score` + `geo_score` + `niche_relevance` | — | Activo | costo $0 |
+| Análisis IA | `candidate_analyzer` | DeepSeek | Según `analyze_with_ai` del brief | content/audience/brand_fit |
 
-### 3.2 Paquetes del Monorepo
+⚠️ **Nota crítica de diseño (nueva):** las fuentes marcadas "usuario reducido" devuelven objetos de usuario **sin biografía ni número de seguidores**. El prefiltro que decide a quién enriquecer puntúa con `0.5·geo + 0.5·niche`, y ambas señales se leen de la biografía. Para perfiles llegados por hashtag o reels ese cálculo tiende a cero, así que la selección de los 50 handles a enriquecer queda determinada por empates — es decir, casi al azar.
 
-| Paquete | Descripción |
-|---------|-------------|
-| `packages/discovery/` | LENS Discovery Module (pipeline de influencers) |
-| `packages/shared-core/` | Configuración, DB, REST de Supabase |
-| `packages/shared-ai/` | Cliente DeepSeek, embeddings |
+**Consecuencia:** el sistema decide en qué gastar antes de tener los datos necesarios para decidir. Es la causa estructural del run que encontró 254 perfiles y produjo 0 candidatos. Ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` §3.6.
 
 ---
 
-## 4. APIs y Servicios Conectados
+## 4. APIs y servicios
 
-### 4.1 HikerAPI (Primary — Instagram Data)
+### 4.1 HikerAPI (proveedor primario)
 
 ```
-Uso: Búsqueda de perfiles, enrichment, hashtags, keywords
 Costo: ~$0.0006 USD por request
-Documentación: https://api.hikerapi.com/docs
+Docs:  https://api.hikerapi.com/docs
+Panel: https://hikerapi.com/billing
 ```
 
-**Endpoints principales:**
-| Método | Endpoint | Uso |
-|--------|----------|-----|
-| `search_hashtag()` | `/v2/hashtag/medias/top` | Top posts por hashtag |
-| `search_hashtag_recent()` | `/v2/hashtag/medias/recent` | Posts recientes |
-| `search_keyword()` | `/v2/fbsearch/accounts` | Cuentas por keyword |
-| `search_top_accounts()` | `/v3/fbsearch/topsearch` | Cuentas trending |
-| `enrich_profile()` | `/v1/user/by/username` | Datos completos de perfil |
-| `get_user_about()` | `/v1/user/about` | País, account_age, former_usernames |
-| `suggested_profiles()` | `/v2/user/suggested/profiles` | Cuentas sugeridas por IG |
-| `search_location()` | `/v1/fbsearch/places` | Búsqueda de ubicaciones |
-| `location_medias_top()` | `/v1/location/medias/top` | Posts top por ubicación |
-| `location_medias_recent()` | `/v1/location/medias/recent/chunk` | Posts recientes por ubicación |
+| Método | Endpoint | Notas |
+|---|---|---|
+| `search_hashtag()` | `/v2/hashtag/medias/top` | usuario reducido |
+| `search_hashtag_recent()` | `/v2/hashtag/medias/recent` | ⚠️ `cache_ttl=0` — sin caché |
+| `search_keyword()` | `/v2/fbsearch/accounts` | perfil completo |
+| `search_top_accounts()` | `/v3/fbsearch/topsearch` | perfil completo |
+| `enrich_profile()` | `/v1/user/by/username` | ★ principal costo |
+| `get_user_about()` | `/v1/user/about?id=` | sin `safe_int` |
+| `suggested_profiles()` | `/v2/user/suggested/profiles` | |
+| `search_location()` | `/v1/fbsearch/places?query=` | |
+| `location_medias_top/recent()` | `/v1/location/medias/*` | param `location_pk` |
 
-**Parámetros críticos:**
-- ❌ `safe_int` causa 422 en `/gql/user/about`, `/v1/location/search`
-- ✅ `/v1/user/about` usa `id` (no `user_id`)
-- ✅ `/v1/location/medias/top` usa `location_pk` (no `id`)
-- ✅ `/v1/fbsearch/places` usa `query` (búsqueda por texto)
+**Parámetros que causan 422:** `safe_int` en `/gql/user/about` y `/v1/location/search`; `id` en lugar de `location_pk` en los endpoints de ubicación.
 
-### 4.2 Apify (Fallback/Legacy — DESHABILITADO)
+⚠️ **Manejo de errores — defecto abierto:** los errores de HikerAPI se capturan con `except Exception` y se registran como `warning`, dejando la lista vacía y permitiendo que el run termine "correctamente". Un `402 InsufficientFunds` (saldo agotado) resulta indistinguible de "el hashtag no tiene resultados": el run reporta `completed` con `total_candidates=0`.
 
-```
-Estado: CONFIGURED BUT DISABLED
-Nota: Retorna 404 — actors no disponibles o deshabilitados
-```
+**Esto ya ocurrió y costó dos días de diagnóstico.** Corrección pendiente: excepción `SourceUnavailable` para 401/402/403/429 que aborte el run con `status="failed"` y mensaje accionable.
 
-**Actors configurados pero no funcionales:**
-- `apify/instagram-search-scraper` → busca por hashtag/keyword
-- `apify/instagram-hashtag-scraper` → posts por hashtag
-- `apify/instagram-profile-scraper` → datos de perfil
-- `apify/instagram-engagement-analytics` → métricas de engagement
+### 4.2 Apify (legado — no operativo)
 
-### 4.3 DeepSeek-V3 (AI/LLM)
+⚠️ **Corrección v1.0:** la v1.0 lo describe como "fallback deshabilitado", lo que sugiere que basta reactivarlo. **No existe fallback funcional.**
 
-```
-Uso: Parsing de brief, generación de perfiles, scoring AI
-Modelo: deepseek-chat
-Costo: ~$0.001 USD por 1K tokens (cache habilitado)
-```
+El Protocol `InstagramSource` declara 5 métodos (`search_hashtag`, `search_keyword`, `enrich_profile`, `get_user_about`, `close`), pero el worker invoca 13, incluidos dos métodos privados del cliente concreto (`_normalize_user`, `_extract_user_from_post`) mediante comprobaciones `hasattr()`.
 
-### 4.4 Supabase (Database + Auth + Storage)
+`ApifyInstagramSource` (148 líneas) no implementa ocho de los métodos que el worker necesita. Cambiar `INSTAGRAM_SOURCE=apify` no degrada el sistema: lo rompe. Rehabilitar Apify exige completar antes el contrato.
 
-```
-Uso: Datos persistentes, autenticación, вектор embeddings
-Ubicación: postgres.railway.internal:5432/railway
-```
+### 4.3 DeepSeek-V3
+Parsing de brief, generación de `DiscoveryProfile`, análisis de candidatos. `deepseek-chat`, caché de prompt habilitada. ~$0.001 USD/1K tokens.
 
 ---
 
-## 5. Modelo de Datos — Discovery
+## 5. Modelo de datos — Discovery
 
-### Tablas Principales
+⚠️ **Corrección v1.0:** la sección 5 de la v1.0 describía un esquema que no existe (`brief`, `enriched_data`, `ai_analysis`, `messages`, `brief_id`, `profile_data`, `cached_at`). Este es el esquema real.
 
 ```
 discovery_runs
 ├── id (UUID)
-├── brief (JSON) — brief estructurado
-├── status — pending | running | completed | failed
-├── total_candidates — conteo final
-├── actual_cost_usd — costo en USD
-├── created_at, updated_at
+├── brief_text            — brief original en texto
+├── brief_parsed (JSONB)  — BriefStructured serializado
+├── status                — pending | running | completed | partial | failed
+├── total_candidates
+├── actual_cost_usd
+├── metadata (JSONB)      — current_step, completed_steps, contadores
+├── title
+├── error
+├── started_at, completed_at, created_at
 └── business_unit_id (FK)
 
-discovery_candidates
-├── id (UUID)
-├── run_id (FK → discovery_runs)
-├── handle — @username
-├── match_score — score 0-100
-├── tier — nano | micro | mid | macro
-├── followers, following, posts
-├── engagement_rate
-├── geo_relevance, niche_relevance
-├── enriched_data (JSON) — datos de HikerAPI
-├── ai_analysis (JSON) — scoring de DeepSeek
-└── created_at
+discovery_candidates       — UNIQUE(run_id, platform, handle)
+├── id, run_id (FK)
+├── handle, full_name, bio, avatar_url, url
+├── platform, country, city
+├── followers, following, posts_count
+├── engagement_rate, avg_likes, avg_comments
+├── match_score           — 0-100 (lens_score)
+├── niche_relevance, geo_relevance
+├── content_quality, audience_relevance, audience_quality
+├── brand_fit             — DeepSeek (si analyze_with_ai)
+├── ai_rationale          — resumen DeepSeek
+├── rationale             — texto generado por reglas
+├── tier, is_tienda, status
+├── raw_payload (JSONB)   — lens_score, geo_score, cross_referenced,
+│                           fraud_signals, engagement_analytics
+└── fetched_at
 
 discovery_conversations
-├── id (UUID)
-├── run_id (FK, nullable)
-├── brief (JSON) — brief acumulado
-├── messages (JSON) — conversación
-└── accumulated_brief, parsed_brief_json
+├── id, discovery_run_id (FK, nullable)
+├── current_step, accumulated_brief, parsed_brief_json
+├── pending_refinements, message_count, title
+└── state (JSONB)         — ⚠️ existe pero el orchestrator NO la usa:
+                            el estado sigue en memoria y se pierde al reiniciar
 
-discovery_profiles
-├── id (UUID)
-├── brief_id — fingerprint del brief
-├── profile_data (JSON) — datos del perfil generado
-└── cached_at
+discovery_messages         — tabla propia (NO un JSON dentro de conversations)
+├── id, conversation_id (FK)
+├── role, content
+├── tool_calls (JSONB), tool_results (JSONB)
+└── reasoning, cost_usd, latency_ms
+
+discovery_profiles         — vocabulario por vertical, generado por LLM
+├── id, fingerprint (UNIQUE)
+├── vertical_slug, languages (JSONB), countries (JSONB)
+├── hashtags, keywords, niche_keywords (JSONB)
+├── geo_indicators, buy_intent_keywords (JSONB)
+├── elite_data (JSONB)    — 9 subcampos de contexto de campaña
+├── source                — seed | llm | manual | fallback
+├── quality_score, times_used
+└── created_at, updated_at
+
+api_costs
+└── provider, operation, entity_id, cost_usd, tokens_in/out, occurred_at
 ```
+
+⚠️ **Nota:** `discovery_profiles` existe para que el vocabulario de negocio sea dato y no código. El `worker.py` actual **lo evita** y vuelve a llevar embebidas ~150 líneas de listas en español (términos de tienda, señales de creador, listas negras por país, palabras políticas). Esto revierte la universalización y ata el pipeline al vertical mascotas-Venezuela.
 
 ---
 
-## 6. Variables de Entorno
+## 6. Variables de entorno
 
 ```bash
-# Database
-DATABASE_URL=postgresql+asyncpg://postgres:***@postgres.railway.internal:5432/railway
-
-# Redis (ARQ Workers)
-ARQ_REDIS_URL=redis://default:***@hopper.proxy.rlwy.net:34537
+# Datos
+DATABASE_URL=postgresql+asyncpg://...@postgres.railway.internal:5432/railway
+ARQ_REDIS_URL=redis://...
 
 # APIs
-HIKERAPI_API_KEY=***          # Instagram data (PRIMARY)
-APIFY_API_KEY=apify_api_***   # Instagram data (FALLBACK/DISABLED)
-DEEPSEEK_API_KEY=sk-***       # AI/LLM
+HIKERAPI_API_KEY=***
+DEEPSEEK_API_KEY=sk-***
+APIFY_API_KEY=***                  # legado, no operativo
 
-# Config
-INSTAGRAM_SOURCE=hikerapi      # hikerapi | apify | hybrid
-ENABLE_AI_ANALYZER=false      # Toggle AI scoring
+# Selección de fuente
+INSTAGRAM_SOURCE=hikerapi          # hikerapi | apify (apify NO funcional)
+
+# Control de costos (efectivos)
+HIKERAPI_STEP0_LOCATION=false      # búsqueda por ubicación
+HIKERAPI_INCLUDE_ABOUT=false       # llamada de fraude/país
+ENABLE_AI_ANALYZER=false           # análisis DeepSeek global
+
 API_ENV=production
 ADMIN_TOKEN=***
 ```
 
----
+⚠️ **Corrección v1.0:** la v1.0 decía que el modo económico "no persiste en deploy, config hardcodeada". Es mixto y ese es el problema: los interruptores de arriba **sí** son de entorno, pero los límites cuantitativos son constantes de módulo o literales en el cuerpo de la función:
 
-## 7. Costos del Pipeline
-
-### Desglose por Step (1 run completa)
-
-| Step | Método | Llamadas máx | Costo aprox |
-|------|--------|--------------|-------------|
-| STEP 0 | Location search | 42 | $0.025 |
-| STEP 1 | Hashtags | 33 | $0.020 |
-| STEP 2 | Keywords | 24 | $0.014 |
-| STEP 2.5 | Reels + Expansion | 6 | $0.004 |
-| STEP 3 | Top Search | 2 | $0.001 |
-| STEP 4 | Suggested | 4 | $0.002 |
-| **STEP 3 Enrich** | **enrich_profile** | **50** | **$0.030** |
-| **STEP 3 About** | **get_user_about** | **50** | **$0.030** |
-| **TOTAL** | | **~211** | **~$0.13** |
-
-### Configuración ULTRA-ECONÓMICA (testing)
-
-| Step | Original | Optimizado | Reducción |
-|------|----------|------------|-----------|
-| `MAX_HANDLES_TO_ENRICH` | 500 | **50** | -90% |
-| `get_user_about` | Enabled | **Disabled** | -50 calls |
-| Hashtags (top) | 6 | **3** | -50% |
-| Hashtags (recent) | 3 | **2** | -33% |
-| Keywords | 8 | **3** | -63% |
-| STEP 0 (Location) | Enabled | **Disabled** | -42 calls |
-| Follower expansion | 2 seeds | **Disabled** | -4 calls |
-| Top Search | 2 | **Disabled** | -2 calls |
-
-**Resultado: ~60 calls/run = ~$0.04 USD/run**
-
----
-
-## 8. Flujo de Desarrollo Local
-
-```bash
-# 1. Levantar servicios (Postgres + Redis)
-docker-compose up -d
-
-# 2. Instalar dependencias
-npm install
-
-# 3. Configurar env
-cp apps/api/.env.example apps/api/.env
-# Editar HIKERAPI_API_KEY
-
-# 4. Correr migraciones
-cd apps/api && npm run db:migrate
-
-# 5. Iniciar backend (dev)
-npm run dev:api
-
-# 6. Iniciar frontend (dev)
-npm run dev:web
-
-# 7. Test discovery (desde Railway shell)
-cd /app/apps/api && python3 scripts/test_purina_dogchow.py
+```python
+MAX_HANDLES_TO_ENRICH = 50      # worker.py
+MAX_POSTS_PER_HASHTAG = 20
+plan.hashtag_queries[:3]         # literales embebidos por step
+plan.keyword_queries[:3]
+min_match_score = 5              # dentro de la función
 ```
 
+La configuración de costos vive en dos lugares con dos ciclos de vida (panel de Railway vs. commit + redeploy). Recomendación: un único objeto Pydantic Settings con todos los límites, registrado en el log al inicio de cada run.
+
 ---
 
-## 9. Railway Deployment
+## 7. Costos del pipeline
+
+⚠️ **Corrección v1.0:** la v1.0 daba dos cifras contradictorias (~211 llamadas / $0.13 y ~60 / $0.04). La primera incluía `get_user_about` y STEP 0, ambos **apagados por defecto**.
+
+### Configuración vigente (defaults del código)
+
+| Fase | Llamadas aprox. | Costo aprox. |
+|---|---|---|
+| Hashtag top (3) | ~6 | $0.004 |
+| Hashtag recientes (2) | ~4 | $0.002 |
+| Keyword (3 × 3 variantes) | ~9 | $0.005 |
+| Reels (1) | ~1 | $0.001 |
+| Expansión de seguidores | 1 (⚠️ desperdiciada) | $0.001 |
+| Top search (1) | ~2 | $0.001 |
+| Sugeridos (1) | ~1 | $0.001 |
+| **Enrichment (50 handles)** | **50** | **$0.030** |
+| **Total** | **~74** | **~$0.045** |
+
+### Configuraciones desactivadas (referencia histórica)
+
+| Opción | Llamadas extra | Costo extra |
+|---|---|---|
+| `HIKERAPI_STEP0_LOCATION=true` | +42 | +$0.025 |
+| `HIKERAPI_INCLUDE_ABOUT=true` | +50 | +$0.030 |
+| `MAX_HANDLES_TO_ENRICH=500` (histórico) | +900 | +$0.54 |
+
+### ⚠️ Control de presupuesto: NO EXISTE
+
+`app/core/discovery_cost_tracker.py` **registra** costos pero no los limita. No hay presupuesto mensual, ni gasto acumulado consultable, ni corte automático, ni tope de llamadas por run.
+
+**Consecuencia documentada:** $50-72 USD consumidos en dos días contra un objetivo de $10/mes, sin que ningún mecanismo interviniera. Con `MAX_HANDLES_TO_ENRICH=500` y ~80 runs de prueba, la aritmética se cumple exactamente.
+
+**Controles mínimos pendientes:**
+1. `MONTHLY_BUDGET_USD` + acumulado por proveedor + corte al 100% y aviso al 70%
+2. `MAX_CALLS_PER_RUN` (~120) que aborte el run y lo marque `partial`
+3. Sin reintentos en 401/402/403 (errores permanentes)
+4. Modo `replay` con costo cero para iterar sobre scoring sin gastar
+
+El punto 4 merece énfasis: la mayor parte del gasto se produjo probando lógica de scoring, que no necesita datos frescos.
+
+---
+
+## 8. Issues conocidos
+
+### Corregidos (2026-08-13)
+
+| Bug | Fix |
+|---|---|
+| `get_user_about()` 422 | `/gql/user/about?user_id` → `/v1/user/about?id` |
+| `search_location()` | `/v1/location/search` → `/v1/fbsearch/places?query` |
+| `location_medias_*` | param `id` → `location_pk` |
+| Costo excesivo | `MAX_HANDLES_TO_ENRICH` 500 → 50 |
+
+### Abiertos
+
+| Issue | Prioridad | Detalle |
+|---|---|---|
+| Sin fusible de presupuesto | **Crítica** | §7 — no recargar créditos antes de tenerlo |
+| 402 se reporta como "0 candidatos" | **Crítica** | §4.1 — fallo de infraestructura presentado como resultado de negocio |
+| Saldo HikerAPI agotado | Crítica | requiere recarga (después del fusible) |
+| Sin idempotencia en encolado | Alta | doble clic o redeploy = cobro doble |
+| Prefiltro muerto con log engañoso | Alta | resultado sobrescrito 110 líneas después; su log reporta filtrado inexistente |
+| `_fetch_step2p6` roto | Alta | gasta 1 `enrich_profile` por run y devuelve vacío |
+| Enriquecimiento sobre muestra casi aleatoria | Alta | §3 — decide gasto sin datos |
+| `country` e `is_private` se pierden en el merge | Media | 7 bloques duplicados no copian esos campos |
+| Contrato `InstagramSource` incompleto | Media | 5 métodos declarados, 13 usados |
+| Vocabulario de negocio hardcodeado | Media | revierte la universalización |
+| Estado del orchestrator en memoria | Media | columna `state` existe y no se usa |
+| Multi-tenancy inexistente | Media | bloquea el segundo cliente |
+| `search_hashtag_recent` sin caché | Baja | `cache_ttl=0` en endpoint de pago |
+
+---
+
+## 9. Deployment
 
 ```toml
 # railway.toml
@@ -361,87 +327,19 @@ restartPolicyMaxRetries = 3
 healthcheckPath = "/api/v1/health"
 ```
 
-**Variables de entorno en Railway:**
-- `HIKERAPI_API_KEY` — API key de HikerAPI
-- `DATABASE_URL` — PostgreSQL (auto-provisioned)
-- `ARQ_REDIS_URL` — Redis (auto-provisioned)
-- `DEEPSEEK_API_KEY` — DeepSeek API key
+⚠️ `restartPolicyMaxRetries = 3` combinado con la falta de idempotencia (§8) implica que un crash con jobs en vuelo puede reejecutar runs y volver a cobrarlos.
 
 ---
 
-## 10. Arquitectura de la UI — LENS Discovery
-
-```
-/lens/discovery
-├── Conversational interface (chat-style)
-├── Brief input (product, industry, audience)
-├── Hashtag suggestions
-├── Results display (cards con score)
-└── Candidate export
-
-/features/lens/
-├── DiscoveryChat.tsx       — Chat principal
-├── BriefForm.tsx           — Formulario de brief
-├── CandidateCard.tsx       — Tarjeta de candidato
-├── CandidateList.tsx      — Lista de resultados
-└── useDiscovery.ts        — TanStack Query hooks
-```
-
----
-
-## 11. Issues Conocidos y Fixes Aplicados
-
-### Bugs Arreglados (2026-08-13)
-
-| Bug | Síntoma | Fix |
-|-----|---------|-----|
-| `get_user_about()` 422 | enrichment retornaba country vacío | `/gql/user/about?user_id` → `/v1/user/about?id` |
-| `search_location()` fail | STEP 0 no encontraba perfiles | `/v1/location/search?query` → `/v1/fbsearch/places?query` |
-| `location_medias_top/recent` fail | posts de location no cargaban | param `id` → `location_pk` |
-| Costo excesivo | $50 en 2 días | `MAX_HANDLES_TO_ENRICH` 500→50, disables varios |
-
-### Issues Abiertos
-
-| Issue | Prioridad | Estado |
-|-------|-----------|--------|
-| Balance HikerAPI agotado | CRÍTICA | Necesita top-up |
-| Hashtags B2B no retornan creators | ALTA | HashTags actualizados a creator-focused |
-| Modo ultra-económico no persiste en deploy | MEDIA | Config hardcodeada en worker.py |
-
----
-
-## 12. Próximos Pasos
-
-### Inmediato (hoy)
-- [ ] Fix `MAX_HANDLES_TO_ENRICH` → 50 en worker.py
-- [ ] Disable `get_user_about` por default
-- [ ] Disable STEP 0 location search
-- [ ] Reducir hashtags y keywords
-- [ ] Test con modo ultra-económico
-- [ ] Top-up HikerAPI ($20-30 USD)
-
-### Esta semana
-- [ ] Validar pipeline completo con candidatos reales
-- [ ] Documentar costos por run
-- [ ] Presentar demo al CEO
-
-### Largo plazo
-- [ ] Re-habilitar Apify como fallback
-- [ ] Implementar modo "dry run" (sin costo)
-- [ ] Dashboard de costos por campaña
-
----
-
-## 13. Contactos y Recursos
+## 10. Recursos
 
 | Recurso | URL |
-|---------|-----|
+|---|---|
 | API Docs | `https://lawebcore-production.up.railway.app/api/docs` |
-| HikerAPI Dashboard | `https://hikerapi.com/billing` |
-| Railway Dashboard | `https://railway.app/project/lawebcore` |
-| Vercel Dashboard | `https://vercel.com/lawebcore` |
+| HikerAPI billing | `https://hikerapi.com/billing` |
+| Railway | `https://railway.app/project/lawebcore` |
+| Vercel | `https://vercel.com/lawebcore` |
 
 ---
 
-*Documento generado: 2026-08-13*
-*Última actualización: Commit `98978b5` — fix: HikerAPI endpoints*
+*Correcciones derivadas del análisis estático del commit `a250b0c`. Detalle completo y plan de acción en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`.*
