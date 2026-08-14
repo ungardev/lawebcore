@@ -44,7 +44,7 @@
 │                   FastAPI + Uvicorn                      │
 │   /api/v1/*  ·  /health  ·  /ready  ·  /metrics          │
 │                            │                             │
-│                   encola vía ARQ (en_id=discovery:{run_id})│
+│                   encola vía ARQ (_job_id=discovery:{run_id})│
 │                            ▼                             │
 │              ARQ WORKER  —  discovery_run_task()         │
 └──────────────────────────────────────────────────────────┘
@@ -248,7 +248,7 @@ ADMIN_TOKEN=***
 1. **`MONTHLY_BUDGET_USD=10.0`** — acumulado mensual en Redis, corte al 100%
 2. **`MAX_CALLS_PER_RUN=120`** — por-run call counter en Redis
 3. **`BUDGET_ALERT_THRESHOLD=0.7`** — log warning al 70%, alert enviado solo una vez por mes
-4. **`en_id=f"discovery:{run_id}"`** en ARQ (hito 5) — idempotencia, previene doble cobro por redeploy/restart
+4. **`_job_id=f"discovery:{run_id}"`** en ARQ (hito 5, corregido en hito 8) — idempotencia, previene doble cobro por redeploy/restart
 
 ### Configuraciones desactivadas (referencia)
 
@@ -267,7 +267,7 @@ ADMIN_TOKEN=***
 | `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | State machine CLOSED→OPEN→HALF_OPEN, Redis-backed |
 | `hikerapi_circuit_breaker.py` | `apps/api/app/core/` | Copia para uso desde worker |
 | `budget_fuse.py` | `apps/api/app/core/` | Budget tracking y enforcement Redis |
-| `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `en_id=discovery:{run_id}` |
+| `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `_job_id=discovery:{run_id}` |
 | `00000000000104_...sql` | `supabase/migrations/` | Añade valor `partial` al enum `discovery_run_status` |
 
 ---
@@ -287,7 +287,7 @@ ADMIN_TOKEN=***
 | 3+4 (`4819857`) | Sin fusible de presupuesto | `BudgetFuse.assert_budget_available()` al inicio del run |
 | 3+4 (`4819857`) | 5xx causing cascade sin corte | `HikerAPICircuitBreaker` — 5 consecutive → OPEN |
 | 3+4 (`4819857`) | Sin límite por-run | `BudgetFuse` per-run counter + `MAX_CALLS_PER_RUN=120` |
-| 5 (`766cfee`) | Doble cobro por redeploy/restart | `en_id=f"discovery:{run_id}"` en ARQ `enqueue_job` |
+| 5 (`766cfee`) | Doble cobro por redeploy/restart | `_job_id=f"discovery:{run_id}"` en ARQ `enqueue_job` (bugfix `27ed99f`) |
 | 6 (`2da78ab`) | `is_private` perdido en merge de enrichment | Añadido al bloque `update()` en worker.py |
 | 6 (`2da78ab`) | `search_hashtag_recent` sin caché | `cache_ttl=0` → `cache_ttl=1800` (30 min) |
 | 7 (`9b43316`) | Documentación desactualizada | Reemplazado por esta versión |
@@ -320,7 +320,7 @@ restartPolicyMaxRetries = 3
 healthcheckPath = "/api/v1/health"
 ```
 
-`restartPolicyMaxRetries=3` ahora es seguro gracias a `en_id` (hito 5).
+`restartPolicyMaxRetries=3` ahora es seguro gracias a `_job_id` (hito 5, fix hito 8).
 
 ---
 

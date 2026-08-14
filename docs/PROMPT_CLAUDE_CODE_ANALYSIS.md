@@ -38,7 +38,7 @@ lawebcore/
 │   │       ├── core/
 │   │       │   ├── budget_fuse.py       # ★ nuevo — budget enforcement
 │   │       │   ├── hikerapi_circuit_breaker.py  # ★ nuevo
-│   │       │   └── worker_enqueuer.py   # ★ actualizado — en_id
+│   │       │   └── worker_enqueuer.py   # ★ actualizado — _job_id
 │   │       ├── models/                  # SQLAlchemy ORM
 │   │       ├── services/                # AI services
 │   │       └── workers/
@@ -85,7 +85,7 @@ lawebcore/
 ✅ 4xx/5xx ya no se swallow como warning — propagan como excepciones
 ✅ BudgetFuse: monthly cap $10 USD + per-run limit 120 calls + 70% alert
 ✅ CircuitBreaker: 5xx consecutive → OPEN, TTL 300s, Redis-backed
-✅ ARQ idempotency: en_id=discovery:{run_id} — no más doble cobro por redeploy
+✅ ARQ idempotency: _job_id=discovery:{run_id} — no más doble cobro por redeploy
 ✅ step2p6 follower expansion ELIMINADO (gastaba 1 enrich por run y devolvía vacío)
 ✅ Apify ELIMINADO (estaba roto, no era fallback funcional)
 ✅ Prefiltro muerto ELIMINADO (30 líneas + logs engañosos)
@@ -164,7 +164,7 @@ HIKERAPI_5XX_BREAKER_TTL_S = 300
 1. ¿Los 7 hitos aplicados son correctos y completos? ¿Hay edge cases donde pueden fallar?
 2. El circuit breaker se instancia DENTRO de `_get()` de hikerapi_client — ¿esto crea un nuevo estado por cada llamada o comparten estado vía Redis correctamente?
 3. `BudgetFuse.assert_budget_available()` se llama ANTES del gather de enrichment, pero `record_call()` está dentro de `_enrich_one()`. Si una excepción ocurre después de `assert_budget_available()` pero antes de `record_call()`, ¿el costo no se registra? ¿Es eso un bug?
-4. El `en_id` de ARQ usa `discovery:{run_id}`. ¿ARQ deduplica solo jobs pending/running o también completed? Si un run falla Y se reintenta manualmente, ¿se permite?
+4. El `_job_id` de ARQ usa `discovery:{run_id}`. ¿ARQ deduplica solo jobs pending/running o también completed? Si un run falla Y se reintenta manualmente, ¿se permite?
 
 ### B. Scoring — bugs abiertos
 
