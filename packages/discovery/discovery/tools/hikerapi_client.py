@@ -166,12 +166,12 @@ class HikerAPIClient:
                 provider="hikerapi",
             )
 
-        async def _record_if_applicable() -> None:
+        async def _record_if_applicable(record_run_counter: bool = True) -> None:
             """Record API call in budget fuse for any HTTP response received."""
             bf = budget_fuse if budget_fuse is not None else getattr(self, 'budget_fuse', None)
             rid = run_id if run_id is not None else getattr(self, 'run_id', None)
             if bf is not None and rid is not None:
-                await bf.record_call(rid, provider="hikerapi")
+                await bf.record_call(rid, provider="hikerapi", record_run_counter=record_run_counter)
 
         cache_key = None
         if cache_ttl > 0:
@@ -194,14 +194,14 @@ class HikerAPIClient:
             response = await client.get(path, params=params)
             if response.status_code == 429:
                 logger.warning("hikerapi_rate_limited", path=path)
-                await _record_if_applicable()
+                await _record_if_applicable(record_run_counter=False)
                 raise SourceUnavailable(
                     f"429 Rate Limited — {response.text[:200]}",
                     status_code=429,
                     provider="hikerapi",
                 )
             if response.status_code == 404:
-                await _record_if_applicable()
+                await _record_if_applicable(record_run_counter=False)
                 return None
             if response.status_code in (401, 402, 403):
                 logger.error(
@@ -211,7 +211,7 @@ class HikerAPIClient:
                     response_body=response.text[:500],
                     hint="Verify x-access-key header is correct and key is active",
                 )
-                await _record_if_applicable()
+                await _record_if_applicable(record_run_counter=False)
                 raise SourceUnavailable(
                     f"{response.status_code} {response.text[:200]}",
                     status_code=response.status_code,
@@ -220,7 +220,7 @@ class HikerAPIClient:
             if response.status_code >= 500:
                 logger.warning("hikerapi_server_error", path=path, status=response.status_code)
                 await breaker.record_failure()
-                await _record_if_applicable()
+                await _record_if_applicable(record_run_counter=False)
                 raise TransientSourceError(
                     f"{response.status_code} server error — {response.text[:200]}",
                     status_code=response.status_code,
@@ -231,7 +231,7 @@ class HikerAPIClient:
             data = response.json()
             if cache_key and data:
                 await self._set_cached(cache_key, data, cache_ttl)
-            await _record_if_applicable()
+            await _record_if_applicable(record_run_counter=False)
             return data
         except SourceUnavailable:
             raise
@@ -241,7 +241,7 @@ class HikerAPIClient:
             status = e.response.status_code
             if status >= 500:
                 await breaker.record_failure()
-                await _record_if_applicable()
+                await _record_if_applicable(record_run_counter=False)
                 raise TransientSourceError(
                     f"HTTP {status} — {e.response.text[:200]}" if hasattr(e.response, "text") else str(e),
                     status_code=status,
@@ -253,7 +253,7 @@ class HikerAPIClient:
                 status=status,
                 response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
             )
-            await _record_if_applicable()
+            await _record_if_applicable(record_run_counter=False)
             return None
         except httpx.TimeoutException as e:
             await breaker.record_failure()

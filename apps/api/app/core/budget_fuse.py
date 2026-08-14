@@ -32,6 +32,27 @@ class BudgetState:
 class BudgetFuse:
     """Redis-backed budget tracking and enforcement for Lens."""
 
+    _RESERVE_AND_RECORD_SCRIPT = """
+local run_key = KEYS[1]
+local month_key = KEYS[2]
+local max_calls = tonumber(ARGV[1])
+local cost = tonumber(ARGV[2])
+local ttl = tonumber(ARGV[3])
+
+local count = redis.call('GET', run_key)
+count = count and tonumber(count) or 0
+
+if count < max_calls then
+    redis.call('INCR', run_key)
+    redis.call('EXPIRE', run_key, ttl)
+    redis.call('INCRBYFLOAT', month_key, cost)
+    redis.call('EXPIRE', month_key, 3456000)
+    return 1
+else
+    return 0
+end
+"""
+
     def __init__(
         self,
         monthly_budget_usd: float = 10.0,
@@ -44,6 +65,7 @@ class BudgetFuse:
         self.alert_threshold = alert_threshold
         self.cost_per_call_usd = cost_per_call_usd
         self._redis = None
+        self._lua_sha = None
 
     async def _get_redis(self):
         if self._redis is None:
@@ -52,6 +74,57 @@ class BudgetFuse:
 
             self._redis = redis_async.from_url(settings.ARQ_REDIS_URL, decode_responses=False)
         return self._redis
+
+    async def _get_lua_sha(self, r) -> str:
+        if self._lua_sha is None:
+            self._lua_sha = await r.script_load(self._RESERVE_AND_RECORD_SCRIPT)
+        return self._lua_sha
+
+    async def reserve_and_record(self, run_id: str, provider: str = "hikerapi") -> bool:
+        """Atomically check and increment run counter + monthly spend.
+
+        Returns True if the call was allowed (counter incremented).
+        Returns False if MAX_CALLS_PER_RUN was already reached.
+
+        This closes the TOCTOU race where concurrent coroutines could all
+        read counter < limit before any incremented it.
+        """
+        month_key = self._month_key(provider)
+        run_key = self._run_key(run_id)
+        cost = self.cost_per_call_usd
+        ttl = 60 * 60 * 24  # 24h
+
+        try:
+            r = await self._get_redis()
+            sha = await self._get_lua_sha(r)
+            result = await r.evalsha(
+                sha,
+                2,  # number of keys
+                run_key,
+                month_key,
+                self.max_calls_per_run,
+                cost,
+                ttl,
+            )
+            allowed = int(result) == 1
+            if allowed:
+                logger.info(
+                    "budget_fuse_call_reserved",
+                    run_id=run_id,
+                    provider=provider,
+                    cost_usd=cost,
+                )
+            else:
+                logger.warning(
+                    "budget_fuse_run_limit_reached",
+                    run_id=run_id,
+                    provider=provider,
+                    max_calls=self.max_calls_per_run,
+                )
+            return allowed
+        except Exception as e:
+            logger.warning("budget_fuse_reserve_error", error=str(e))
+            return True  # fail open on Redis errors
 
     def _month_key(self, provider: str) -> str:
         import datetime
@@ -124,8 +197,20 @@ class BudgetFuse:
             logger.warning("budget_fuse_run_counter_error", error=str(e))
             return True
 
-    async def record_call(self, run_id: str, provider: str = "hikerapi", call_count: int = 1) -> None:
-        """Record API calls and accumulate monthly spend atomically."""
+    async def record_call(
+        self,
+        run_id: str,
+        provider: str = "hikerapi",
+        call_count: int = 1,
+        record_run_counter: bool = True,
+    ) -> None:
+        """Record API calls and accumulate monthly spend atomically.
+
+        Args:
+            record_run_counter: If False, only records monthly spend (no run-key
+                increment). Use when run counter is managed atomically via
+                reserve_and_record() to avoid double-counting.
+        """
         cost = call_count * self.cost_per_call_usd
         month_key = self._month_key(provider)
         run_key = self._run_key(run_id)
@@ -135,8 +220,9 @@ class BudgetFuse:
             pipe = r.pipeline()
             pipe.incrbyfloat(month_key, cost)
             pipe.expire(month_key, 60 * 60 * 24 * 40)
-            pipe.incr(run_key)
-            pipe.expire(run_key, 60 * 60 * 24)
+            if record_run_counter:
+                pipe.incr(run_key)
+                pipe.expire(run_key, 60 * 60 * 24)
             await pipe.execute()
             logger.info(
                 "budget_fuse_call_recorded",
@@ -144,6 +230,7 @@ class BudgetFuse:
                 provider=provider,
                 calls=call_count,
                 cost_usd=cost,
+                run_counter_recorded=record_run_counter,
             )
         except Exception as e:
             logger.warning("budget_fuse_record_error", error=str(e))

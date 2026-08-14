@@ -831,7 +831,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                 status_code=503,
                                 provider="hikerapi",
                             )
-                        if not await budget_fuse.can_make_call(run_id):
+                        if not await budget_fuse.reserve_and_record(run_id, "hikerapi"):
                             raise BudgetExhausted(
                                 f"Límite de {settings.MAX_CALLS_PER_RUN} llamadas alcanzado.",
                                 current_usd=None,
