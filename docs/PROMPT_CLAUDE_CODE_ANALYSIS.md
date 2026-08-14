@@ -1,48 +1,53 @@
-# Análisis para Senior Full-Stack Developer — LENS Discovery Bottleneck
+# Segunda Auditoría — LENS Discovery Module (Post-Fixes)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Problema:** Cuello de botella crítico en costos, performance y arquitectura del pipeline de descubrimiento de influencers
+> **Solicitud:** **SEGUNDA AUDITORÍA** — la primera auditoría (2026-08-14) identificó 7 issues críticos; los hitos 1–7 fueron aplicados y commitados. Pedimos que validen los fixes, identifiquen regresiones y propongan los próximos mejoras.
 > **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI + DeepSeek
 
 ---
 
-## 🎯 OBJETIVO DEL ANÁLISIS
+## OBJETIVO
 
-Necesito que analices la arquitectura completa de nuestro sistema de descubrimiento de influencers (LENS) y nos des un **plan de acción como senior full-stack developer** para resolver:
+La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 días** por bugs evitables. Ejecutamos 7 hitos de fix:
 
-1. **Costos insostenibles**: $50-72 USD consumidos en 2 días con HikerAPI
-2. **Pipeline no retorna candidatos útiles**: 0 candidatos en últimas ejecuciones
-3. **Bugs encontrados en endpoints de HikerAPI** durante integración
-4. **Falta de observabilidad** del consumo real por step
-5. **Arquitectura de fallback incompleta**: Apify configurado pero deshabilitado
+| Hito | Commit | Desc |
+|------|--------|------|
+| 1 | `be32a39` | Elimina Apify (roto), step2p6 (roto), prefilter muerto |
+| 2 | `835bf2a` | Excepciones `SourceUnavailable`/`TransientSourceError` que propagan |
+| 3+4 | `4819857` | `BudgetFuse` + `HikerAPICircuitBreaker` |
+| 5 | `766cfee` | ARQ idempotency key `discovery:{run_id}` |
+| 6 | `2da78ab` | `is_private` en merge + cache TTL 30min |
+| 7 | `9b43316` | Documentación actualizada |
 
-**Necesito que seas brutalmente honesto** sobre:
-- Qué está mal arquitectado
-- Qué buenas prácticas estamos violando
-- Qué soluciones propondrías (corto, mediano, largo plazo)
-- Cómo evitar que esto vuelva a pasar
+**Pedimos:**
+1. Validar que los fixes no introdujeron regressions
+2. Identificar los issues que quedaron abiertos
+3. Proponer la siguiente tanda de mejoras priorizadas
 
 ---
 
-## 📂 ESTRUCTURA DEL PROYECTO
-
-### Monorepo
+## ESTRUCTURA DEL PROYECTO
 
 ```
 lawebcore/
 ├── apps/
-│   ├── api/                          # FastAPI backend (Railway)
+│   ├── api/                              # FastAPI backend (Railway)
 │   │   └── app/
-│   │       ├── api/v1/              # 40+ endpoints
-│   │       ├── core/                # security, metrics, rate_limiter
-│   │       ├── models/              # SQLAlchemy ORM
-│   │       ├── services/            # AI services
-│   │       └── workers/             # ARQ worker entry point
-│   └── web/                         # React 19 frontend (Vercel)
+│   │       ├── api/v1/                  # 40+ endpoints
+│   │       ├── core/
+│   │       │   ├── budget_fuse.py       # ★ nuevo — budget enforcement
+│   │       │   ├── hikerapi_circuit_breaker.py  # ★ nuevo
+│   │       │   └── worker_enqueuer.py   # ★ actualizado — en_id
+│   │       ├── models/                  # SQLAlchemy ORM
+│   │       ├── services/                # AI services
+│   │       └── workers/
+│   │           └── worker.py            # ~1760 líneas
+│   └── web/                             # React 19 frontend (Vercel)
 ├── packages/
-│   ├── discovery/                   # ★ LENS Discovery Module
+│   ├── discovery/                        # ★ LENS Discovery Module
 │   │   └── discovery/
+│   │       ├── exceptions.py           # ★ nuevo — SourceUnavailable, TransientSourceError, BudgetExhausted
 │   │       ├── orchestrator.py
 │   │       ├── brief_parser.py
 │   │       ├── profile_generator.py
@@ -52,263 +57,193 @@ lawebcore/
 │   │       ├── result_ranker.py
 │   │       ├── scoring/
 │   │       │   ├── lens_score.py
+│   │       │   ├── geo_boost.py        # geo_score here
 │   │       │   └── niche.py
 │   │       └── tools/
-│   │           ├── hikerapi_client.py
-│   │           ├── apify_client.py
-│   │           ├── apify_instagram_source.py
+│   │           ├── hikerapi_client.py  # ★ actualizado — exceptions + breaker + cache
+│   │           ├── hikerapi_circuit_breaker.py  # ★ nuevo
 │   │           ├── instagram_source.py
-│   │           ├── source_registry.py
-│   │           ├── geo_boost.py
 │   │           └── metricool_client.py
 │   ├── shared-core/
 │   └── shared-ai/
-├── supabase/
-│   ├── migrations/
-│   ├── schema.sql
-│   └── seed*.sql
+├── supabase/migrations/
+│   └── 00000000000104_discovery_run_partial_status.sql  # ★ nuevo
 └── docs/
-    └── ARQUITECTURA_LENS.md         # Documentación completa
+    ├── ARQUITECTURA_LENS.md            # v3.0 post-auditoría
+    └── LENS_REVIEW_ARQUITECTURA_2026-08-14.md  # auditoría original
+```
+
+**Archivos eliminados en Hito 1:** `apify_instagram_source.py`, `source_registry.py`.
+
+---
+
+## ESTADO ACTUAL POST-FIXES
+
+### Lo que SE arregló
+
+```
+✅ 4xx/5xx ya no se swallow como warning — propagan como excepciones
+✅ BudgetFuse: monthly cap $10 USD + per-run limit 120 calls + 70% alert
+✅ CircuitBreaker: 5xx consecutive → OPEN, TTL 300s, Redis-backed
+✅ ARQ idempotency: en_id=discovery:{run_id} — no más doble cobro por redeploy
+✅ step2p6 follower expansion ELIMINADO (gastaba 1 enrich por run y devolvía vacío)
+✅ Apify ELIMINADO (estaba roto, no era fallback funcional)
+✅ Prefiltro muerto ELIMINADO (30 líneas + logs engañosos)
+✅ search_hashtag_recent ahora con cache_ttl=1800 (30 min vs 0)
+✅ is_private preservado en el merge de enrichment
+✅ discovery_run_status enum: valor 'partial' añadido (migración lista para ejecutar)
+```
+
+### Lo que NO se arregló (abierto)
+
+```
+⚠️  Enriquecimiento decide sobre muestra casi aleatoria — decide el gasto ANTES de tener datos
+⚠️  geo_score con bugs visibles en tests (city matching, country disqualification)
+⚠️  Vocabulario de negocio hardcodeado en worker.py (~150 líneas en español)
+⚠️  Estado del orchestrator en memoria — columna state existe y no se usa
+⚠️  Multi-tenancy inexistente — bloquea segundo cliente
+⚠️  La migración 00000000000104 NO se ha ejecutado aún en producción
 ```
 
 ---
 
-## 🚨 PROBLEMAS CONOCIDOS
+## PIPELINE ACTUAL (worker.py ~1760 líneas)
 
-### 1. Costos HikerAPI (CRÍTICO)
-
-**Síntoma:**
-- $50-72 USD consumidos en 2 días
-- Balance actual: -717 requests, $0.0 USD
-- Cuenta agotada (`InsufficientFunds 402`)
-
-**Causa raíz:**
-```python
-MAX_HANDLES_TO_ENRICH = 500  # ⚠️ ESTO ES EL PROBLEMA
 ```
-
-Cada perfil enriquecido invoca:
-- 1× `enrich_profile()` → `/v1/user/by/username`
-- 1× `get_user_about()` → `/v1/user/about`
-
-= **2 calls × 500 perfiles = 1000 calls por run**
-
-**Math del costo:**
+1. build brief → DeepSeek parsea brief_text → BriefStructured
+2. QueryBuilder genera plan: hashtags, keywords, reels, topsearch, suggested
+3. _fetch_step1 (hashtag top, 3)     → enrich: NO (usuario reducido)
+4. _fetch_step1_recent (hashtag, 2)  → enrich: NO (usuario reducido)  [TTL=30min]
+5. _fetch_step2 (keyword, 3×3)        → enrich: SÍ (perfil completo)
+6. _fetch_step2p5 (reels, 1)         → enrich: NO (usuario reducido)
+7. _fetch_step3 (topsearch, 1)       → enrich: SÍ (perfil completo)
+8. _fetch_step4 (suggested, 1)        → enrich: SÍ (perfil completo)
+9. PREFILTRO: se seleccionan hasta MAX_HANDLES_TO_ENRICH handles
+              ⚠️ PROBLEMA: scoring se hace sin bio ni seguidores
+10. ENRICHMENT: enrich_profile() por handle
+                - circuit_breaker.can_proceed() → si OPEN aborta
+                - budget_fuse.record_call() después de cada llamada
+                - hasta MAX_CALLS_PER_RUN=120
+11. SCORING: lens_score, geo_score, niche_relevance
+12. CANDIDATE_ANALYZER: DeepSeek (si analyze_with_ai=true)
+13. upsert_many → PostgreSQL
 ```
-Precio HikerAPI: $0.0006 USD/call
-Costo por run (cold cache): 1000 × $0.0006 = $0.60 USD
-Si ejecutamos 80 tests en 2 días: 80 × $0.60 = $48 USD ✓ matches reality
-```
-
-### 2. Pipeline retorna 0 candidatos
-
-**Síntoma:** Última ejecución: 0 candidatos en 10 segundos, sin error visible.
-
-**Causas posibles:**
-- `get_user_about()` retornaba 422 (todos los perfiles sin `country` → descartados)
-- STEP 0 location search no encuentra perfiles (endpoint incorrecto)
-- Hashtags B2B (`dogchowve`) → no retornan creators
-- Scoring demasiado estricto: `min_match_score = 10` eliminaba 254 profiles → 0
-
-### 3. Bugs en endpoints de HikerAPI
-
-| Bug | Endpoint incorrecto | Endpoint correcto |
-|-----|---------------------|-------------------|
-| `search_location()` | `/v1/location/search` (requiere lat/lng) | `/v1/fbsearch/places` (búsqueda por texto) |
-| `get_user_about()` | `/gql/user/about?user_id&safe_int` | `/v1/user/about?id` (sin safe_int) |
-| `location_medias_top()` | `?id=...` | `?location_pk=...` |
-| `location_medias_recent()` | `?id=...` | `?location_pk=...` |
-
-**Documentación:** https://api.hikerapi.com/docs
-
-### 4. Apify configurado pero deshabilitado
-
-```python
-INSTAGRAM_SOURCE = "hikerapi"  # default
-```
-
-Apify API key disponible pero:
-- Actors retornan 404
-- Engagement analytics actor desactivado
-- No hay lógica de fallback funcional
-
-### 5. Falta de observabilidad
-
-No sabemos:
-- Cuántas calls hace cada step exactamente
-- Cuánto cuesta cada step
-- Cache hit rate real
-- Qué endpoints son más costosos
 
 ---
 
-## 📊 ESTADO ACTUAL DEL CÓDIGO
-
-### Pipeline LENS (Steps 0-5)
-
-```
-STEP 0: Location Search
-  - search_location() por ciudad → encuentra location_pk
-  - location_medias_top() + recent() → perfiles geolocalizados
-  - API calls: 6 cities × (1 + 3 × 2) = 42 calls
-  - Status: ⚠️ Disabled by default
-
-STEP 1: Hashtag Search
-  - search_hashtag() top posts + search_hashtag_recent()
-  - API calls: 3 + 2 = ~12 calls
-  - Status: ✅ Optimizado
-
-STEP 2: Keyword Search
-  - search_keyword() con geo suffixes
-  - API calls: 3 keywords × 3 variants = 9 calls
-  - Status: ✅ Optimizado
-
-STEP 2.5: Reels Search
-  - search_reels_by_keyword()
-  - API calls: 1 keyword = 1 call
-
-STEP 2.6: Network Expansion
-  - suggested_profiles() + search_followers_of()
-  - API calls: 1 seed × 1 niche = 2 calls
-  - Status: ⚠️ Follower expansion disabled
-
-STEP 3: Profile Enrichment  ★ MAYOR COSTO
-  - enrich_profile() por handle
-  - get_user_about() (opcional)
-  - API calls: 50 × 1 (sin about) = 50 calls
-  - Status: ✅ Optimizado (MAX_HANDLES_TO_ENRICH: 500→50)
-
-STEP 4: Scoring
-  - geo_score, niche_relevance, lens_score
-  - Bot filters (ER > 30% = bot)
-  - Cost: $0 (solo DB queries)
-
-STEP 5: AI Analysis (DeepSeek)
-  - Optional, controlled by `analyze_with_ai`
-  - Cost: ~$0.001/1K tokens
-```
-
-### Constantes actuales (worker.py)
+## CONSTANTES ACTUALES ( worker.py )
 
 ```python
 MAX_HANDLES_TO_ENRICH = 50
 MAX_POSTS_PER_HASHTAG = 20
-VE_GEO_SUFFIXES = ["venezuela", "vzla"]
-MAX_REELS_PER_QUERY = 3
-MAX_FOLLOWER_EXPANSION_PER_SEED = 5
-ENRICHMENT_INCLUDE_ABOUT = False  # By default
-
-# Step limits
+ENRICHMENT_INCLUDE_ABOUT = False   # desactivado por defecto
 HASHTAGS_TOP = 3
 HASHTAGS_RECENT = 2
 KEYWORDS = 3
 TOP_SEARCH = 1
 SUGGESTED_SEEDS = 1
 REELS_KEYWORDS = 1
-FOLLOWER_EXPANSION_SEEDS = 1
-FOLLOWER_EXPANSION_NICHE_KWS = 0  # Disabled
+```
+
+**Nuevas vars de entorno (Settings en shared_core):**
+```python
+MONTHLY_BUDGET_USD = 10.0          # corte mensual hard
+MAX_CALLS_PER_RUN = 120            # por-run
+BUDGET_ALERT_THRESHOLD = 0.7       # warn al 70%
+HIKERAPI_COST_PER_CALL_USD = 0.0006
+HIKERAPI_5XX_BREAKER_THRESHOLD = 5
+HIKERAPI_5XX_BREAKER_TTL_S = 300
 ```
 
 ---
 
-## ❓ PREGUNTAS PARA TI (CLAUDE CODE)
+## PREGUNTAS PARA CLAUDE CODE — SEGUNDA AUDITORÍA
 
-### A. Análisis Arquitectónico
+### A. Validación de fixes
 
-1. ¿La separación Discovery ↔ API ↔ Web está bien diseñada o hay acoplamiento problemático?
-2. ¿El pipeline de steps 0-5 es el flujo correcto o hay una mejor arquitectura?
-3. ¿`BriefStructured → DiscoveryPlan → Candidates` es el patrón correcto?
-4. ¿La separación `instagram_source` abstract / `hikerapi_client` concrete es la mejor forma?
+1. ¿Los 7 hitos aplicados son correctos y completos? ¿Hay edge cases donde pueden fallar?
+2. El circuit breaker se instancia DENTRO de `_get()` de hikerapi_client — ¿esto crea un nuevo estado por cada llamada o comparten estado vía Redis correctamente?
+3. `BudgetFuse.assert_budget_available()` se llama ANTES del gather de enrichment, pero `record_call()` está dentro de `_enrich_one()`. Si una excepción ocurre después de `assert_budget_available()` pero antes de `record_call()`, ¿el costo no se registra? ¿Es eso un bug?
+4. El `en_id` de ARQ usa `discovery:{run_id}`. ¿ARQ deduplica solo jobs pending/running o también completed? Si un run falla Y se reintenta manualmente, ¿se permite?
 
-### B. Estrategia de Costos
+### B. Scoring — bugs abiertos
 
-5. ¿Cuál es la mejor estrategia para mantener el pipeline útil pero económico?
-   - ¿Reducir más las llamadas?
-   - ¿Implementar modo "dry run" con cache agresivo?
-   - ¿Migrar de HikerAPI a otra solución?
-6. ¿Cómo evitar el "burn rate" cuando hay errores que disparan retries?
-7. ¿Vale la pena re-habilitar Apify como fallback?
+5. Los tests de smoke fallan en `geo_score`: perfiles CO con `geo_indicators=["bogota","medellin"]` obtienen score 0.0 cuando el país del perfil es CO. ¿Está `geo_score` bien implementada?
+6. El test `test_no_ve_artifacts_in_non_ve_profile` falla: perfil CO con `geo_indicators=["colombia","bogota","medellin"]` devuelve `geo=0.0`. ¿El problema es en `geo_score` o en el test?
+7. ¿Cómo recalibrar `geo_score`, `lens_score` y `niche_relevance` para que funcionen correctamente con el flujo actual?
 
-### C. Calidad de Candidatos
+### C. Arquitectura — issues abiertos
 
-8. ¿Por qué retornamos 0 candidatos aunque encontremos 254 profiles?
-9. ¿El scoring está bien calibrado o necesita reentrenamiento?
-10. ¿Cómo encontrar creators reales y no tiendas/B2B en Instagram VE?
+8. El vocabulario de negocio está hardcodeado en worker.py (~150 líneas de listas en español). ¿Cuál es la forma más limpia de externalizarlo a `discovery_profiles` sin romper el pipeline actual?
+9. El estado del orchestrator vive en memoria (se pierde al reiniciar). ¿Deberíamos usar la columna `state` de `discovery_conversations` o hay una solución más simple?
+10. Multi-tenancy: ¿cuál es el approach correcto — filtrado por `business_unit_id` en todas las queries, o un rol de base separado?
 
-### D. Observabilidad
+### D. Siguiente tanda de fixes
 
-11. ¿Qué métricas mínimas deberíamos trackear?
-12. ¿Cómo construir un dashboard de costos por step/run/campaign?
-
-### E. Arquitectura de Fallback
-
-13. Si HikerAPI falla (como ahora), ¿cuál debería ser la estrategia?
-14. ¿Apify vale la pena arreglarlo o deberíamos buscar otra solución?
-15. ¿Vale la pena explorar Meta Business API / TikTok Research API?
-
-### F. Refactor
-
-16. ¿Qué partes del código worker.py están "smelly" y necesitan refactor?
-17. ¿Cómo manejar mejor el "freshness" de los datos?
-18. ¿La lógica de scoring está mezclada con lógica de pipeline? ¿Vale la pena separar?
+11. ¿Cuáles de los issues abiertos deberían resolverse ANTES deputar a producción con un segundo cliente?
+12. ¿Vale la pena implementar un "modo replay" (costo $0) para iterar scoring sin gastar llamadas? ¿cómo debería funcionar?
+13. ¿Cómo debería verse un dashboard de observabilidad mínimo viable para el pipeline?
 
 ---
 
-## 🎯 LO QUE ESPERO DE TI
+## LO QUE ESPERAMOS DE TI — SEGUNDA PASADA
 
-Dame un **plan de acción estructurado** con:
+Sé brutalmente honesto. Enfócate en:
 
-### Corto plazo (esta semana)
-- [ ] Fixes críticos para desbloquear pipeline
-- [ ] Tests que validen el flujo end-to-end
-- [ ] Monitoreo básico de costos
+### Validación (urgente antes de recarga de créditos)
+- [ ] ¿Los fixes de los hitos 1-7 son correctos o tienen bugs sutiles?
+- [ ] ¿El circuit breaker y budget fuse se implementaron bien o hay race conditions?
 
-### Mediano plazo (este mes)
-- [ ] Refactor arquitectónico de las áreas problemáticas
-- [ ] Implementación de cache inteligente
-- [ ] Dashboard de observabilidad
+### Scoring y calidad (bloquea la utilidad del producto)
+- [ ] Diagnóstico completo de `geo_score` — ¿por qué fallan los tests?
+- [ ] ¿Cómo debería funcionar el prefilter para que no sea "casi aleatorio"?
 
-### Largo plazo (próximo trimestre)
-- [ ] Estrategia multi-fuente (HikerAPI + Apify + Meta + TikTok)
-- [ ] Auto-scaling del pipeline
-- [ ] Mejoras de calidad de candidatos
+### Arquitectura (siguiente sprint)
+- [ ] Plan concreto para externalizar el vocabulario de negocio
+- [ ] Decisión: ¿usar la columna `state` o implementar un redis-based state?
+
+### Producto listo para escalar (multi-cliente)
+- [ ] Plan de multi-tenancy que no destruya el rendimiento
+- [ ] Dashboard de costos mínimo viable
 
 ---
 
-## 📚 RECURSOS
+## RECURSOS
 
-### Documentación Oficial
-- HikerAPI: https://api.hikerapi.com/docs
-- FastAPI: https://fastapi.tiangolo.com
-- ARQ: https://arq-docs.helpmanual.io
+### Archivos clave para esta auditoría
 
-### Archivos Clave para Revisar
-1. `apps/api/app/workers/worker.py` (1759 líneas) - Pipeline completo
-2. `packages/discovery/discovery/tools/hikerapi_client.py` (727 líneas) - Cliente HikerAPI
-3. `packages/discovery/discovery/scoring/lens_score.py` - Scoring
-4. `packages/discovery/discovery/brief_parser.py` - Parsing de brief con DeepSeek
-5. `packages/discovery/discovery/query_builder.py` - Query building
-6. `docs/ARQUITECTURA_LENS.md` - Documentación completa
+| Archivo | Líneas | Relevancia |
+|---|---|---|
+| `apps/api/app/workers/worker.py` | ~1760 | Pipeline completo, budget/breaker integrados |
+| `packages/discovery/discovery/tools/hikerapi_client.py` | ~770 | Circuit breaker + cache TTL |
+| `packages/discovery/discovery/exceptions.py` | 60 | Nuevo — excepciones del pipeline |
+| `packages/discovery/discovery/scoring/geo_boost.py` | — | geo_score con bugs en tests |
+| `packages/discovery/discovery/scoring/lens_score.py` | — | lens_score weights |
+| `apps/api/app/core/budget_fuse.py` | 183 | Budget enforcement |
+| `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker |
+| `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency |
+| `supabase/migrations/00000000000104_...sql` | 11 | Enum partial — **ejecutar manualmente** |
+| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.0 completa |
 
-### Información del Proyecto
+### Información del proyecto
 - **Cliente actual:** Nestlé Venezuela / Purina Dog Chow
-- **Caso de uso:** Encontrar influencers de mascotas en VE
-- **Budget mensual objetivo:** < $10 USD/mes
-- **Performance target:** Run completa en < 3 min, < 100 API calls
+- **Budget objetivo:** < $10 USD/mes
+- **Performance target:** Run completa en < 3 min, < 120 API calls
+- **Decisión de arquitectura:** short-term fixes — no se reactivó Apify
 
 ---
 
-## 🚀 CÓMO EMPEZAR
+## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` primero
-2. Después `apps/api/app/workers/worker.py` (líneas 150-900 son el pipeline)
-3. Después `packages/discovery/discovery/tools/hikerapi_client.py`
-4. Identifica problemas arquitectónicos
-5. Propón soluciones concretas con código
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.0 — refleja el estado actual)
+2. Lee `apps/api/app/workers/worker.py` — enfócate en las secciones de budget_fuse, circuit_breaker y enrichment
+3. Lee `packages/discovery/discovery/scoring/geo_boost.py` — busca el bug que hace fallar los tests
+4. Revisa `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida el circuit breaker integration
+5. Identifica gaps en los fixes aplicados y propone los próximos hitos
 
-**Sé directo, brutal en honestidad, y enfócate en soluciones prácticas.**
+**Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 
 ---
 
-*Documento generado: 2026-08-13*
+*Documento generado: 2026-08-14 — Segunda auditoría post-LENS fixes*
 *Para: Claude Code Opus 5 / Senior Full-Stack Developer*
