@@ -65,8 +65,8 @@ lawebcore/
 │   │       │   ├── geo_boost.py        # geo_score here
 │   │       │   └── niche.py
 │   │       └── tools/
-│   │           ├── hikerapi_client.py  # ★ actualizado — exceptions + breaker + cache
-│   │           ├── hikerapi_circuit_breaker.py  # ★ nuevo
+│   │           ├── hikerapi_client.py  # ★ actualizado — exceptions + breaker singleton + cache + replay
+│   │           ├── hikerapi_circuit_breaker.py  # ★ singleton unificado
 │   │           ├── instagram_source.py
 │   │           └── metricool_client.py
 │   ├── shared-core/
@@ -89,21 +89,26 @@ lawebcore/
 ```
 ✅ 4xx/5xx ya no se swallow como warning — propagan como excepciones
 ✅ BudgetFuse: monthly cap $10 USD + per-run limit 120 calls + 70% alert
-✅ CircuitBreaker: 5xx consecutive → OPEN, TTL 300s, Redis-backed
+✅ CircuitBreaker: 5xx consecutive → OPEN, TTL 300s (×3=900s para HALF_OPEN), Redis-backed, singleton
 ✅ ARQ idempotency: _job_id=discovery:{run_id} — no más doble cobro por redeploy
 ✅ step2p6 follower expansion ELIMINADO (gastaba 1 enrich por run y devolvía vacío)
-✅ Apify ELIMINADO (estaba roto, no era fallback funcional)
+✅ Apify ELIMINADO (estaba roto, no era fallback funcional) + apify_client.py borrado
 ✅ Prefiltro muerto ELIMINADO (30 líneas + logs engañosos)
 ✅ search_hashtag_recent ahora con cache_ttl=1800 (30 min vs 0)
 ✅ is_private preservado en el merge de enrichment
 ✅ discovery_run_status enum: valor 'partial' añadido (migración lista para ejecutar)
+✅ en_id → _job_id en worker_enqueuer (TypeError corregido)
+✅ 402 credits exhausted → SourceUnavailable (no más "0 candidatos" silencioso)
+✅ record_call() en hikerapi_client._get() — todas las API calls se cuentan
+✅ can_make_call() checkeado antes de HTTP en _enrich_one()
+✅ geo_score con target_country explícito (reemplaza target_iso2 inference rota)
+✅ Modo replay: RUN_MODE=replay + ReplayMiss exception — testing sin costo
 ```
 
 ### Lo que NO se arregló (abierto)
 
 ```
 ⚠️  Enriquecimiento decide sobre muestra casi aleatoria — decide el gasto ANTES de tener datos
-⚠️  geo_score con bugs visibles en tests (city matching, country disqualification)
 ⚠️  Vocabulario de negocio hardcodeado en worker.py (~150 líneas en español)
 ⚠️  Estado del orchestrator en memoria — columna state existe y no se usa
 ⚠️  Multi-tenancy inexistente — bloquea segundo cliente
@@ -112,7 +117,7 @@ lawebcore/
 
 ---
 
-## PIPELINE ACTUAL (worker.py ~1760 líneas)
+## PIPELINE ACTUAL (worker.py ~1781 líneas)
 
 ```
 1. build brief → DeepSeek parsea brief_text → BriefStructured
@@ -126,12 +131,18 @@ lawebcore/
 9. PREFILTRO: se seleccionan hasta MAX_HANDLES_TO_ENRICH handles
               ⚠️ PROBLEMA: scoring se hace sin bio ni seguidores
 10. ENRICHMENT: enrich_profile() por handle
-                - circuit_breaker.can_proceed() → si OPEN aborta
-                - budget_fuse.record_call() después de cada llamada
-                - hasta MAX_CALLS_PER_RUN=120
-11. SCORING: lens_score, geo_score, niche_relevance
+                 - can_make_call() check → si no hay budget/breaker → aborta
+                 - hikerapi_client._get() → record_call() al final
+                 - hasta MAX_CALLS_PER_RUN=120
+11. SCORING: lens_score (con target_country), geo_score (con target_country), niche_relevance
 12. CANDIDATE_ANALYZER: DeepSeek (si analyze_with_ai=true)
 13. upsert_many → PostgreSQL
+
+MODO REPLAY (RUN_MODE=replay):
+- hikerapi_client._get() lee de Redis cache
+- Si cache hit → retorna cached response
+- Si cache miss → lanza ReplayMiss → worker log warning + status=partial
+- No hace ninguna network call → costo $0
 ```
 
 ---
@@ -162,7 +173,7 @@ HIKERAPI_5XX_BREAKER_TTL_S = 300
 
 ---
 
-## PREGUNTAS PARA CLAUDE CODE — SEGUNDA AUDITORÍA
+## PREGUNTAS PARA CLAUDE CODE — TERCERA AUDITORÍA
 
 ### A. Validación de fixes
 
@@ -191,17 +202,18 @@ HIKERAPI_5XX_BREAKER_TTL_S = 300
 
 ---
 
-## LO QUE ESPERAMOS DE TI — SEGUNDA PASADA
+## LO QUE ESPERAMOS DE TI — TERCERA PASADA
 
 Sé brutalmente honesto. Enfócate en:
 
 ### Validación (urgente antes de recarga de créditos)
-- [ ] ¿Los fixes de los hitos 1-7 son correctos o tienen bugs sutiles?
-- [ ] ¿El circuit breaker y budget fuse se implementaron bien o hay race conditions?
+- [ ] ¿Los fixes de los Hitos 8-12 son correctos y completos?
+- [ ] ¿El breaker singleton, `record_call` en `_get()`, y `can_make_call` check están bien integrados?
+- [ ] ¿El modo replay (`RUN_MODE=replay`) está bien implementado?
 
-### Scoring y calidad (bloquea la utilidad del producto)
-- [ ] Diagnóstico completo de `geo_score` — ¿por qué fallan los tests?
-- [ ] ¿Cómo debería funcionar el prefilter para que no sea "casi aleatorio"?
+### Scoring y calidad
+- [ ] Ejecuta `pytest` — reporta 31/31 pass (el failure pre-existente `test_hashtag_cap_30` no cuenta)
+- [ ] Valida que `geo_score(profile, geo_indicators, target_country)` funciona correctamente
 
 ### Arquitectura (siguiente sprint)
 - [ ] Plan concreto para externalizar el vocabulario de negocio
@@ -211,6 +223,10 @@ Sé brutalmente honesto. Enfócate en:
 - [ ] Plan de multi-tenancy que no destruya el rendimiento
 - [ ] Dashboard de costos mínimo viable
 
+### Confirmación final
+- [ ] Confirma que el sistema está **listo para usar en producción** con créditos reales
+- [ ] Si hay issues restantes, clasifícalos: bloqueante vs. puedo vivir con ello
+
 ---
 
 ## RECURSOS
@@ -219,14 +235,14 @@ Sé brutalmente honesto. Enfócate en:
 
 | Archivo | Líneas | Relevancia |
 |---|---|---|
-| `apps/api/app/workers/worker.py` | ~1760 | Pipeline completo, budget/breaker integrados |
-| `packages/discovery/discovery/tools/hikerapi_client.py` | ~770 | Circuit breaker + cache TTL |
-| `packages/discovery/discovery/exceptions.py` | 60 | Nuevo — excepciones del pipeline |
-| `packages/discovery/discovery/scoring/geo_boost.py` | — | geo_score con bugs en tests |
-| `packages/discovery/discovery/scoring/lens_score.py` | — | lens_score weights |
+| `apps/api/app/workers/worker.py` | ~1781 | Pipeline completo, budget/breaker/replay integrados |
+| `packages/discovery/discovery/tools/hikerapi_client.py` | ~810 | Circuit breaker singleton + cache + replay + record_call |
+| `packages/discovery/discovery/exceptions.py` | ~75 | Excepciones: SourceUnavailable, TransientSourceError, BudgetExhausted, ReplayMiss |
+| `packages/discovery/discovery/scoring/geo_boost.py` | — | geo_score con `target_country` (Hito 11 — corregido) |
+| `packages/discovery/discovery/scoring/lens_score.py` | — | lens_score con `target_country` kwarg |
 | `apps/api/app/core/budget_fuse.py` | 183 | Budget enforcement |
-| `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker |
-| `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency |
+| `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker singleton unificado |
+| `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency con `_job_id` |
 | `supabase/migrations/00000000000104_...sql` | 11 | Enum partial — **ejecutar manualmente** |
 | `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.1 completa |
 
@@ -235,17 +251,19 @@ Sé brutalmente honesto. Enfócate en:
 - **Budget objetivo:** < $10 USD/mes
 - **Performance target:** Run completa en < 3 min, < 120 API calls
 - **Decisión de arquitectura:** short-term fixes — no se reactivó Apify
+- **Pytest actual:** 30/31 pass — 1 failure pre-existente (`test_hashtag_cap_30`)
+- **NO RECARGAR** hasta que la tercera auditoría confirme que el sistema está listo
 
 ---
 
 ## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` (v3.1 — refleja el estado actual con Hitos 8-12)
-2. Lee `apps/api/app/workers/worker.py` — enfócate en las secciones de budget_fuse, circuit_breaker, replay mode y enrichment
-3. Lee `packages/discovery/discovery/scoring/geo_boost.py` — valida que `target_country` param取代了 `target_iso2` inference
-4. Revisa `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida que `record_call`, `can_make_call`, breaker singleton y replay mode están correctos
-5. **Ejecuta `pytest` y reporta 31/31 pass** — los 3 failures de geo_score deben estar resueltos
-6. Confirma que el sistema está listo para usar en producción
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.1 — refleja el estado actual con Hitos 8-12 aplicados)
+2. Lee `apps/api/app/workers/worker.py` — enfócate en: `ReplayMiss` handler, breaker singleton, `record_call` en `_get()`, `can_make_call` check
+3. Lee `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida: cache path para replay, breaker singleton, `record_call`
+4. Lee `packages/discovery/discovery/scoring/geo_boost.py` — valida que `target_country` reemplaza la inferencia de `target_iso2`
+5. **Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py` y reporta el resultado exacto**
+6. **Confirma: ¿está el sistema listo para usar con créditos reales en producción?**
 
 **Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 

@@ -221,6 +221,9 @@ HIKERAPI_STEP0_LOCATION=false     # búsqueda por ubicación
 HIKERAPI_INCLUDE_ABOUT=false     # llamada de fraude/país
 ENABLE_AI_ANALYZER=false          # análisis DeepSeek global
 
+# Modo replay (hito 12) — para testing sin costo
+RUN_MODE=live                     # 'live' (default) o 'replay'
+
 API_ENV=production
 ADMIN_TOKEN=***
 ```
@@ -263,9 +266,8 @@ ADMIN_TOKEN=***
 
 | Módulo | Ubicación | Responsabilidad |
 |---|---|---|
-| `exceptions.py` | `packages/discovery/discovery/exceptions.py` | `SourceUnavailable`, `TransientSourceError`, `BudgetExhausted` |
-| `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | State machine CLOSED→OPEN→HALF_OPEN, Redis-backed |
-| `hikerapi_circuit_breaker.py` | `apps/api/app/core/` | Copia para uso desde worker |
+| `exceptions.py` | `packages/discovery/discovery/exceptions.py` | `SourceUnavailable`, `TransientSourceError`, `BudgetExhausted`, `ReplayMiss` |
+| `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | State machine CLOSED→OPEN→HALF_OPEN, Redis-backed, singleton |
 | `budget_fuse.py` | `apps/api/app/core/` | Budget tracking y enforcement Redis |
 | `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `_job_id=discovery:{run_id}` |
 | `00000000000104_...sql` | `supabase/migrations/` | Añade valor `partial` al enum `discovery_run_status` |
@@ -287,10 +289,26 @@ ADMIN_TOKEN=***
 | 3+4 (`4819857`) | Sin fusible de presupuesto | `BudgetFuse.assert_budget_available()` al inicio del run |
 | 3+4 (`4819857`) | 5xx causing cascade sin corte | `HikerAPICircuitBreaker` — 5 consecutive → OPEN |
 | 3+4 (`4819857`) | Sin límite por-run | `BudgetFuse` per-run counter + `MAX_CALLS_PER_RUN=120` |
-| 5 (`766cfee`) | Doble cobro por redeploy/restart | `_job_id=f"discovery:{run_id}"` en ARQ `enqueue_job` (bugfix `27ed99f`) |
+| 5 (`766cfee`) | Doble cobro por redeploy/restart | `_job_id=f"discovery:{run_id}"` en ARQ `enqueue_job` |
 | 6 (`2da78ab`) | `is_private` perdido en merge de enrichment | Añadido al bloque `update()` en worker.py |
 | 6 (`2da78ab`) | `search_hashtag_recent` sin caché | `cache_ttl=0` → `cache_ttl=1800` (30 min) |
 | 7 (`9b43316`) | Documentación desactualizada | Reemplazado por esta versión |
+| 8 (`2f7b06b`) | `en_id` typo en worker_enqueuer | Corregido a `_job_id` — `TypeError` arreglado |
+| 8 (`2f7b06b`) | Docs mencionaban `en_id` | 8 menciones corregidas en ARQUITECTURA y PROMPT |
+| 9 (`390277b`) | 402 credits exhausted no clasificaba | 402 añadido a `(401,402,403)` → `SourceUnavailable` |
+| 9 (`390277b`) | `asyncio.gather` absorbía excepciones | 4 re-raise post-gather en worker.py |
+| 10 (`950d475`) | `apify_client` zombi importado | Eliminado de `discovery/tools/`, `__init__.py`, worker |
+| 10 (`950d475`) | Circuit breaker tenía copia divergente | Unificado en módulo único `hikerapi_circuit_breaker.py` |
+| 10 (`950d475`) | HALF_OPEN nunca funcionaba (TTL=key expiry) | TTL=breaker_ttl_s×3 (900s), funciona correctamente |
+| 10 (`950d475`) | `record_call` no llamado | Movido a `hikerapi_client._get()` — todas las calls cuentas |
+| 10 (`950d475`) | `can_make_call()` nunca llamado | Checkeado en `_enrich_one()` antes de HTTP |
+| 10 (`950d475`) | `_breaker` pool leak (1 por call) | Módulo singleton en `hikerapi_client.py` |
+| 10 (`950d475`) | `HIKERAPI_5XX_BREAKER_*` no usadas | Pasadas a `CircuitBreakerConfig` constructor |
+| 11 (`06a952e`) | `geo_score` con `target_iso2=None` siempre | `target_country` explícito reemplaza inferencia rota |
+| 11 (`06a952e`) | `lens_score` no propagaba `target_country` | Añadido kwarg y pasado a `geo_score` |
+| 11 (`06a952e`) | Tests fallaban por geo_score | 5 tests de `TestGeoBoostFixes` reescritos con `target_country` |
+| 12 (`cc3f57c`) | Sin modo replay para testing | `ReplayMiss` exception + `RUN_MODE=replay` en config |
+| 12 (`cc3f57c`) | `_get()` siempre hacía network call | En modo replay: cache hit → return; cache miss → `ReplayMiss` |
 
 ### Abiertos
 
@@ -300,7 +318,6 @@ ADMIN_TOKEN=***
 | Vocabulario de negocio hardcodeado | **Media** | worker.py tiene ~150 líneas de listas en español; ata el pipeline a mascotas-Venezuela |
 | Estado del orchestrator en memoria | **Media** | columna `state` existe y no se usa; se pierde al reiniciar |
 | Multi-tenancy inexistente | **Media** | bloquea un segundo cliente en la misma instancia |
-| Scoring / geo_score con bugs | **Media** | Tests muestran fallos en city matching y country disqualification |
 | `discovery_run_status` enum sin `partial` | **Baja** | Migración `00000000000104` creada pero debe ejecutarse manualmente |
 
 ---
@@ -335,4 +352,4 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-*Documento derivado de la auditoría LENS (`LENS_REVIEW_ARQUITECTURA_2026-08-14.md`) con los 7 hitos de fix aplicados. Para detalle completo de la auditoría original, ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`.*
+*Documento derivado de la auditoría LENS (`LENS_REVIEW_ARQUITECTURA_2026-08-14.md`) con los 12 hitos de fix aplicados (Hitos 1-7 en `be32a39`–`9b43316`; Hitos 8-12 en `2f7b06b`–`cc3f57c`). Para detalle completo de la auditoría original y segunda-pass, ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` y `LENS_AUDIT2_2026-08-14.md`.*
