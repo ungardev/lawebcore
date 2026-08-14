@@ -3,16 +3,13 @@
 from __future__ import annotations
 
 import structlog
-from typing import Optional
-
 from arq import create_pool
 from arq.connections import ArqRedis, RedisSettings
-
 from shared_core import settings
 
 logger = structlog.get_logger(__name__)
 
-_pool: Optional[ArqRedis] = None
+_pool: ArqRedis | None = None
 
 
 async def init_worker_pool() -> None:
@@ -55,11 +52,18 @@ async def enqueue_discovery_run(run_id: str) -> bool:
             return False
 
     try:
-        await _pool.enqueue_job(
+        job = await _pool.enqueue_job(
             "discovery_run_task",
             run_id,
             _job_id=f"discovery:{run_id}",
         )
+        if job is None:
+            logger.warning(
+                "discovery_run_enqueue_deduped",
+                run_id=run_id,
+                hint="job_id ya usado en la última hora — reintento de run fallido silenciosamente",
+            )
+            return False
         logger.info("discovery_run_enqueued", run_id=run_id)
         return True
     except Exception as e:

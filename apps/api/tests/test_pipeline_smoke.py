@@ -254,3 +254,51 @@ class TestWorkerTyping:
         import app.workers.worker as worker_mod
         source = Path(worker_mod.__file__).read_text()
         assert "from typing import Any" in source, "worker.py must have 'from typing import Any'"
+
+
+class TestWorkerEnqueuer:
+    """Hito 13: enqueue_job returning None must be detected and logged."""
+
+    @pytest.mark.asyncio
+    async def test_enqueue_returns_false_when_job_is_none(self):
+        """When arq returns None (dedup window), enqueue_discovery_run returns False."""
+        mock_pool = AsyncMock()
+        mock_pool.enqueue_job = AsyncMock(return_value=None)
+
+        with patch("app.core.worker_enqueuer.create_pool", new_callable=AsyncMock) as mock_create:
+            mock_create.return_value = mock_pool
+            # Force re-init with our mock pool
+            import app.core.worker_enqueuer as we
+            from app.core.worker_enqueuer import enqueue_discovery_run
+            we._pool = mock_pool
+
+            result = await enqueue_discovery_run("test-run-123")
+
+            assert result is False
+            mock_pool.enqueue_job.assert_awaited_once_with(
+                "discovery_run_task", "test-run-123", _job_id="discovery:test-run-123"
+            )
+            # Restore
+            we._pool = None
+
+    @pytest.mark.asyncio
+    async def test_enqueue_returns_true_when_job_succeeds(self):
+        """When arq returns a Job, enqueue_discovery_run returns True."""
+        mock_job = MagicMock()
+        mock_pool = AsyncMock()
+        mock_pool.enqueue_job = AsyncMock(return_value=mock_job)
+
+        with patch("app.core.worker_enqueuer.create_pool", new_callable=AsyncMock) as mock_create:
+            mock_create.return_value = mock_pool
+            import app.core.worker_enqueuer as we
+            from app.core.worker_enqueuer import enqueue_discovery_run
+            we._pool = mock_pool
+
+            result = await enqueue_discovery_run("test-run-456")
+
+            assert result is True
+            mock_pool.enqueue_job.assert_awaited_once_with(
+                "discovery_run_task", "test-run-456", _job_id="discovery:test-run-456"
+            )
+            # Restore
+            we._pool = None
