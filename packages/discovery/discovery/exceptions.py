@@ -58,3 +58,18 @@ class BudgetExhausted(Exception):
         super().__init__(message)
         self.current_usd = current_usd
         self.budget_usd = budget_usd
+        self.message = message
+
+
+class ReplayMiss(Exception):
+    """No cached response available in replay mode.
+
+    In RUN_MODE=replay, _get() reads from Redis cache. If no cached
+    entry exists, this exception is raised instead of making a network call.
+    The worker catches it and logs a warning, allowing the run to continue.
+    """
+
+    def __init__(self, message: str, endpoint: str | None = None):
+        super().__init__(message)
+        self.endpoint = endpoint
+        self.message = message

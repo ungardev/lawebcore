@@ -171,7 +171,16 @@ class HikerAPIClient:
             cache_key = self._cache_key(path, params or {})
             cached = await self._get_cached(cache_key)
             if cached is not None:
+                if settings.RUN_MODE == "replay":
+                    logger.info("replay_cache_hit", path=path)
                 return cached
+
+        if settings.RUN_MODE == "replay":
+            from discovery.exceptions import ReplayMiss
+            raise ReplayMiss(
+                f"Replay mode: no cached response for {path}",
+                endpoint=path,
+            )
 
         client = await self._get_client()
         try:

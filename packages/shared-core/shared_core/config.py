@@ -89,6 +89,7 @@ class Settings(BaseSettings):
     HIKERAPI_COST_PER_CALL_USD: float = 0.0006
     HIKERAPI_5XX_BREAKER_THRESHOLD: int = 5
     HIKERAPI_5XX_BREAKER_TTL_S: int = 300
+    RUN_MODE: Literal["live", "replay"] = "live"
 
 
 @lru_cache

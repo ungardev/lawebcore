@@ -157,7 +157,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     STEP 3: Profile enrichment (single sync call — up to 80 profiles)
     STEP 4: Scoring con geo_score + lens_score + cross_ref
     """
-    from discovery.exceptions import SourceUnavailable
+    from discovery.exceptions import ReplayMiss, SourceUnavailable
     try:
         await _run_set_status(run_id, "running")
         lens_active_runs.inc()
@@ -1454,6 +1454,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
         return {"run_id": run_id, "error": error_msg, "candidates": 0}
+
+    except ReplayMiss as e:
+        logger.warning("discovery_replay_miss", run_id=run_id, endpoint=e.endpoint)
+        await _run_set_status(run_id, "partial", error=f"Replay miss: {e.message}")
+        await budget_fuse.reset_run_counter(run_id)
+        lens_active_runs.dec()
+        return {"run_id": run_id, "candidates": 0}
 
     except Exception as e:
         logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
