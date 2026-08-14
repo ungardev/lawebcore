@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 import structlog
+from discovery.exceptions import SourceUnavailable, TransientSourceError
 from shared_core.config import settings
 
 logger = structlog.get_logger(__name__)
@@ -143,7 +144,11 @@ class HikerAPIClient:
             response = await client.get(path, params=params)
             if response.status_code == 429:
                 logger.warning("hikerapi_rate_limited", path=path)
-                return None
+                raise SourceUnavailable(
+                    f"429 Rate Limited — {response.text[:200]}",
+                    status_code=429,
+                    provider="hikerapi",
+                )
             if response.status_code == 404:
                 return None
             if response.status_code in (401, 403):
@@ -154,20 +159,44 @@ class HikerAPIClient:
                     response_body=response.text[:500],
                     hint="Verify x-access-key header is correct and key is active",
                 )
-                return None
+                raise SourceUnavailable(
+                    f"{response.status_code} {response.text[:200]}",
+                    status_code=response.status_code,
+                    provider="hikerapi",
+                )
+            if response.status_code >= 500:
+                logger.warning("hikerapi_server_error", path=path, status=response.status_code)
+                raise TransientSourceError(
+                    f"{response.status_code} server error — {response.text[:200]}",
+                    status_code=response.status_code,
+                    provider="hikerapi",
+                )
             response.raise_for_status()
             data = response.json()
             if cache_key and data:
                 await self._set_cached(cache_key, data, cache_ttl)
             return data
+        except SourceUnavailable:
+            raise
+        except TransientSourceError:
+            raise
         except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status >= 500:
+                raise TransientSourceError(
+                    f"HTTP {status} — {e.response.text[:200]}" if hasattr(e.response, "text") else str(e),
+                    status_code=status,
+                    provider="hikerapi",
+                )
             logger.error(
                 "hikerapi_http_error",
                 path=path,
-                status=e.response.status_code,
+                status=status,
                 response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
             )
             return None
+        except httpx.TimeoutException as e:
+            raise TransientSourceError(f"Timeout after {self.TIMEOUT}s — {e}", provider="hikerapi")
         except Exception as e:
             logger.error("hikerapi_request_error", path=path, error=str(e))
             return None

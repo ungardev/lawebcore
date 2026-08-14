@@ -159,6 +159,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     STEP 3: Profile enrichment (single sync call — up to 80 profiles)
     STEP 4: Scoring con geo_score + lens_score + cross_ref
     """
+    from discovery.exceptions import SourceUnavailable
     try:
         await _run_set_status(run_id, "running")
         lens_active_runs.inc()
@@ -286,26 +287,33 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
 
         async def _fetch_step1():
+            from discovery.exceptions import SourceUnavailable
             results = []
             for tag in plan.hashtag_queries[:3]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("source_hashtag_error", source="hikerapi", hashtag=tag, error=str(e))
             return results
 
         async def _fetch_step1_recent():
+            from discovery.exceptions import SourceUnavailable
             results = []
             for tag in plan.hashtag_queries[:2]:
                 try:
                     items = await instagram_source.search_hashtag_recent(tag, limit=20)
                     results.extend(items)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("source_hashtag_recent_error", source="hikerapi", hashtag=tag, error=str(e))
             return results
 
         async def _fetch_step2():
+            from discovery.exceptions import SourceUnavailable
             results = []
             target_country = (brief.audience_countries or ["VE"])[0].upper()
             geo_suffixes = VE_GEO_SUFFIXES[:2]
@@ -313,6 +321,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=10)
                     results.extend(items)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("source_keyword_error", source="hikerapi", keyword=kw, error=str(e))
                 if target_country == "VE":
@@ -321,21 +331,27 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         try:
                             items = await instagram_source.search_keyword(combined_kw, limit=10)
                             results.extend(items)
+                        except SourceUnavailable:
+                            raise
                         except Exception as e:
                             logger.warning("source_keyword_geo_error", keyword=combined_kw, error=str(e))
             return results
 
         async def _fetch_step3():
+            from discovery.exceptions import SourceUnavailable
             results = []
             for kw in plan.keyword_queries[:1]:
                 try:
                     items = await instagram_source.search_top_accounts(kw, limit=10)
                     results.extend(items)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("hikerapi_topsearch_error", keyword=kw, error=str(e))
             return results
 
         async def _fetch_step4():
+            from discovery.exceptions import SourceUnavailable
             seeds = list(step1_handles | step2_handles)[:1]
             results = []
             for handle in seeds:
@@ -343,11 +359,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     items = await instagram_source.suggested_profiles(handle, limit=10)
                     results.extend(items)
                     await asyncio.sleep(0.5)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("hikerapi_suggested_error", handle=handle, error=str(e))
             return results
 
         async def _fetch_step2p5():
+            from discovery.exceptions import SourceUnavailable
             results = []
             seeds = (plan.keyword_queries or [])[:1]
             for kw in seeds:
@@ -362,6 +381,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                 normalized = instagram_source._normalize_user(media) if hasattr(instagram_source, "_normalize_user") else media
                                 normalized["_source_reels"] = kw
                                 results.append(normalized)
+                except SourceUnavailable:
+                    raise
                 except Exception as e:
                     logger.warning("source_reels_error", keyword=kw, error=str(e))
             logger.info("step2p5_reels_done", results=len(results))
@@ -758,6 +779,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             try:
                 async def _enrich_one(handle: str) -> dict | None:
+                    from discovery.exceptions import SourceUnavailable
                     try:
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
@@ -766,9 +788,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                 about_data = await instagram_source.get_user_about(profile["pk"])
                                 if about_data:
                                     profile["about"] = about_data
+                            except SourceUnavailable:
+                                raise
                             except Exception as e:
                                 logger.warning("hikerapi_user_about_error", handle=handle, error=str(e))
                         return profile
+                    except SourceUnavailable:
+                        raise
                     except Exception as e:
                         logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
                         return None
@@ -1341,6 +1367,39 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         lens_active_runs.dec()
         lens_candidates_total.labels(status="inserted").inc(total)
         return {"run_id": run_id, "candidates": total}
+
+    except SourceUnavailable as e:
+        logger.error(
+            "discovery_run_source_unavailable",
+            run_id=run_id,
+            provider=e.provider,
+            status_code=e.status_code,
+            error=e.message,
+        )
+        error_msg = (
+            f"Fuente de datos no disponible ({e.provider}, HTTP {e.status_code}): {e.message}. "
+            "Revisa: hikerapi.com/billing"
+        )
+        await _run_set_status(run_id, "failed", error=error_msg)
+        try:
+            await _save_progress_message(
+                run_id,
+                f"🔴 La búsqueda falló por un problema con HikerAPI: HTTP {e.status_code}. "
+                f"Detalles: {e.message}. "
+                f"Recarga créditos en hikerapi.com/billing y vuelve a intentarlo.",
+            )
+        except Exception:
+            pass
+        try:
+            tracker = get_discovery_cost_tracker()
+            apify_cost = apify_client.get_and_clear_cost(run_id)
+            if apify_cost > 0:
+                tracker.record_apify_cost(run_id=run_id, actor_id="discovery_pipeline", cost_usd=apify_cost)
+            await tracker.flush(run_id)
+        except Exception:
+            pass
+        lens_active_runs.dec()
+        return {"run_id": run_id, "error": error_msg, "candidates": 0}
 
     except Exception as e:
         logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
