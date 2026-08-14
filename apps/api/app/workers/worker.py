@@ -507,6 +507,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "locationName": item.get("locationName", "") or "",
                 "location": item.get("locationName", "") or "",
                 "pk": item.get("pk"),
+                "is_private": item.get("is_private", False),
             }
 
         for item in keyword_items:
@@ -535,6 +536,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "is_verified": item.get("is_verified", False),
                 "verified": item.get("verified", False),
                 "pk": item.get("pk"),
+                "is_private": item.get("is_private", False),
             }
 
         step3_result, step4_result = await asyncio.gather(
