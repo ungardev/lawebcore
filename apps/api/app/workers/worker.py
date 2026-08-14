@@ -43,6 +43,8 @@ from app.core.metrics import (
 
 logger = structlog.get_logger(__name__)
 
+_replay_miss_count_for_run: int = 0
+
 MAX_HANDLES_TO_ENRICH = 50
 MAX_POSTS_PER_HASHTAG = 20
 TIER_MIN_FOLLOWERS = 5_000
@@ -199,6 +201,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     STEP 4: Scoring con geo_score + lens_score + cross_ref
     """
     from discovery.exceptions import ReplayMiss, SourceUnavailable
+    global _replay_miss_count_for_run
+    _replay_miss_count_for_run = 0
     try:
         await _run_set_status(run_id, "running")
         lens_active_runs.inc()
@@ -264,6 +268,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "keywords_count": len(plan.keyword_queries),
             "hashtags_count": len(plan.hashtag_queries),
             "candidates_found": 0,
+            "replay_miss_count": 0,
         })
 
         profiles: dict[str, dict] = {}
@@ -472,6 +477,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         for res in (step1_result, step2_result):
             if isinstance(res, SourceUnavailable):
                 raise res
+            if isinstance(res, ReplayMiss):
+                _replay_miss_count_for_run += 1
 
         step1_recent_result, step2p5_result = await asyncio.gather(
             _fetch_step1_recent(),
@@ -481,6 +488,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         for res in (step1_recent_result, step2p5_result):
             if isinstance(res, SourceUnavailable):
                 raise res
+            if isinstance(res, ReplayMiss):
+                _replay_miss_count_for_run += 1
 
         hashtag_items: list[dict] = []
         keyword_items: list[dict] = []
@@ -588,6 +597,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         for res in (step3_result, step4_result):
             if isinstance(res, SourceUnavailable):
                 raise res
+            if isinstance(res, ReplayMiss):
+                _replay_miss_count_for_run += 1
 
         if isinstance(step3_result, Exception):
             logger.error("step3_topsearch_failed", error=str(step3_result))
@@ -899,6 +910,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 for res in enrichment_results:
                     if isinstance(res, SourceUnavailable):
                         raise res
+                    if isinstance(res, ReplayMiss):
+                        _replay_miss_count_for_run += 1
                 enriched_profiles = [
                     p for p in enrichment_results
                     if isinstance(p, dict) and p.get("username")
@@ -1384,6 +1397,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "completed_at": datetime.now(UTC).isoformat(),
             "step3_degraded": step3_degraded,
             "step3_error": step3_error,
+            "replay_miss_count": _replay_miss_count_for_run,
         })
 
         conv = await railway_pg.select_one(
@@ -1478,8 +1492,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         return {"run_id": run_id, "error": error_msg, "candidates": 0}
 
     except ReplayMiss as e:
-        logger.warning("discovery_replay_miss", run_id=run_id, endpoint=e.endpoint)
-        await _run_set_status(run_id, "partial", error=f"Replay miss: {e.message}")
+        _replay_miss_count_for_run += 1
+        logger.warning("discovery_replay_miss", run_id=run_id, endpoint=e.endpoint, count=_replay_miss_count_for_run)
+        await _run_update_metadata(run_id, {"replay_miss_count": _replay_miss_count_for_run})
+        await _run_set_status(run_id, "partial", error=f"Replay miss: {e.message} (+{_replay_miss_count_for_run - 1} more silent)")
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
         return {"run_id": run_id, "candidates": 0}
