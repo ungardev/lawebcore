@@ -304,7 +304,7 @@ class HikerAPIClient:
 
         for _ in range(2):
             params: dict[str, Any] = {"name": clean, "page_id": cursor, "safe_int": self.SAFE_INT}
-            resp = await self._get("/v2/hashtag/medias/recent", params=params, cache_ttl=0)
+            resp = await self._get("/v2/hashtag/medias/recent", params=params, cache_ttl=1800)
             if not resp:
                 break
 

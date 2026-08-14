@@ -896,6 +896,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "avatar_url": e.get("profilePicUrlHD") or e.get("profilePicUrl") or profiles[handle].get("avatar_url", ""),
                 "profilePicUrl": e.get("profilePicUrlHD") or e.get("profilePicUrl") or profiles[handle].get("profilePicUrl", ""),
                 "country": e.get("country", ""),
+                "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
                 "locationName": e.get("locationName", profiles[handle].get("locationName", "")),
                 "location": e.get("locationName", profiles[handle].get("location", "")),
                 "latestPosts": e.get("latestPosts", []),
