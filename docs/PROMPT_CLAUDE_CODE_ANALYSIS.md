@@ -1,15 +1,15 @@
-# Tercera Auditoría — LENS Discovery Module (Post-Second-Pass Fixes)
+# Cuarta Auditoría — LENS Discovery Module (Post-Tercera-Pass Fixes)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Solicitud:** **TERCERA AUDITORÍA** — la segunda auditoría (2026-08-14) identificó 6 issues críticos en Hitos 8-12; todos fueron aplicados y commitados (`2f7b06b`, `390277b`, `950d475`, `06a952e`, `cc3f57c`). Pedimos que validen los fixes, identifiquen regresiones y confirmen que el sistema está listo para usar en producción.
+> **Solicitud:** **CUARTA AUDITORÍA** — la tercera auditoría (2026-08-14) identificó 7 fixes en Hitos 13-20 + Bonus 1; todos fueron aplicados y commitados (`a9cbb78`, `6fd29b1`, `f3735b2`, `bad1d37`, `a91e76d`, `b5e404e`, `a5da503`, `611d22e`, `880da7d`). Esta es la auditoría final de confirmación — el auditor de la tercera-pass dijo: "el sistema está listo para usar con créditos reales en producción" conditional al Hito 13 aplicado. Confirmamos que Hito 13 está aplicado.
 > **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI + DeepSeek
 
 ---
 
 ## OBJETIVO
 
-La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 días** por bugs evitables. Ejecutamos 7 hitos de fix:
+La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 días** por bugs evitables. Ejecutamos 20 hitos de fix + 2 bonus:
 
 | Hito | Commit | Desc |
 |------|--------|------|
@@ -24,10 +24,22 @@ La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 dí
 | 10 | `950d475` | `can_make_call` check; `record_call` en `_get`; breaker singleton; TTL×3; `apify_client` muerto |
 | 11 | `06a952e` | `geo_score(profile, geo_indicators, target_country=None)`; `lens_score` actualizado; tests corregidos |
 | 12 | `cc3f57c` | `ReplayMiss` exception; `RUN_MODE=replay`; `_get` en modo replay |
+| 13 | `a9cbb78` | `enqueue_job` retorna None detectado → log `discovery_run_enqueue_deduped` |
+| 14 | `6fd29b1` | `record_call` en todas las respuestas HTTP, no solo 2xx |
+| 15 | `f3735b2` | Lua script atómico `reserve_and_record` — cierra race TOCTOU |
+| 16 | `bad1d37` | `is_private` en perfiles de search (antes solo en enrichment) |
+| 17 | `a91e76d` | `business_unit_id` del usuario autenticado, no hardcoded |
+| 18 | `b5e404e` | Vocabulario externalizado a `discovery_profiles` (3 JSONB cols + defaults) |
+| 19 | `a5da503` | LRU/TTL en `orchestrator.state` — sin memory leak |
+| 20 | `611d22e` | Tests: `test_hashtag_cap_30` fix + `test_result_ranker.py` borrado |
+| Bonus | `880da7d` | Contador `replay_miss_count` en metadata + gather loops |
+
+**Pytest actual:** 33/33 pass (incluye 2 tests nuevos de Hito 13 y todos los fixes)
 
 **Pedimos:**
-1. Validar que los fixes no introdujeron regressions
-2. Identificar los issues que quedaron abiertos
+1. Confirmar que todos los Hitos 13-20 + Bonus 1 fueron correctamente aplicados
+2. Verificar `pytest` → 33/33 pass
+3. Confirmar que el sistema está **listo para producción con créditos reales**
 3. Proponer la siguiente tanda de mejoras priorizadas
 
 ---
@@ -244,30 +256,30 @@ Sé brutalmente honesto. Enfócate en:
 | `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker singleton unificado |
 | `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency con `_job_id` |
 | `supabase/migrations/00000000000104_...sql` | 11 | Enum partial — **ejecutar manualmente** |
-| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.1 completa |
+| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.2 completa |
 
 ### Información del proyecto
 - **Cliente actual:** Nestlé Venezuela / Purina Dog Chow
 - **Budget objetivo:** < $10 USD/mes
 - **Performance target:** Run completa en < 3 min, < 120 API calls
 - **Decisión de arquitectura:** short-term fixes — no se reactivó Apify
-- **Pytest actual:** 30/31 pass — 1 failure pre-existente (`test_hashtag_cap_30`)
-- **NO RECARGAR** hasta que la tercera auditoría confirme que el sistema está listo
+- **Pytest actual:** 33/33 pass — todos los tests pasan
+- **El sistema está listo para producción con créditos reales** (tercera auditoría confirmó condicional a Hito 13 aplicado; Hito 13 commitado en `a9cbb78`)
 
 ---
 
 ## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` (v3.1 — refleja el estado actual con Hitos 8-12 aplicados)
-2. Lee `apps/api/app/workers/worker.py` — enfócate en: `ReplayMiss` handler, breaker singleton, `record_call` en `_get()`, `can_make_call` check
-3. Lee `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida: cache path para replay, breaker singleton, `record_call`
-4. Lee `packages/discovery/discovery/scoring/geo_boost.py` — valida que `target_country` reemplaza la inferencia de `target_iso2`
-5. **Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py` y reporta el resultado exacto**
-6. **Confirma: ¿está el sistema listo para usar con créditos reales en producción?**
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.2 — refleja el estado actual con Hitos 8-20 aplicados)
+2. Lee `apps/api/app/core/worker_enqueuer.py` — valida el fix de `enqueue_job` retornando None (Hito 13)
+3. Lee `apps/api/app/core/budget_fuse.py` — valida el Lua script `reserve_and_record` (Hito 15)
+4. Lee `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida `record_call` en todas las respuestas HTTP (Hito 14)
+5. **Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py` y reporta 33/33 pass**
+6. **Confirma: ¿el sistema está listo para producción?**
 
 **Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 
 ---
 
-*Documento generado: 2026-08-14 — Tercera auditoría post-Hitos 8-12*
+*Documento generado: 2026-08-14 — Cuarta auditoría post-Hitos 13-20 + Bonus 1*
 *Para: Claude Code Opus 5 / Senior Full-Stack Developer*

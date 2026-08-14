@@ -1,9 +1,9 @@
-# La Web Core — Arquitectura Técnica (versión 3.1 post-segunda-auditoría LENS)
+# La Web Core — Arquitectura Técnica (versión 3.2 post-tercera-auditoría LENS)
 
-> **Versión:** 3.1 — 2026-08-14
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.0 (`27ed99f`)
-> **Commit de referencia:** `cc3f57c` (Hitos 8-12 aplicados: en_id, 402, breaker, apify, target_country, replay)
-> **Auditoría segunda-pass:** `LENS_AUDIT2_2026-08-14.md`
+> **Versión:** 3.2 — 2026-08-14
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.1 (`cc3f57c`)
+> **Commit de referencia:** `880da7d` (Hitos 13-20 + Bonus 1 aplicados: enqueue_job, record_call, Lua atomic, is_private, business_unit_id, vocab externalized, LRU, ReplayMiss counter)
+> **Auditoría tercera-pass:** `LENS_AUDIT3_2026-08-14.md`
 
 ---
 
@@ -309,15 +309,24 @@ ADMIN_TOKEN=***
 | 11 (`06a952e`) | Tests fallaban por geo_score | 5 tests de `TestGeoBoostFixes` reescritos con `target_country` |
 | 12 (`cc3f57c`) | Sin modo replay para testing | `ReplayMiss` exception + `RUN_MODE=replay` en config |
 | 12 (`cc3f57c`) | `_get()` siempre hacía network call | En modo replay: cache hit → return; cache miss → `ReplayMiss` |
+| 13 (`a9cbb78`) | `enqueue_job` devolvía None ignorado | Check de `job is None` + log `discovery_run_enqueue_deduped` |
+| 14 (`6fd29b1`) | `record_call` solo contaba 2xx | Ahora cuenta todas las respuestas HTTP (404, 4xx, 5xx) |
+| 15 (`f3735b2`) | Race condition TOCTOU en `MAX_CALLS_PER_RUN` | Lua script atómico `reserve_and_record` — sin desborde |
+| 16 (`bad1d37`) | `is_private` ausente en perfiles de search | Añadido a los dicts de hashtag y keyword search |
+| 17 (`a91e76d`) | `business_unit_id` hardcodeado en campaigns | Usa `user.business_unit_id` del JWT con fallback |
+| 18 (`b5e404e`) | Vocabulario hardcodeado en español | 3 JSONB cols en `discovery_profiles` + defaults en worker.py |
+| 19 (`a5da503`) | `orchestrator.state` memory leak | OrderedDict + LRU/TTL (24h, máx 1000 entries) |
+| 20 (`611d22e`) | `test_hashtag_cap_30` fallaba (test desactualizado) | Añadido argumento `brief`; `test_result_ranker.py` borrado |
+| Bonus (`880da7d`) | ReplayMiss invisible en modo replay | Contador atómico `replay_miss_count` en metadata |
 
 ### Abiertos
 
 | Issue | Prioridad | Detalle |
 |---|---|---|
 | Enriquecimiento sobre muestra casi aleatoria | **Alta** | §3 — decide gasto sin datos; afecta calidad de candidatos |
-| Vocabulario de negocio hardcodeado | **Media** | worker.py tiene ~150 líneas de listas en español; ata el pipeline a mascotas-Venezuela |
-| Estado del orchestrator en memoria | **Media** | columna `state` existe y no se usa; se pierde al reiniciar |
-| Multi-tenancy inexistente | **Media** | bloquea un segundo cliente en la misma instancia |
+| Vocabulario de negocio hardcodeado | **Media** | Hito 18 started — campos añadidos, defaults mantienen compat |
+| Estado del orchestrator en memoria | **Media** | Hito 19 aplica LRU/TTL — memory leak resuelto |
+| Multi-tenancy inexistente | **Media** | Hito 17 abrió el camino — filtrado por `business_unit_id` queda |
 | `discovery_run_status` enum sin `partial` | **Baja** | Migración `00000000000104` creada pero debe ejecutarse manualmente |
 
 ---
@@ -337,7 +346,7 @@ restartPolicyMaxRetries = 3
 healthcheckPath = "/api/v1/health"
 ```
 
-`restartPolicyMaxRetries=3` ahora es seguro gracias a `_job_id` (hito 5, fix hito 8).
+`restartPolicyMaxRetries=3` ahora es seguro gracias a `_job_id` (hito 5, fix hito 8). Hito 13 añade visibilidad cuando un reintento es silenciosamente bloqueado por la ventana de deduplicación de arq (1h).
 
 ---
 
@@ -352,4 +361,4 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-*Documento derivado de la auditoría LENS (`LENS_REVIEW_ARQUITECTURA_2026-08-14.md`) con los 12 hitos de fix aplicados (Hitos 1-7 en `be32a39`–`9b43316`; Hitos 8-12 en `2f7b06b`–`cc3f57c`). Para detalle completo de la auditoría original y segunda-pass, ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` y `LENS_AUDIT2_2026-08-14.md`.*
+*Documento derivado de la auditoría LENS (`LENS_REVIEW_ARQUITECTURA_2026-08-14.md`) con los 20 hitos de fix aplicados (Hitos 1-7 en `be32a39`–`9b43316`; Hitos 8-12 en `2f7b06b`–`cc3f57c`; Hitos 13-20 + Bonus en `a9cbb78`–`880da7d`). Para detalle completo de la auditoría original, segunda-pass y tercera-pass, ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md` y `LENS_AUDIT3_2026-08-14.md`.*
