@@ -25,17 +25,15 @@ from typing import Any
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from discovery.tools.source_registry import get_instagram_source
+from discovery.tools.hikerapi_client import HikerAPIClient
 
 
 async def run_pipeline(args) -> int:
     """Execute the full 4-step pipeline."""
-    source_name = os.getenv("INSTAGRAM_SOURCE", "hikerapi")
-    instagram_source = get_instagram_source(source_name)
+    instagram_source = HikerAPIClient()
 
     print("=" * 70)
     print(f"HikerAPI Full Pipeline Test")
-    print(f"Source: {source_name}")
     print(f"Hashtags: {args.hashtags}")
     print(f"Keywords: {args.keywords}")
     print(f"Country: {args.country}")

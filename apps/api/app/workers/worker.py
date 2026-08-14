@@ -33,8 +33,8 @@ from discovery.tools import (
     youtube_client,
 )
 from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
-from discovery.tools.source_registry import get_instagram_source
-from shared_core import settings, railway_pg
+from discovery.tools.hikerapi_client import HikerAPIClient
+from shared_core import railway_pg, settings
 
 from app.core.discovery_cost_tracker import get_discovery_cost_tracker
 from app.core.metrics import (
@@ -197,8 +197,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step2_handles: set[str] = set()
         step3_handles: set[str] = set()
         step4_handles: set[str] = set()
-        source_name = os.getenv("INSTAGRAM_SOURCE", "hikerapi")
-        instagram_source = get_instagram_source(source_name)
+        instagram_source = HikerAPIClient()
 
         location_items: list[dict] = []
         step0_handles: set[str] = set()
@@ -293,7 +292,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
                 except Exception as e:
-                    logger.warning("source_hashtag_error", source=source_name, hashtag=tag, error=str(e))
+                    logger.warning("source_hashtag_error", source="hikerapi", hashtag=tag, error=str(e))
             return results
 
         async def _fetch_step1_recent():
@@ -303,7 +302,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     items = await instagram_source.search_hashtag_recent(tag, limit=20)
                     results.extend(items)
                 except Exception as e:
-                    logger.warning("source_hashtag_recent_error", source=source_name, hashtag=tag, error=str(e))
+                    logger.warning("source_hashtag_recent_error", source="hikerapi", hashtag=tag, error=str(e))
             return results
 
         async def _fetch_step2():
@@ -315,7 +314,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     items = await instagram_source.search_keyword(kw, limit=10)
                     results.extend(items)
                 except Exception as e:
-                    logger.warning("source_keyword_error", source=source_name, keyword=kw, error=str(e))
+                    logger.warning("source_keyword_error", source="hikerapi", keyword=kw, error=str(e))
                 if target_country == "VE":
                     for geo in geo_suffixes:
                         combined_kw = f"{kw} {geo}"
@@ -368,42 +367,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             logger.info("step2p5_reels_done", results=len(results))
             return results
 
-        async def _fetch_step2p6():
-            results = []
-            seeds = list(step1_handles | step2_handles)[:1]
-            niche_kws: list[str] = []
-            for handle in seeds:
-                try:
-                    profile = await instagram_source.enrich_profile(handle)
-                    if not profile or not profile.get("pk"):
-                        continue
-                    user_pk = profile["pk"]
-                    for niche_kw in niche_kws:
-                        try:
-                            data = await instagram_source.search_followers_of(user_pk, niche_kw)
-                            for u in data.get("users", [])[:MAX_FOLLOWER_EXPANSION_PER_SEED]:
-                                if u.get("username"):
-                                    normalized = instagram_source._normalize_user(u) if hasattr(instagram_source, "_normalize_user") else u
-                                    normalized["_source_follower_expansion"] = handle
-                                    results.append(normalized)
-                        except Exception as e:
-                            logger.warning("source_follower_expansion_error", handle=handle, niche_kw=niche_kw, error=str(e))
-                except Exception as e:
-                    logger.warning("source_follower_expansion_profile_error", handle=handle, error=str(e))
-            logger.info("step2p6_follower_expansion_done", results=len(results))
-            return results
-
-        print(f"[discovery_run_task] STEP 1+2+2.5+2.6+3+4: Running with source={source_name}", flush=True)
+        print("[discovery_run_task] STEP 1+2+2.5+3+4: Running", flush=True)
         step1_result, step2_result = await asyncio.gather(
             _fetch_step1(),
             _fetch_step2(),
             return_exceptions=True,
         )
 
-        step1_recent_result, step2p5_result, step2p6_result = await asyncio.gather(
+        step1_recent_result, step2p5_result = await asyncio.gather(
             _fetch_step1_recent(),
             _fetch_step2p5(),
-            _fetch_step2p6(),
             return_exceptions=True,
         )
 
@@ -411,7 +384,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         keyword_items: list[dict] = []
         hashtag_recent_items: list[dict] = []
         reels_items: list[dict] = []
-        follower_expansion_items: list[dict] = []
         topsearch_items: list[dict] = []
         suggested_items: list[dict] = []
 
@@ -421,16 +393,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[STEP1] FAILED: {step1_result}", flush=True)
         else:
             hashtag_items = step1_result
-            print(f"[STEP1] {len(hashtag_items)} posts from hashtags source={source_name}", flush=True)
-            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source=source_name)
+            print(f"[STEP1] {len(hashtag_items)} posts from hashtags source=hikerapi", flush=True)
+            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source="hikerapi")
 
         if isinstance(step2_result, Exception):
             logger.error("step2_keyword_failed", error=str(step2_result))
             print(f"[STEP2] FAILED: {step2_result}", flush=True)
         else:
             keyword_items = step2_result
-            print(f"[STEP2] {len(keyword_items)} users from keywords source={source_name}", flush=True)
-            logger.info("step2_keyword_done", keyword_users=len(keyword_items), source=source_name)
+            print(f"[STEP2] {len(keyword_items)} users from keywords source=hikerapi", flush=True)
+            logger.info("step2_keyword_done", keyword_users=len(keyword_items), source="hikerapi")
 
         if isinstance(step1_recent_result, Exception):
             logger.error("step1_recent_failed", error=str(step1_recent_result))
@@ -445,13 +417,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             reels_items = step2p5_result
             print(f"[STEP2p5_REELS] {len(reels_items)} creators from reels search", flush=True)
             logger.info("step2p5_reels_done", reels_creators=len(reels_items))
-
-        if isinstance(step2p6_result, Exception):
-            logger.error("step2p6_follower_expansion_failed", error=str(step2p6_result))
-        else:
-            follower_expansion_items = step2p6_result
-            print(f"[STEP2p6_EXPANSION] {len(follower_expansion_items)} users from follower network expansion", flush=True)
-            logger.info("step2p6_follower_expansion_done", expansion_users=len(follower_expansion_items))
 
         for item in hashtag_items:
             handle = item.get("username") or item.get("ownerUsername", "")
@@ -648,84 +613,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "locationName": item.get("locationName", "") or "",
             }
 
-        for item in follower_expansion_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step4_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", ""),
-                "fullName": item.get("full_name", ""),
-                "bio": item.get("bio", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "pk": item.get("pk"),
-                "locationName": item.get("locationName", "") or "",
-            }
-
         unique_handles = list(profiles.keys())
-        print(f"[DIAG] steps 1-6 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, follower_expansion={len(follower_expansion_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
-        logger.info("steps_1_to_6_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), hashtag_recent=len(hashtag_recent_items), keyword_users=len(keyword_items), reels_creators=len(reels_items), follower_expansion=len(follower_expansion_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items))
-
-        prefiltered_handles = []
-        stores_prefiltered = 0
-        low_followers_prefiltered = 0
-        private_prefiltered = 0
-        for handle in unique_handles:
-            p = profiles.get(handle, {})
-            followers = p.get("followersCount") or p.get("follower_count") or 0
-            is_biz = p.get("isBusinessAccount") or p.get("is_business") or False
-            is_priv = p.get("is_private", False)
-            if followers < plan.min_followers:
-                low_followers_prefiltered += 1
-                continue
-            if is_biz and followers < 50000:
-                stores_prefiltered += 1
-                continue
-            if is_priv and followers < 10000:
-                private_prefiltered += 1
-                continue
-            prefiltered_handles.append(handle)
-
-        logger.info(
-            "step1_prefiltered",
-            total=len(unique_handles),
-            after_prefilter=len(prefiltered_handles),
-            stores_filtered=stores_prefiltered,
-            low_followers_filtered=low_followers_prefiltered,
-            private_filtered=private_prefiltered,
-        )
+        print(f"[DIAG] steps 1-5 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
+        logger.info("steps_1_to_5_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), hashtag_recent=len(hashtag_recent_items), keyword_users=len(keyword_items), reels_creators=len(reels_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items))
 
         await _save_progress_message(
             run_id,
-            f"✅ Encontré {len(unique_handles)} perfiles candidatos (hashtags={len(hashtag_items)}, recent={len(hashtag_recent_items)}, keywords={len(keyword_items)}, reels={len(reels_items)}, expansion={len(follower_expansion_items)}). "
+            f"✅ Encontré {len(unique_handles)} perfiles candidatos (hashtags={len(hashtag_items)}, recent={len(hashtag_recent_items)}, keywords={len(keyword_items)}, reels={len(reels_items)}). "
             f"Filtrando tiendas y cuentas sin seguidores suficientes...",
         )
 
         await _run_update_metadata(run_id, {
-            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search", "step2p6_follower_expansion"],
+            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search"],
             "total_unique_handles": len(unique_handles),
-            "prefiltered_handles": len(prefiltered_handles),
-            "stores_prefiltered": stores_prefiltered,
             "current_step": "step3_profile_enrichment",
         })
 
-        handles_to_enrich = prefiltered_handles[:MAX_HANDLES_TO_ENRICH]
-        print(f"[discovery_run_task] STEP 3: Profile enrichment ({len(handles_to_enrich)} profiles)", flush=True)
+        print("[discovery_run_task] STEP 3: Profile enrichment", flush=True)
 
         async def _prefilter_profiles(
             profiles: dict[str, dict],
@@ -965,7 +869,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         await _run_update_metadata(run_id, {
             "current_step": "step4_scoring",
-            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search", "step2p6_follower_expansion", "step3_profile_enrichment"],
+            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search", "step3_profile_enrichment"],
         })
 
         print(f"[discovery_run_task] STEP 4: Scoring {len(profiles)} profiles", flush=True)
@@ -1092,9 +996,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             fraud_penalty = 1.0
             if former_usernames_count >= 3:
                 fraud_penalty = 0.80
-            elif former_usernames_count == 2:
-                fraud_penalty = 0.90
-            elif account_age_days > 0 and account_age_days < 90:
+            elif former_usernames_count == 2 or account_age_days > 0 and account_age_days < 90:
                 fraud_penalty = 0.90
             if fraud_penalty < 1.0:
                 score_val = round(score_val * fraud_penalty, 1)
@@ -1318,7 +1220,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "step1_recent_hashtag_search",
                 "step2_keyword_search",
                 "step2p5_reels_search",
-                "step2p6_follower_expansion",
                 "step3_profile_enrichment",
                 "step4_scoring",
             ],
