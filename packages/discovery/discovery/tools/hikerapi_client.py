@@ -17,6 +17,23 @@ CACHE_TTL_HASHTAG = 43200
 CACHE_TTL_PROFILE = 86400
 CACHE_TTL_LOCATION = 30 * 86400
 
+_breaker = None
+
+
+def _get_breaker():
+    global _breaker
+    if _breaker is None:
+        from discovery.tools.hikerapi_circuit_breaker import (
+            CircuitBreakerConfig,
+            HikerAPICircuitBreaker,
+        )
+        config = CircuitBreakerConfig(
+            failure_threshold=settings.HIKERAPI_5XX_BREAKER_THRESHOLD,
+            breaker_ttl_s=settings.HIKERAPI_5XX_BREAKER_TTL_S,
+        )
+        _breaker = HikerAPICircuitBreaker(provider="hikerapi", config=config)
+    return _breaker
+
 
 class HikerAPIClient:
     """HikerAPI REST client. Docs: https://api.hikerapi.com/docs."""
@@ -28,6 +45,8 @@ class HikerAPIClient:
     def __init__(self, api_key: str | None = None):
         self.api_key = api_key or settings.HIKERAPI_API_KEY
         self._client: httpx.AsyncClient | None = None
+        self.run_id: str | None = None
+        self.budget_fuse: Any = None
         self._redis = None
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -132,10 +151,14 @@ class HikerAPIClient:
         path: str,
         params: dict | None = None,
         cache_ttl: int = 0,
+        run_id: str | None = None,
+        budget_fuse: Any = None,
     ) -> dict | None:
-        from discovery.tools.hikerapi_circuit_breaker import HikerAPICircuitBreaker
-
-        breaker = HikerAPICircuitBreaker(provider="hikerapi")
+        if run_id is not None:
+            self.run_id = run_id
+        if budget_fuse is not None:
+            self.budget_fuse = budget_fuse
+        breaker = _get_breaker()
         if not await breaker.can_proceed():
             raise SourceUnavailable(
                 "Circuit breaker open — HikerAPI degradado por errores 5xx recientes.",
@@ -188,6 +211,13 @@ class HikerAPIClient:
             data = response.json()
             if cache_key and data:
                 await self._set_cached(cache_key, data, cache_ttl)
+            if budget_fuse is not None and run_id is not None:
+                await budget_fuse.record_call(run_id, provider="hikerapi")
+            else:
+                bf = getattr(self, 'budget_fuse', None)
+                rid = getattr(self, 'run_id', None)
+                if bf is not None and rid is not None:
+                    await bf.record_call(rid, provider="hikerapi")
             return data
         except SourceUnavailable:
             raise

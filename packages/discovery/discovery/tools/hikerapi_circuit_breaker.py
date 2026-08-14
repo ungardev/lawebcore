@@ -106,7 +106,7 @@ class HikerAPICircuitBreaker:
                 "opened_at": opened_at,
             }
             if state == CircuitState.OPEN:
-                await r.setex(self._key("state"), self.config.breaker_ttl_s, json.dumps(data))
+                await r.setex(self._key("state"), self.config.breaker_ttl_s * 3, json.dumps(data))
             else:
                 await r.set(self._key("state"), json.dumps(data))
         except (redis_async.RedisError, OSError) as e:

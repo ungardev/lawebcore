@@ -1,6 +1,5 @@
 """Tool clients for external APIs."""
 
-from discovery.tools.apify_client import apify_client
 from discovery.tools.geo_boost import (
     build_rationale,
     classify_tier,
@@ -14,7 +13,6 @@ from discovery.tools.tiktok_client import tiktok_client
 from discovery.tools.youtube_client import youtube_client
 
 __all__ = [
-    "apify_client",
     "build_rationale",
     "classify_tier",
     "geo_score",

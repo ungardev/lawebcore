@@ -24,7 +24,6 @@ from discovery.schemas import BriefStructured, Platform
 from discovery.scoring.lens_score import lens_score
 from discovery.scoring.niche import niche_relevance
 from discovery.tools import (
-    apify_client,
     build_rationale,
     classify_tier,
     meta_client,
@@ -104,7 +103,6 @@ async def startup(ctx):
 async def shutdown(ctx):
     """Cleanup on shutdown."""
     logger.info("workers_stopping")
-    await apify_client.close()
     await meta_client.close()
     await youtube_client.close()
     await metricool_client.close()
@@ -177,9 +175,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             return {"error": f"Run {run_id} not found"}
 
         from discovery.exceptions import BudgetExhausted, SourceUnavailable
+        from discovery.tools.hikerapi_circuit_breaker import HikerAPICircuitBreaker
 
         from app.core.budget_fuse import BudgetFuse
-        from app.core.hikerapi_circuit_breaker import HikerAPICircuitBreaker
 
         budget_fuse = BudgetFuse(
             monthly_budget_usd=settings.MONTHLY_BUDGET_USD,
@@ -233,6 +231,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step3_handles: set[str] = set()
         step4_handles: set[str] = set()
         instagram_source = HikerAPIClient()
+        instagram_source.run_id = run_id
+        instagram_source.budget_fuse = budget_fuse
 
         location_items: list[dict] = []
         step0_handles: set[str] = set()
@@ -822,7 +822,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             try:
                 async def _enrich_one(handle: str) -> dict | None:
-                    from discovery.exceptions import SourceUnavailable
+                    from discovery.exceptions import BudgetExhausted, SourceUnavailable
                     try:
                         if not await circuit_breaker.can_proceed():
                             raise SourceUnavailable(
@@ -830,9 +830,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                 status_code=503,
                                 provider="hikerapi",
                             )
+                        if not await budget_fuse.can_make_call(run_id):
+                            raise BudgetExhausted(
+                                f"Límite de {settings.MAX_CALLS_PER_RUN} llamadas alcanzado.",
+                                current_usd=None,
+                                budget_usd=settings.MONTHLY_BUDGET_USD,
+                            )
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
-                        await budget_fuse.record_call(run_id, provider="hikerapi")
                         if profile and profile.get("pk") and ENRICHMENT_INCLUDE_ABOUT and hasattr(instagram_source, "get_user_about"):
                             try:
                                 about_data = await instagram_source.get_user_about(profile["pk"])
@@ -1399,15 +1404,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         tracker = get_discovery_cost_tracker()
 
-        apify_cost = apify_client.get_and_clear_cost(run_id)
-        if apify_cost > 0:
-            tracker.record_apify_cost(
-                run_id=run_id,
-                actor_id="discovery_pipeline",
-                cost_usd=apify_cost,
-                metadata={"run_id": run_id},
-            )
-
         cost_summary = tracker.get_run_summary(run_id)
         total_cost = cost_summary["total_usd"]
 
@@ -1417,6 +1413,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             filters=[f"id=eq.{run_id}"],
         )
         await tracker.flush(run_id)
+        await budget_fuse.reset_run_counter(run_id)
 
         lens_active_runs.dec()
         lens_candidates_total.labels(status="inserted").inc(total)
@@ -1446,12 +1443,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             pass
         try:
             tracker = get_discovery_cost_tracker()
-            apify_cost = apify_client.get_and_clear_cost(run_id)
-            if apify_cost > 0:
-                tracker.record_apify_cost(run_id=run_id, actor_id="discovery_pipeline", cost_usd=apify_cost)
             await tracker.flush(run_id)
         except Exception:
             pass
+        await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
         return {"run_id": run_id, "error": error_msg, "candidates": 0}
 
@@ -1460,12 +1455,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _run_set_status(run_id, "failed", error=str(e))
         try:
             tracker = get_discovery_cost_tracker()
-            apify_cost = apify_client.get_and_clear_cost(run_id)
-            if apify_cost > 0:
-                tracker.record_apify_cost(run_id=run_id, actor_id="discovery_pipeline", cost_usd=apify_cost)
             await tracker.flush(run_id)
         except Exception:
             pass
+        await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
         raise
 
