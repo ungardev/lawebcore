@@ -82,6 +82,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 300
     RATE_LIMIT_DISCOVERY_PER_MIN: int = 30
 
+    # LENS Budget & Cost Controls
+    MONTHLY_BUDGET_USD: float = 10.0
+    MAX_CALLS_PER_RUN: int = 120
+    BUDGET_ALERT_THRESHOLD: float = 0.7
+    HIKERAPI_COST_PER_CALL_USD: float = 0.0006
+    HIKERAPI_5XX_BREAKER_THRESHOLD: int = 5
+    HIKERAPI_5XX_BREAKER_TTL_S: int = 300
+
 
 @lru_cache
 def get_settings() -> Settings:

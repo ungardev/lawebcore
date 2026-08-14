@@ -7,8 +7,9 @@ from typing import Any
 
 import httpx
 import structlog
-from discovery.exceptions import SourceUnavailable, TransientSourceError
 from shared_core.config import settings
+
+from discovery.exceptions import SourceUnavailable, TransientSourceError
 
 logger = structlog.get_logger(__name__)
 
@@ -132,6 +133,16 @@ class HikerAPIClient:
         params: dict | None = None,
         cache_ttl: int = 0,
     ) -> dict | None:
+        from discovery.tools.hikerapi_circuit_breaker import HikerAPICircuitBreaker
+
+        breaker = HikerAPICircuitBreaker(provider="hikerapi")
+        if not await breaker.can_proceed():
+            raise SourceUnavailable(
+                "Circuit breaker open — HikerAPI degradado por errores 5xx recientes.",
+                status_code=503,
+                provider="hikerapi",
+            )
+
         cache_key = None
         if cache_ttl > 0:
             cache_key = self._cache_key(path, params or {})
@@ -166,12 +177,14 @@ class HikerAPIClient:
                 )
             if response.status_code >= 500:
                 logger.warning("hikerapi_server_error", path=path, status=response.status_code)
+                await breaker.record_failure()
                 raise TransientSourceError(
                     f"{response.status_code} server error — {response.text[:200]}",
                     status_code=response.status_code,
                     provider="hikerapi",
                 )
             response.raise_for_status()
+            await breaker.record_success()
             data = response.json()
             if cache_key and data:
                 await self._set_cached(cache_key, data, cache_ttl)
@@ -183,6 +196,7 @@ class HikerAPIClient:
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             if status >= 500:
+                await breaker.record_failure()
                 raise TransientSourceError(
                     f"HTTP {status} — {e.response.text[:200]}" if hasattr(e.response, "text") else str(e),
                     status_code=status,
@@ -196,8 +210,9 @@ class HikerAPIClient:
             )
             return None
         except httpx.TimeoutException as e:
+            await breaker.record_failure()
             raise TransientSourceError(f"Timeout after {self.TIMEOUT}s — {e}", provider="hikerapi")
-        except Exception as e:
+        except (httpx.HTTPError, ValueError) as e:
             logger.error("hikerapi_request_error", path=path, error=str(e))
             return None
 

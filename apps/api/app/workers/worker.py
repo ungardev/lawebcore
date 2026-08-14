@@ -176,6 +176,40 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[discovery_run_task] ABORT: Run {run_id} not found", flush=True)
             return {"error": f"Run {run_id} not found"}
 
+        from discovery.exceptions import BudgetExhausted, SourceUnavailable
+
+        from app.core.budget_fuse import BudgetFuse
+        from app.core.hikerapi_circuit_breaker import HikerAPICircuitBreaker
+
+        budget_fuse = BudgetFuse(
+            monthly_budget_usd=settings.MONTHLY_BUDGET_USD,
+            max_calls_per_run=settings.MAX_CALLS_PER_RUN,
+            alert_threshold=settings.BUDGET_ALERT_THRESHOLD,
+            cost_per_call_usd=settings.HIKERAPI_COST_PER_CALL_USD,
+        )
+        circuit_breaker = HikerAPICircuitBreaker(provider="hikerapi")
+
+        try:
+            await budget_fuse.assert_budget_available(run_id, provider="hikerapi")
+        except BudgetExhausted as e:
+            error_msg = str(e)
+            await _run_set_status(run_id, "failed", error=error_msg)
+            await _save_progress_message(
+                run_id,
+                f"🔴 Presupuesto mensual agotado: ${e.current_usd:.4f} de ${e.budget_usd:.2f}. "
+                f"Recarga en hikerapi.com/billing para continuar.",
+            )
+            lens_active_runs.dec()
+            return {"run_id": run_id, "error": error_msg, "candidates": 0}
+
+        if not await circuit_breaker.can_proceed():
+            raise SourceUnavailable(
+                "Circuit breaker open — HikerAPI degradado por errores 5xx recientes. "
+                "Espera unos minutos o contacta a soporte.",
+                status_code=503,
+                provider="hikerapi",
+            )
+
         brief_parsed = run.get("brief_parsed", {})
         if isinstance(brief_parsed, str):
             import json
@@ -781,8 +815,15 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 async def _enrich_one(handle: str) -> dict | None:
                     from discovery.exceptions import SourceUnavailable
                     try:
+                        if not await circuit_breaker.can_proceed():
+                            raise SourceUnavailable(
+                                "Circuit breaker open — HikerAPI degradado.",
+                                status_code=503,
+                                provider="hikerapi",
+                            )
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
+                        await budget_fuse.record_call(run_id, provider="hikerapi")
                         if profile and profile.get("pk") and ENRICHMENT_INCLUDE_ABOUT and hasattr(instagram_source, "get_user_about"):
                             try:
                                 about_data = await instagram_source.get_user_about(profile["pk"])
