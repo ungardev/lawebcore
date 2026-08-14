@@ -11,11 +11,11 @@ import asyncio
 import uuid
 
 import pytest
-
-from app.workers.worker import discovery_run_task
 from discovery.memory import conversation_memory
 from discovery.schemas import AudienceGender, BriefStructured, DiscoverySearchRequest, Platform
 from shared_core.railway_pg import railway_pg
+
+from app.workers.worker import discovery_run_task
 
 
 async def _create_test_conversation(user_id: uuid.UUID) -> str:
@@ -151,6 +151,7 @@ def minimal_brief() -> BriefStructured:
     )
 
 
+@pytest.mark.skip(reason="requires live Postgres — run manually with docker-compose up")
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_discovery_run_e2e_rule_based(test_user_id, minimal_brief):
@@ -198,6 +199,7 @@ def ai_brief(test_user_id) -> BriefStructured:
     )
 
 
+@pytest.mark.skip(reason="requires live Postgres — run manually with docker-compose up")
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_discovery_run_e2e_full_with_ai(test_user_id, ai_brief):
@@ -230,6 +232,7 @@ async def test_discovery_run_e2e_full_with_ai(test_user_id, ai_brief):
             await _cleanup(run_id, conv_id)
 
 
+@pytest.mark.skip(reason="requires live Postgres — run manually with docker-compose up")
 @pytest.mark.e2e
 @pytest.mark.asyncio
 async def test_discovery_run_inserts_candidates_to_db(test_user_id, minimal_brief):

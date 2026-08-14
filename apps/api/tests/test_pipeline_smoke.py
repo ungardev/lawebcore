@@ -161,8 +161,14 @@ class TestQueryBuilderCaps:
         with patch("shared_ai.deepseek_client"):
             from discovery.query_builder import QueryBuilder
         qb = QueryBuilder()
+        brief = BriefStructured(
+            product_name="Test",
+            industry="belleza",
+            niches=["belleza"],
+            audience_countries=["CO"],
+        )
         profile = {"hashtags": [f"tag{i}" for i in range(100)]}
-        result = qb._build_hashtag_queries(profile)
+        result = qb._build_hashtag_queries(profile, brief)
         assert len(result) <= 30, f"Expected <=30 hashtags, got {len(result)}"
 
     def test_no_buy_intent_in_queries(self):
