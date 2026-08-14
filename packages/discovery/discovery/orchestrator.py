@@ -1,13 +1,16 @@
 """LangGraph Orchestrator — state machine for conversational discovery."""
 
-import asyncio
 import re
+import time
+from collections import OrderedDict
 from typing import Any
 from uuid import UUID
 
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+from shared_core.railway_pg import railway_pg
 
 from discovery.brief_parser import brief_parser_agent
 from discovery.query_builder import query_builder
@@ -16,15 +19,11 @@ from discovery.schemas import (
     CandidateMetrics,
     CandidateWithScore,
     ConversationStep,
-    DiscoveryRunResponse,
-    DiscoverySearchRequest,
     DiscoveryPlan,
     MessageCreate,
     MessageResponse,
     Platform,
 )
-from discovery.tools import apify_client, meta_client, metricool_client, tiktok_client, youtube_client
-from shared_core.railway_pg import railway_pg
 
 _AFFIRMATIVE_KEYWORDS = {
     "si", "sí", "sii", "siii", "siiii", "confirmo", "confirmar", "confirmado",
@@ -34,9 +33,8 @@ _AFFIRMATIVE_KEYWORDS = {
     "todo bien", "todo ok", "todo correcto", "esta bien", "está bien",
     "estoy de acuerdo", "de acuerdo", "ok", "okay", "k",
     "si por favor", "si dale", "genial", "excelente", "buenisimo",
-    "buenísimo", "bueno", "vamos a ello", "manos a la obra",
-    "yes", "yeah", "yep", "yup", "sure", "correct", "perfect",
-    "great", "let's do it", "do it", "run it", "launch", "execute",
+    "buenísimo", "bueno", "vamos a ello", "yes", "yeah", "yep", "yup", "sure", "correct", "perfect",
+    "great", "let's do it", "do it", "run it", "execute",
     "proceed", "ready", "let's go", "lets go",
 }
 
@@ -70,11 +68,40 @@ class ConversationState:
 
 
 class DiscoveryOrchestrator:
+    MAX_STATE_ENTRIES = 1000
+    STATE_TTL_SECONDS = 24 * 3600
+
     def __init__(self):
-        self.state: dict[UUID, ConversationState] = {}
+        self.state: OrderedDict[UUID, ConversationState] = OrderedDict()
+        self._state_timestamps: dict[UUID, float] = {}
+
+    def _evict_expired(self) -> None:
+        """Remove expired entries from state cache."""
+        if not self._state_timestamps:
+            return
+        now = time.monotonic()
+        expired = [
+            cid for cid, ts in self._state_timestamps.items()
+            if now - ts > self.STATE_TTL_SECONDS
+        ]
+        for cid in expired:
+            self.state.pop(cid, None)
+            self._state_timestamps.pop(cid, None)
+        if len(self.state) > self.MAX_STATE_ENTRIES:
+            over = len(self.state) - self.MAX_STATE_ENTRIES
+            for _ in range(over):
+                oldest_cid, _ = self.state.popitem(last=False)
+                self._state_timestamps.pop(oldest_cid, None)
+
+    def _touch(self, conversation_id: UUID) -> None:
+        """Update access timestamp and move to end (LRU)."""
+        self._state_timestamps[conversation_id] = time.monotonic()
+        if conversation_id in self.state:
+            self.state.move_to_end(conversation_id)
 
     async def _load_state(self, conversation_id: UUID) -> ConversationState | None:
         import json as _json
+
         from discovery.memory import conversation_memory
 
         conv = await conversation_memory.get_conversation(conversation_id)
@@ -105,7 +132,7 @@ class DiscoveryOrchestrator:
             candidates_data = stored_state.get("candidates") or []
             if candidates_data:
                 try:
-                    from discovery.schemas import CandidateStatus, CandidateWithScore
+                    from discovery.schemas import CandidateWithScore
                     state.candidates = [CandidateWithScore(**c) for c in candidates_data]
                 except Exception as exc:
                     logger.warning("candidates_restore_failed", error=str(exc))
@@ -139,6 +166,7 @@ class DiscoveryOrchestrator:
 
     async def _save_state(self, conversation_id: UUID, state: ConversationState) -> None:
         import json as _json
+
         from discovery.memory import conversation_memory
 
         state_json = {
@@ -173,8 +201,10 @@ class DiscoveryOrchestrator:
         )
 
     async def create_conversation(self, conversation_id: UUID, initial_brief: str | None = None) -> dict[str, Any]:
+        self._evict_expired()
         state = ConversationState()
         self.state[conversation_id] = state
+        self._touch(conversation_id)
 
         if initial_brief:
             state.accumulated_brief = initial_brief
@@ -192,13 +222,16 @@ class DiscoveryOrchestrator:
     async def process_message(
         self, conversation_id: UUID, message: MessageCreate
     ) -> dict[str, Any]:
+        self._evict_expired()
         if conversation_id not in self.state:
             state = await self._load_state(conversation_id)
             if not state:
                 raise ValueError(f"Conversation {conversation_id} not found")
             self.state[conversation_id] = state
+            self._touch(conversation_id)
 
         state = self.state[conversation_id]
+        self._touch(conversation_id)
         state.accumulated_brief += f"\n\nUsuario: {message.content}"
 
         result = await self._process_message(conversation_id, message.content)
