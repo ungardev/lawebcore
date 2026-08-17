@@ -879,12 +879,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                                 status_code=503,
                                 provider="hikerapi",
                             )
-                        if not await budget_fuse.reserve_and_record(run_id, "hikerapi"):
-                            raise BudgetExhausted(
-                                f"Límite de {settings.MAX_CALLS_PER_RUN} llamadas alcanzado.",
-                                current_usd=None,
-                                budget_usd=settings.MONTHLY_BUDGET_USD,
-                            )
+                        # La reserva de presupuesto vive ahora en
+                        # HikerAPIClient._get() (hito 21), que es el único punto
+                        # por el que pasan todas las llamadas y el único que sabe
+                        # si la respuesta vino de caché.
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
                         if profile and profile.get("pk") and ENRICHMENT_INCLUDE_ABOUT and hasattr(instagram_source, "get_user_about"):
@@ -899,6 +897,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         return profile
                     except SourceUnavailable:
                         raise
+                    except BudgetExhausted:
+                        # Tope de llamadas del run alcanzado: dejamos de
+                        # enriquecer, pero conservamos lo ya obtenido.
+                        raise
                     except Exception as e:
                         logger.warning("hikerapi_enrich_error", handle=handle, error=str(e))
                         return None
@@ -907,11 +909,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     *[_enrich_one(h) for h in handles_to_enrich],
                     return_exceptions=True,
                 )
+                budget_capped = 0
                 for res in enrichment_results:
                     if isinstance(res, SourceUnavailable):
                         raise res
                     if isinstance(res, ReplayMiss):
                         _replay_miss_count_for_run += 1
+                    if isinstance(res, BudgetExhausted):
+                        budget_capped += 1
+                if budget_capped:
+                    step3_degraded = True
+                    step3_error = (
+                        f"Tope de {settings.MAX_CALLS_PER_RUN} llamadas alcanzado: "
+                        f"{budget_capped} perfiles quedaron sin enriquecer."
+                    )
+                    logger.warning(
+                        "enrichment_budget_capped",
+                        run_id=run_id,
+                        skipped=budget_capped,
+                        max_calls=settings.MAX_CALLS_PER_RUN,
+                    )
                 enriched_profiles = [
                     p for p in enrichment_results
                     if isinstance(p, dict) and p.get("username")

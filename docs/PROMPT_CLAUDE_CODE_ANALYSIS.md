@@ -1,29 +1,33 @@
-# QUINTA AUDITORÍA — LENS Discovery Module (Análisis Exhaustivo de Costos + Fixes Completos)
+# QUINTA AUDITORÍA — LENS Discovery Module (Post-Hito 21)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Solicitud:** **QUINTA AUDITORÍA EXHAUSTIVA** — el sistema tiene 20 hitos + Bonus 1 aplicados y 33/33 tests pasando. Necesitamos que valides todos los fixes, corrijas la configuración de costos (el plan real de HikerAPI es **$0.02/request**, no $0.0006), y hagas un análisis detallado del costo real de un discovery run con el plan "Start" actual.
+> **Solicitud:** **QUINTA AUDITORÍA EXHAUSTIVA** — el sistema tiene 21 hitos + Bonus 1 aplicados. La auditoría 5 de Opus 5 identificó bugs críticos en el modelo de contabilidad. Hito 21 se aplicó para corregirlos. Necesitamos que valides los fixes yconfirmes que el sistema está listo para producción.
 > **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI "Start" ($0.02/req) + DeepSeek
 
 ---
 
-## CONTEXTO CRÍTICO — PLAN HIKERAPI "START"
+## ESTADO ACTUAL — POST-HITO 21
 
 ```
 ╔══════════════════════════════════════════════════════════════════╗
-║  PLAN HIKERAPI "START" — $0.02 USD por request              ║
+║  HIKERAPI "START" — $0.02 USD por request              ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  Costo por request:   $0.02 USD                              ║
 ║  Balance prepago:    $20 USD (~1,000 requests)               ║
 ║  Todos los endpoints de Instagram incluidos (100+)           ║
 ║                                                                  ║
-║  ⚠️ EL SISTEMA ACTUALMENTE TIENE CONFIGURADO:              ║
-║     HIKERAPI_COST_PER_CALL_USD = 0.0006                    ║
-║     ESTO ES 33 VECES MÁS BARATO QUE EL PLAN REAL          ║
-║     (legacy de cuando el plan costaba ~$0.0006/req)        ║
+║  ✅ CONFIGURACIÓN ACTUAL (post Hito 21):               ║
+║     HIKERAPI_COST_PER_CALL_USD = 0.02                     ║
+║     BudgetFuse funcionando con costo real                  ║
+║     Single accounting point en HikerAPIClient._get()      ║
 ║                                                                  ║
-║  IMPACTO: BudgetFuse muestra gastos incorrectos              ║
-║  Budget real se agota 33× más rápido de lo que muestra     ║
+║  🔧 FIXES APLICADOS EN HITO 21:                        ║
+║     §2.1 Doble conteo: eliminado                          ║
+║     §2.2 Caché cobraba: eliminado                          ║
+║     §2.3 NOSCRIPT sin fallback: corregido                  ║
+║     §2.4 Fail-open peligroso: fail-closed                  ║
+║     §2.5 MAX_CALLS_PER_RUN decorativo: ahora real         ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 PRESUPUESTO OBJETIVO: < $10 USD/mes
@@ -38,14 +42,14 @@ ESCENARIOS REALES CON $0.02/req:
 
 ## OBJETIVO
 
-Ejecutamos 20 hitos + 1 bonus de fixes. El sistema pasa 33/33 tests. Pero **la configuración de costos de HikerAPI está desactualizada** — usa $0.0006 cuando el plan real cobra $0.02. Esto significa que el BudgetFuse muestro números falsos.
+Ejecutamos 21 hitos + 1 bonus de fixes. El sistema pasa 33/33 tests + tests de Hito 21. **El modelo de contabilidad ahora es correcto** — un solo punto de cobro en `HikerAPIClient._get()`.
 
 **Pedimos:**
-1. Validar que los 20 hitos + Bonus 1 fueron correctamente aplicados
-2. **Corregir `HIKERAPI_COST_PER_CALL_USD` a `$0.02`** en la configuración
-3. Hacer análisis de costos detallado: ¿cuántos requests por fase? ¿cómo optimizar?
-4. Proponer estrategias de reducción de costo sin perder calidad
-5. Verificar `pytest` → 33/33 pass
+1. Validar que los 21 hitos + Bonus 1 fueron correctamente aplicados
+2. Hacer análisis de costos detallado: ¿cuántos requests por fase? ¿cómo optimizar?
+3. Proponer estrategias de reducción de costo sin perder calidad
+4. Verificar `pytest` → 33/33 + nuevos tests
+5. Confirmar que el sistema está listo para producción con créditos reales
 6. Identificar cualquier issue que quede bloqueante para producción
 
 ---
@@ -223,21 +227,18 @@ RUN_MODE = "live"                    # 'live' o 'replay'
 
 ## LO QUE PEDIMOS QUE HAGAS
 
-### 1. Fix crítico: HIKERAPI_COST_PER_CALL_USD
+### 1. ✅ FIX YA APLICADO: HIKERAPI_COST_PER_CALL_USD + Modelo de Contabilidad
 
-El archivo `packages/shared-core/shared_core/config.py` tiene:
-```python
-HIKERAPI_COST_PER_CALL_USD: float = 0.0006  # ← LEGACY
+**Archivos tocados por Hito 21:**
+- `apps/api/app/core/budget_fuse.py` — NOSCRIPT fallback + fail-closed + docstring
+- `packages/discovery/discovery/tools/hikerapi_client.py` — single accounting point en `_get()`
+- `apps/api/app/workers/worker.py` — remueve `reserve_and_record` redundante, propaga `BudgetExhausted`, run `partial` al alcanzar tope
+
+**Verificación pendiente:**
+```bash
+pytest apps/api/tests/test_budget_fuse.py -v
 ```
-
-**Debe ser:**
-```python
-HIKERAPI_COST_PER_CALL_USD: float = 0.02  # Plan Start real
-```
-
-Esto hace que BudgetFuse funcione correctamente con el plan real.
-
-**Verifica:** Busca `HIKERAPI_COST_PER_CALL_USD` en todo el codebase y actualiza en todos los lugares donde se use como hardcoded value.
+Esperado: 8 tests passing (5 nuevos + 3 existentes)
 
 ### 2. Análisis exhaustivo de costos
 
@@ -262,7 +263,7 @@ c) **Cachear resultados de enrichment** — ¿feasible? ¿cuál TTL?
 d) **Discovery only (sin enrichment)** — ¿los candidatos de keyword/topsearch son suficientemente completos?
 e) **DeepSeek solo para top N candidatos** — ¿reduce costo significativamente?
 
-### 4. Validación de Hitos 13-20 + Bonus 1
+### 4. Validación de Hitos 13-21 + Bonus 1
 
 Confirma que estos cambios están correctos:
 
@@ -274,15 +275,16 @@ Confirma que estos cambios están correctos:
 - **Hito 18** (`b5e404e`): 3 JSONB cols en `discovery_profiles` + defaults
 - **Hito 19** (`a5da503`): LRU/TTL en `orchestrator.state`
 - **Hito 20** (`611d22e`): test_hashtag_cap_30 + test_result_ranker.py borrado
+- **Hito 21** (aplicado): Single accounting point + NOSCRIPT fallback + fail-closed
 - **Bonus** (`880da7d`): `replay_miss_count` en metadata
 
 ### 5. Ejecuta pytest
 
 ```bash
-pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py -v
+pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py apps/api/tests/test_budget_fuse.py -v
 ```
 
-Reporta: **33/33 pass**
+Reporta: **33/33 + 8 tests de Hito 21 = ~41 pass**
 
 ### 6. Dashboard de observabilidad
 
@@ -300,23 +302,23 @@ Reporta: **33/33 pass**
 
 Sé brutalmente honesto. Enfócate en:
 
-### Prioridad 1 — Fix de costo HIKERAPI
-- [ ] Cambia `HIKERAPI_COST_PER_CALL_USD` a `$0.02` en `config.py`
-- [ ] Verifica que no haya otros hardcoded $0.0006 en el codebase
-- [ ] Confirma que BudgetFuse ahora muestra números reales
+### Prioridad 1 — ✅ FIX YA APLICADO (Hito 21)
+- [x] `HIKERAPI_COST_PER_CALL_USD` = `$0.02` en `config.py`
+- [x] BudgetFuse con single accounting point en `HikerAPIClient._get()`
+- [x] NOSCRIPT fallback implementado
+- [x] Fail-closed ante error de Redis
 
 ### Prioridad 2 — Análisis de costos
-- [ ] Tabla completa de costo por fase (ya la tienes en ARQUITECTURA_LENS.md v3.3)
 - [ ] Sweet spot: ¿cuántos enrichment calls valen la pena con $10/mes?
-- [ ] Estrategia de optimización concreta (una o dos que sean implementables en 1-2 días)
+- [ ] Estrategia de optimización concreta (Hito 23: apagar hashtag-top/recent/reels)
 
 ### Prioridad 3 — Validación de código
-- [ ] 33/33 tests pass
+- [ ] 33/33 + tests de Hito 21 pasan
 - [ ] Lua script de `reserve_and_record` está bien
 - [ ] El replay mode funciona correctamente (nunca hace network call en modo replay)
 
 ### Prioridad 4 — Producto listo
-- [ ] ¿Está el sistema listo para producción con créditos reales de HikerAPI Start?
+- [ ] Validar fail-fast con saldo agotado (run termina en `failed` con mensaje de recarga)
 - [ ] ¿Cuántos runs de prueba podemos hacer con $20 de balance prepago?
 - [ ] ¿Cuándo debemos alertar al usuario que recargue?
 
@@ -324,16 +326,15 @@ Sé brutalmente honesto. Enfócate en:
 
 ## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` (v3.3 — tiene el análisis de costos completo)
-2. Lee `packages/shared-core/shared_core/config.py` → busca `HIKERAPI_COST_PER_CALL_USD`
-3. Cambia el valor a `$0.02` y verifica que todo compile
-4. Lee `apps/api/app/core/budget_fuse.py` → verifica el Lua script
-5. Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py`
-6. Reporta: costo real por run, runs posibles con $10/mes, y si el sistema está listo para producción
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.4 — tiene el análisis de costos completo + Hito 21)
+2. Lee `docs/HITO21_CAMBIOS.md` → entender qué se arregló
+3. Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py apps/api/tests/test_budget_fuse.py -v`
+4. Valida fail-fast: encola un run con saldo agotado → debe terminar en `failed` con mensaje claro
+5. Reporta: costo real por run, runs posibles con $10/mes, y si el sistema está listo para producción
 
 **Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 
 ---
 
-*Documento generado: 2026-08-17 — Quinta auditoría LENS post-Hitos 1-20 + Bonus 1*
+*Documento generado: 2026-08-17 — Quinta auditoría LENS post-Hitos 1-21 + Bonus 1*
 *Para: Claude Code Opus 5 / Senior Full-Stack Developer*

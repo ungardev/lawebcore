@@ -1,9 +1,9 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.3)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.4)
 
-> **Versión:** 3.3 — 2026-08-17
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.2 (`880da7d`)
-> **Commit de referencia:** `a3cee52` (Hitos 1-20 + Bonus 1 aplicados)
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera)
+> **Versión:** 3.4 — 2026-08-17
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.3 (`c295e86`)
+> **Commit de referencia:** `c295e86` (Hitos 1-20 + Bonus 1 aplicados)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17)
 
 ---
 
@@ -283,6 +283,40 @@ CONCLUSIÓN: $10/mes permite ~6-8 runs completos con enrichment,
 o ~16 runs de solo discovery (sin enriquecer perfiles).
 ```
 
+### 5.4.1 Modelo de Contabilidad Único (Hito 21)
+
+**Problema antes de Hito 21:**
+- `reserve_and_record()` en worker.py incremented both run counter AND monthly spend
+- `_record_if_applicable()` in hikerapi_client.py ALSO incremented monthly spend
+- **Resultado:** doble conteo del gasto mensual ($0.04/call en vez de $0.02)
+- Caché hit cobraba (reserve corría antes de verificar caché)
+- Redis restart borraba SHA → evalsha fallaba → `return True` (fail-open silencioso)
+- `MAX_CALLS_PER_RUN` solo cubría enrichment (discovery no se contaba)
+
+**Solución (Hito 21):** `_get()` en `HikerAPIClient` es el **ÚNICO** punto de contabilidad.
+
+```
+HikerAPIClient._get():
+    1. breaker.can_proceed()     ← ¿fuente disponible?
+    2. ¿caché? → return (sin cobrar)
+    3. ¿replay? → ReplayMiss (sin cobrar)
+    4. reserve_and_record()      ← ÚNICO punto de cobro
+    5. HTTP request
+```
+
+**Beneficios:**
+- ✅ Sin doble conteo (un solo sitio)
+- ✅ Caché no cobra (reserva después de cache check)
+- ✅ Replay mode cuesta $0 de verdad
+- ✅ Discovery + enrichment ambos consumen `MAX_CALLS_PER_RUN` (cap real)
+- ✅ Fail closed ante error de Redis (return False, no True)
+- ✅ Fallback NOSCRIPT si Redis reinicia
+
+**Log events nuevos:**
+- `budget_fuse_noscript_fallback` — Redis reinició o SCRIPT FLUSH ejecutado
+- `budget_fuse_reserve_error_failing_closed` — Redis caído, fusible cerrado
+- `enrichment_budget_capped` — run se marca `partial` al alcanzar tope
+
 ### 5.5 Guards implementados contra sobre-costo
 
 ```
@@ -363,10 +397,10 @@ def real_cost_per_run(
 │  GET /v1/user/about               (fraude, OFF)   │
 └────────────────────────────────────────────────────────┘
 
-⚠️ NOTA: El campo HIKERAPI_COST_PER_CALL_USD=0.0006 en config
-corresponde a un plan legacy. Debe actualizarse a 0.02
-para reflejar el plan "Start" real y que BudgetFuse funcione
-correctamente. Ver Issue #COS-001.
+⚠️ NOTA: El campo HIKERAPI_COST_PER_CALL_USD=0.02 en config
+refleja el plan "Start" real ($0.02/request). BudgetFuse ahora
+funciona correctamente con el costo real. El modelo de contabilidad
+cambió en Hito 21: un solo punto de cobro en HikerAPIClient._get().
 ```
 
 ---
@@ -386,7 +420,7 @@ DEEPSEEK_API_KEY=sk-***      # ~$0.001/1K tokens
 MONTHLY_BUDGET_USD=10.0       # Corte mensual hard
 MAX_CALLS_PER_RUN=120          # Máximo de requests por run (c/limiter Lua)
 BUDGET_ALERT_THRESHOLD=0.7     # Warning al 70% ($7.00)
-HIKERAPI_COST_PER_CALL_USD=0.02  # ⚠️ CORREGIR: era 0.0006 (legacy)
+HIKERAPI_COST_PER_CALL_USD=0.02  # Plan Start real — $0.02/req
 HIKERAPI_5XX_BREAKER_THRESHOLD=5  # 5xx consecutivos → breaker abre
 HIKERAPI_5XX_BREAKER_TTL_S=300    # Segundos en estado OPEN (3×TTL=900s HALF_OPEN)
 
@@ -477,13 +511,14 @@ lens:profile:{fingerprint}
 | 18 | `b5e404e` | Vocabulario hardcodeado | 3 JSONB cols + defaults |
 | 19 | `a5da503` | orchestrator.state memory leak | LRU/TTL OrderedDict |
 | 20 | `611d22e` | test_hashtag_cap_30 + test_result_ranker rotos | Arreglados |
+| 21 | `hito21` | Doble conteo + caché cobra + fail-open | Single accounting en _get() + NOSCRIPT fallback + fail-closed |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
 ### 9.2 Abiertos
 
 | Issue | Prioridad | Detalle |
 |-------|-----------|---------|
-| HIKERAPI_COST_PER_CALL_USD legacy | **ALTA** | Config dice 0.0006, plan real es $0.02 — debe actualizarse |
+| HIKERAPI_COST_PER_CALL_USD legacy | ~~**ALTA**~~ ✅ | **RESUELTO** en config.py + Hito 21 |
 | Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad de candidatos |
 | discovery_runs.metadata sin `partial` en enum | **Alta** | Migración 104 debe ejecutarse |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; endpoints de discovery aún no filtran |
@@ -517,14 +552,15 @@ healthcheckPath = "/api/v1/health"
 |--------|-----------|----------------|
 | `exceptions.py` | `packages/discovery/discovery/` | SourceUnavailable, TransientSourceError, BudgetExhausted, ReplayMiss |
 | `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | Singleton CLOSED→OPEN→HALF_OPEN, Redis, TTL×3 |
-| `budget_fuse.py` | `apps/api/app/core/` | Budget enforcement + Lua atómico `reserve_and_record` |
+| `budget_fuse.py` | `apps/api/app/core/` | Budget enforcement + Lua atómico + NOSCRIPT fallback + fail-closed |
 | `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `_job_id` + check de dedup |
-| `hikerapi_client.py` | `packages/discovery/discovery/tools/` | `_get()` con record_call universal, replay mode, breaker singleton |
+| `hikerapi_client.py` | `packages/discovery/discovery/tools/` | `_get()` con single accounting point (Hito 21), replay, breaker |
 | `orchestrator.py` | `packages/discovery/discovery/` | LRU/TTL en state cache |
 | `geo_boost.py` | `packages/discovery/discovery/scoring/` | geo_score con `target_country` explícito |
 | `lens_score.py` | `packages/discovery/discovery/scoring/` | lens_score con `target_country` kwarg |
 | `00000000000104_...sql` | `supabase/migrations/` | Enum `discovery_run_status` + `partial` |
 | `00000000000105_...sql` | `supabase/migrations/` | 3 JSONB cols en `discovery_profiles` |
+| `test_budget_fuse.py` | `apps/api/tests/` | Tests Hito 21: single accounting, NOSCRIPT, fail-closed, partial |
 
 ---
 
@@ -540,4 +576,4 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-*Documento generado: 2026-08-17 — Arquitectura LENS v3.3 (20 hitos + Bonus 1 aplicados). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
+*Documento generado: 2026-08-17 — Arquitectura LENS v3.4 (21 hitos + Bonus 1 aplicados). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*

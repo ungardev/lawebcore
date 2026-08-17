@@ -5,11 +5,21 @@ Tracks cumulative monthly spend per provider in Redis and enforces:
   - MAX_CALLS_PER_RUN: per-run call limit
   - BUDGET_ALERT_THRESHOLD: warn at this % of monthly budget
 
+Accounting model (hito 21):
+    `reserve_and_record()` is the SINGLE point where a call is booked. It
+    atomically increments both the per-run counter and the monthly spend.
+    It is called from HikerAPIClient._get(), after the cache lookup misses
+    and before the HTTP request — so cached responses are never charged.
+
+    `record_call()` is kept for non-HikerAPI providers only. Never call it
+    for a call that already went through reserve_and_record(): that double
+    counts the monthly spend.
+
 Usage:
     fuse = BudgetFuse()
-    await fuse.assert_budget_available(run_id)  # raises BudgetExhausted
-    await fuse.record_call("hikerapi", cost_usd=0.0006)
-    await fuse.get_current_spend()  # {this_month_usd, pct_used, ...}
+    await fuse.assert_budget_available(run_id)   # raises BudgetExhausted
+    allowed = await fuse.reserve_and_record(run_id)  # False if run cap hit
+    await fuse.get_current_spend()               # {this_month_usd, pct_used, ...}
 """
 
 from dataclasses import dataclass
@@ -58,7 +68,7 @@ end
         monthly_budget_usd: float = 10.0,
         max_calls_per_run: int = 120,
         alert_threshold: float = 0.7,
-        cost_per_call_usd: float = 0.0006,
+        cost_per_call_usd: float = 0.02,  # HikerAPI plan "Start" — ver config.py
     ):
         self.monthly_budget_usd = monthly_budget_usd
         self.max_calls_per_run = max_calls_per_run
@@ -88,6 +98,10 @@ end
 
         This closes the TOCTOU race where concurrent coroutines could all
         read counter < limit before any incremented it.
+
+        This is the SINGLE accounting point: it books both the run counter
+        and the monthly spend. Do not also call record_call() for the same
+        request — that double counts (hito 21).
         """
         month_key = self._month_key(provider)
         run_key = self._run_key(run_id)
@@ -96,16 +110,23 @@ end
 
         try:
             r = await self._get_redis()
-            sha = await self._get_lua_sha(r)
-            result = await r.evalsha(
-                sha,
-                2,  # number of keys
-                run_key,
-                month_key,
-                self.max_calls_per_run,
-                cost,
-                ttl,
-            )
+            try:
+                sha = await self._get_lua_sha(r)
+                result = await r.evalsha(
+                    sha, 2, run_key, month_key,
+                    self.max_calls_per_run, cost, ttl,
+                )
+            except Exception as e:
+                # NOSCRIPT: Redis restarted or SCRIPT FLUSH wiped the cache.
+                # Fall back to EVAL, which re-registers the script.
+                if "NOSCRIPT" not in str(e).upper():
+                    raise
+                logger.warning("budget_fuse_noscript_fallback")
+                self._lua_sha = None
+                result = await r.eval(
+                    self._RESERVE_AND_RECORD_SCRIPT, 2, run_key, month_key,
+                    self.max_calls_per_run, cost, ttl,
+                )
             allowed = int(result) == 1
             if allowed:
                 logger.info(
@@ -123,8 +144,11 @@ end
                 )
             return allowed
         except Exception as e:
-            logger.warning("budget_fuse_reserve_error", error=str(e))
-            return True  # fail open on Redis errors
+            # Fail CLOSED (hito 21). A $0.02/call provider with a broken fuse
+            # can burn the whole monthly budget in one run. Redis is already a
+            # hard dependency (ARQ), so blocking here costs nothing extra.
+            logger.error("budget_fuse_reserve_error_failing_closed", error=str(e))
+            return False
 
     def _month_key(self, provider: str) -> str:
         import datetime

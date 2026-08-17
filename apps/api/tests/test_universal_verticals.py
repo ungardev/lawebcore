@@ -95,7 +95,7 @@ class TestUniversalVerticals:
             "locationName": "Bogotá",
         }
         geo_indicators = ["colombia", "bogota", "medellin", "cali", "barranquilla"]
-        score = geo_score(co_profile, geo_indicators)
+        score = geo_score(co_profile, geo_indicators, target_country="CO")
         assert score == 1.0, "Colombian profile in target country should score 1.0"
 
     def test_geo_score_mexico_for_mexican_profile(self):
@@ -107,7 +107,7 @@ class TestUniversalVerticals:
             "locationName": "CDMX",
         }
         geo_indicators = ["mexico", "cdmx", "guadalajara", "monterrey"]
-        score = geo_score(mx_profile, geo_indicators)
+        score = geo_score(mx_profile, geo_indicators, target_country="MX")
         assert score == 1.0, "Mexican profile in target country should score 1.0"
 
     def test_geo_score_panama_for_panama_profile(self):
@@ -119,7 +119,7 @@ class TestUniversalVerticals:
             "locationName": "Ciudad de Panamá",
         }
         geo_indicators = ["panama", "ciudad de panama", "david"]
-        score = geo_score(pa_profile, geo_indicators)
+        score = geo_score(pa_profile, geo_indicators, target_country="PA")
         assert score == 1.0, "Panamanian profile should score 1.0 for PA target"
 
     def test_geo_score_rejects_wrong_country(self):
@@ -131,8 +131,8 @@ class TestUniversalVerticals:
             "locationName": "Caracas",
         }
         co_indicators = ["colombia", "bogota", "medellin"]
-        score = geo_score(wrong_profile, co_indicators)
-        assert score < 1.0, "VE profile should NOT score 1.0 for CO target"
+        score = geo_score(wrong_profile, co_indicators, target_country="CO")
+        assert score == 0.0, "VE profile should NOT score 1.0 for CO target (explicit target_country=CO)"
 
     def test_geo_score_unknown_country_defaults_to_latam_signal(self):
         profile = {
