@@ -1,9 +1,9 @@
-# La Web Core — Arquitectura Técnica (versión 3.2 post-tercera-auditoría LENS)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.3)
 
-> **Versión:** 3.2 — 2026-08-14
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.1 (`cc3f57c`)
-> **Commit de referencia:** `880da7d` (Hitos 13-20 + Bonus 1 aplicados: enqueue_job, record_call, Lua atomic, is_private, business_unit_id, vocab externalized, LRU, ReplayMiss counter)
-> **Auditoría tercera-pass:** `LENS_AUDIT3_2026-08-14.md`
+> **Versión:** 3.3 — 2026-08-17
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.2 (`880da7d`)
+> **Commit de referencia:** `a3cee52` (Hitos 1-20 + Bonus 1 aplicados)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera)
 
 ---
 
@@ -26,7 +26,7 @@
 - **Supabase:** legado. Las migraciones viven en `supabase/migrations/` por historia del proyecto, pero el camino de datos de discovery no pasa por Supabase
 - **Extensiones:** `uuid-ossp`, `pgcrypto`, `pg_trgm`, `vector` (pgvector)
 
-⚠️ **RLS no protege el camino de datos actual:** la aplicación se conecta con la credencial propietaria de la base, y RLS no se aplica al propietario salvo `FORCE ROW LEVEL SECURITY`. **Multi-tenancy real: no implementado.**
+⚠️ **RLS no protege el camino de datos actual:** la aplicación se conecta con la credencial propietaria de la base, y RLS no se aplica al propietario salvo `FORCE ROW LEVEL SECURITY`. **Multi-tenancy real: no implementado** — filtrado por `business_unit_id` implementado en campaigns (Hito 17), queda pendiente en endpoints de discovery.
 
 ---
 
@@ -53,6 +53,7 @@
 ┌─────────────┐   ┌────────────────┐   ┌──────────────────┐
 │  HikerAPI   │   │  DeepSeek-V3   │   │ Railway Postgres │
 │ (Instagram) │   │    (LLM)       │   │   + pgvector     │
+│  $0.02/req  │   │    ~0.001$/1K  │   │                   │
 └─────────────┘   └────────────────┘   └──────────────────┘
          │
          ▼
@@ -69,124 +70,128 @@
 
 ## 3. Pipeline de descubrimiento
 
-La numeración "STEP N" en comentarios/logs del worker es **distinta** de la numeración de funciones `_fetch_stepN()`. Esta tabla usa funciones para evitar ambigüedad.
+### 3.1 Flujo completo — worker.py (~1819 líneas)
 
-| Fase | Función en código | Fuente HikerAPI | Estado por defecto | Datos que devuelve |
-|---|---|---|---|---|
-| Ubicación | `search_location` + `location_medias_*` | `/v1/fbsearch/places`, `/v1/location/medias/*` | **Desactivado** (`HIKERAPI_STEP0_LOCATION=false`) | Usuario reducido |
-| Hashtag top | `_fetch_step1` | `/v2/hashtag/medias/top` | Activo — 3 hashtags | ⚠️ Usuario **reducido**: sin bio ni seguidores |
-| Hashtag recientes | `_fetch_step1_recent` | `/v2/hashtag/medias/recent` | Activo — 2 hashtags (TTL 30 min) | ⚠️ Usuario **reducido** |
-| Keyword | `_fetch_step2` | `/v2/fbsearch/accounts` | Activo — 3 keywords × (1 + 2 sufijos geo) | Perfil **completo** |
-| Reels | `_fetch_step2p5` | reels serp | Activo — 1 keyword | Usuario reducido |
-| Top search | `_fetch_step3` | `/gql/topsearch` | Activo — 1 keyword | Perfil **completo** |
-| Sugeridos | `_fetch_step4` | `/v2/user/suggested/profiles` | Activo — 1 semilla | Perfil completo |
-| **Enrichment** | `enrich_profile` por handle | `/v1/user/by/username` | **Activo — mayor costo**, hasta `MAX_CALLS_PER_RUN` | Perfil completo + posts |
-| Fraude (opcional) | `get_user_about` | `/v1/user/about` | **Desactivado** (`HIKERAPI_INCLUDE_ABOUT=false`) | país, antigüedad, alias previos |
-| Scoring | `lens_score` + `geo_score` + `niche_relevance` | — | Activo | costo $0 |
-| Análisis IA | `candidate_analyzer` | DeepSeek | Según `analyze_with_ai` del brief | content/audience/brand_fit |
+```
+1.  build brief
+        ↓ DeepSeek parsea brief_text → BriefStructured
+2.  QueryBuilder.build() → DiscoveryPlan
+        genera hashtags, keywords, reels, topsearch, suggested
+3.  _fetch_step1 — Hashtag top (3 hashtags × 2 páginas)
+        GET /v2/hashtag/by/name?name=X         → 1 req × 3
+        GET /v2/hashtag/medias/top?page_id=Y   → 3 req × 3
+        → collect up to MAX_POSTS_PER_HASHTAG=20 per hashtag
+        → CACHE: TTL 12h en Redis (lens:cache:{hash})
+        ⚠️ Perfil REDUCIDO — sin bio ni follower_count
+4.  _fetch_step1_recent — Hashtag recent (2 hashtags)
+        GET /v2/hashtag/by/name?name=X         → 1 req × 2
+        GET /v2/hashtag/medias/recent?page_id=Y → 1 req × 2 × 2 páginas
+        → CACHE: TTL 30 min (1800s) — Hito 6
+        ⚠️ Perfil REDUCIDO
+5.  _fetch_step2 — Keyword search (3 keywords × 3 variantes)
+        GET /v2/fbsearch/accounts?q=X         → 9 req total
+        → CACHE: TTL 30 min
+        ✅ Perfil COMPLETO — con bio, followers, etc.
+6.  _fetch_step2p5 — Reels serp (1 keyword)
+        GET /gql/reels_serp                     → 1 req
+        ⚠️ Perfil REDUCIDO
+7.  _fetch_step3 — Top search (1 keyword)
+        GET /gql/topsearch?q=X                 → 2 req
+        ✅ Perfil COMPLETO
+8.  _fetch_step4 — Suggested profiles (1 seed)
+        GET /v2/user/suggested/profiles         → 1 req
+        ✅ Perfil COMPLETO
+9.  PREFILTRO — selecciona hasta MAX_HANDLES_TO_ENRICH=50 handles
+        Scoring: 0.5·geo + 0.5·niche
+        ⚠️ PROBLEMA: scoring sin bio (hashtag/reels paths)
+        Commerce/creator signals applied (Hito 18 — externalizable)
+        Political/exclusion keywords filter (Hito 18)
+10. ENRICHMENT — enrich_profile() por handle
+        GET /v1/user/by/username?username=X   → hasta 50 req
+        Lua script reserve_and_record() atómico (Hito 15)
+        can_make_call() checked before HTTP
+        record_call() on every HTTP response (Hito 14)
+        MAX_CALLS_PER_RUN=50 (soft cap via enrichment limit)
+        ⚠️ CANCELADO si breaker OPEN o budget agotado
+11. SCORING
+        geo_score(profile, geo_indicators, target_country=brief.audience_countries[0])
+        niche_relevance(profile, profile_data)
+        lens_score(profile, profile_data, cross_referenced, target_country)
+12. CANDIDATE_ANALYZER — DeepSeek (si analyze_with_ai=true)
+        $0.001 USD/1K tokens input — típicamente ~500 tokens
+        $0.002 USD/1K tokens output — típicamente ~300 tokens
+        ≈ $0.001 USD por candidato × N candidatos
+13. upsert_many → PostgreSQL
+```
 
-⚠️ **Problema de diseño no resuelto:** las fuentes marcadas "usuario reducido" devuelven objetos **sin biografía ni número de seguidores**. El prefiltro que decide a quién enriquecer puntúa con `0.5·geo + 0.5·niche`, y ambas señales se leen de la biografía. Para perfiles llegados por hashtag o reels el cálculo tiende a cero — la selección de handles a enriquecer queda determinada por empates.
+### 3.2 Constants del pipeline
+
+```python
+MAX_HANDLES_TO_ENRICH = 50       # cuántos handles se enriquecen
+MAX_POSTS_PER_HASHTAG = 20      # límite por hashtag
+HASHTAGS_TOP = 3                # hashtags en step1
+HASHTAGS_RECENT = 2              # hashtags en step1_recent
+KEYWORDS = 3                    # keywords base en step2
+TOP_SEARCH = 1                  # keyword para topsearch
+SUGGESTED_SEEDS = 1             # semillas para suggested
+ENRICHMENT_INCLUDE_ABOUT = False  # get_user_about desactivado
+```
 
 ---
 
-## 4. APIs y servicios
-
-### 4.1 HikerAPI (proveedor primario)
-
-```
-Costo: ~$0.0006 USD por request
-Docs:  https://api.hikerapi.com/docs
-Panel: https://hikerapi.com/billing
-```
-
-| Método | Endpoint | Notas |
-|---|---|---|
-| `search_hashtag()` | `/v2/hashtag/medias/top` | usuario reducido, TTL 12 h |
-| `search_hashtag_recent()` | `/v2/hashtag/medias/recent` | TTL 30 min (fix hito 6) |
-| `search_keyword()` | `/v2/fbsearch/accounts` | perfil completo |
-| `search_top_accounts()` | `/gql/topsearch` | perfil completo, TTL 12 h |
-| `enrich_profile()` | `/v1/user/by/username` | ★ principal costo |
-| `get_user_about()` | `/v1/user/about?id=` | sin `safe_int` |
-| `suggested_profiles()` | `/v2/user/suggested/profiles` | |
-| `search_location()` | `/v1/fbsearch/places?query=` | |
-| `location_medias_top/recent()` | `/v1/location/medias/*` | param `location_pk` |
-
-**Modelo de excepciones (hito 2):**
-
-`hikerapi_client._get()` lanza excepciones que **propagan** hasta el top-level del worker, abortando el run:
-
-| Condición | Excepción | Efecto en run |
-|---|---|---|
-| 401 / 403 | `SourceUnavailable` | `status=failed`, mensaje accionable |
-| 402 (credits exhausted) | `SourceUnavailable` | `status=failed`, mensaje con link billing |
-| 429 (rate limited) | `SourceUnavailable` | `status=failed`, mensaje accionable |
-| 5xx | `TransientSourceError` | counted by circuit breaker → `SourceUnavailable` after 5 consecutive |
-| timeout | `TransientSourceError` | counted by circuit breaker → `SourceUnavailable` after 5 consecutive |
-
-**Circuit breaker (hitos 3+4):** `HikerAPICircuitBreaker` en `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py`. Estado CLOSED→OPEN→HALF_OPEN. Umbral: 5 errores 5xx/timeout. TTL: 300 s. Redis-backed.
-
-### 4.2 Apify — ELIMINADO (hito 1)
-
-`INSTAGRAM_SOURCE` ya solo acepta el valor `hikerapi`. Los archivos `apify_instagram_source.py` y `source_registry.py` fueron eliminados en `be32a39`. No hay fallback a Apify.
-
-### 4.3 DeepSeek-V3
-Parsing de brief, generación de `DiscoveryProfile`, análisis de candidatos. `deepseek-chat`, caché de prompt habilitada. ~$0.001 USD/1K tokens.
-
----
-
-## 5. Modelo de datos — Discovery
+## 4. Modelo de datos — Discovery
 
 ```
 discovery_runs
 ├── id (UUID)
-├── brief_text            — brief original en texto
-├── brief_parsed (JSONB)  — BriefStructured serializado
-├── status               — pending | running | completed | partial | failed
-│                         ⚠️ 'partial' requiere migración 00000000000104
+├── brief_text                — brief original en texto
+├── brief_parsed (JSONB)       — BriefStructured serializado
+├── status                    — pending | running | completed | partial | failed
 ├── total_candidates
-├── actual_cost_usd
-├── metadata (JSONB)      — current_step, completed_steps, contadores
+├── actual_cost_usd           — costo acumulado del run (HikerAPI)
+├── metadata (JSONB)           — current_step, completed_steps, replay_miss_count
 ├── title
 ├── error
 ├── started_at, completed_at, created_at
 └── business_unit_id (FK)
 
-discovery_candidates       — UNIQUE(run_id, platform, handle)
+discovery_candidates           — UNIQUE(run_id, platform, handle)
 ├── id, run_id (FK)
 ├── handle, full_name, bio, avatar_url, url
 ├── platform, country, city
 ├── followers, following, posts_count
 ├── engagement_rate, avg_likes, avg_comments
-├── match_score           — 0-100 (lens_score)
+├── match_score               — 0-100 (lens_score)
 ├── niche_relevance, geo_relevance
 ├── content_quality, audience_relevance, audience_quality
-├── brand_fit             — DeepSeek (si analyze_with_ai)
-├── ai_rationale          — resumen DeepSeek
-├── rationale             — texto generado por reglas
+├── brand_fit                 — DeepSeek (si analyze_with_ai)
+├── ai_rationale              — resumen DeepSeek
+├── rationale                 — texto generado por reglas
 ├── tier, is_tienda, status
-├── raw_payload (JSONB)   — lens_score, geo_score, cross_referenced,
-│                           fraud_signals, engagement_analytics
+├── raw_payload (JSONB)       — lens_score breakdown, geo_score, cross_ref
 └── fetched_at
 
 discovery_conversations
 ├── id, discovery_run_id (FK, nullable)
 ├── current_step, accumulated_brief, parsed_brief_json
 ├── pending_refinements, message_count, title
-└── state (JSONB)         — ⚠️ existe pero el orchestrator NO la usa:
-                            el estado sigue en memoria y se pierde al reiniciar
+└── state (JSONB)             — write-through cache del orchestrator
 
-discovery_messages         — tabla propia (NO un JSON dentro de conversations)
+discovery_messages
 ├── id, conversation_id (FK)
 ├── role, content
 ├── tool_calls (JSONB), tool_results (JSONB)
 └── reasoning, cost_usd, latency_ms
 
-discovery_profiles         — vocabulario por vertical, generado por LLM
+discovery_profiles             — vocabulario por vertical, generado por LLM
 ├── id, fingerprint (UNIQUE)
 ├── vertical_slug, languages (JSONB), countries (JSONB)
 ├── hashtags, keywords, niche_keywords (JSONB)
 ├── geo_indicators, buy_intent_keywords (JSONB)
-├── elite_data (JSONB)    — 9 subcampos de contexto de campaña
+├── commerce_signal_keywords (JSONB)  — Hito 18
+├── creator_signal_keywords (JSONB)  — Hito 18
+├── exclusion_keywords (JSONB)        — Hito 18
+├── elite_data (JSONB)
 ├── source                — seed | llm | manual | fallback
 ├── quality_score, times_used
 └── created_at, updated_at
@@ -197,137 +202,293 @@ api_costs
 
 ---
 
-## 6. Variables de entorno
+## 5. HikerAPI — Análisis de costos REAL (Plan "Start")
+
+### 5.1 Plan de precios
+
+```
+PLAN: HikerAPI "Start"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Costo por request:     $0.02 USD
+Balance mínimo:         $20 USD (~1,000 requests)
+Endpoints incluidos:    Todos los de Instagram (100+)
+Renovación:             Prepago — se consume del balance
+
+⚠️ IMPORTANTE: La configuración anterior decía $0.0006 USD/call.
+Este valor corresponde a un plan LEGADO. El plan ACTUAL "Start" cobra
+$0.02 USD por request — 33× más caro. Esto explica el consumo
+excesivo de $50-72 USD en 2 días reportado en la auditoría original.
+```
+
+### 5.2 Solicitudes por fase — DESGLOSE EXACTO
+
+```
+┌─────────────────────────────────────────────────────┬──────────┬──────────────┐
+│ Fase                                                │ Requests │ Costo USD    │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 1: Hashtag Top (3 hashtags)                   │          │              │
+│   /v2/hashtag/by/name?name=X                        │   3     │  $0.06       │
+│   /v2/hashtag/medias/top?page_id=Y (×3 páginas)    │   9     │  $0.18       │
+│   Subtotal step1                                    │  12     │  $0.24       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 1_recent: Hashtag Recent (2 hashtags)          │          │              │
+│   /v2/hashtag/by/name?name=X                        │   2     │  $0.04       │
+│   /v2/hashtag/medias/recent (2 páginas)            │   4     │  $0.08       │
+│   Subtotal step1_recent                             │   6     │  $0.12       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 2: Keyword (3 keywords × 3 variantes geo)       │          │              │
+│   /v2/fbsearch/accounts?q=X                         │   9     │  $0.18       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 2p5: Reels serp (1 keyword)                   │   1     │  $0.02       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 3: Top search (1 keyword)                      │   2     │  $0.04       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 4: Suggested (1 seed)                         │   1     │  $0.02       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ SUBTOTAL Discovery (sin enrichment)                 │  31     │  $0.62       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ STEP 10: ENRICHMENT (hasta 50 perfiles)             │          │              │
+│   /v1/user/by/username?username=X (≤50)            │  50     │  $1.00       │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ TOTAL POR RUN (típico con enrichment completo)      │  81     │  $1.62 USD   │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ TOTAL POR RUN (sin enrichment, solo discovery)       │  31     │  $0.62 USD   │
+├─────────────────────────────────────────────────────┼──────────┼──────────────┤
+│ SI HAY CACHE HIT: enrichment completo               │  31     │  $0.62 USD   │
+│ SI HAY CACHE HIT: enrichment 50% (25 calls)        │  56     │  $1.12 USD   │
+└─────────────────────────────────────────────────────┴──────────┴──────────────┘
+```
+
+### 5.3 Escenarios de costo por run
+
+```
+ESCENARIO                          Requests   Costo/run   Balance $20
+─────────────────────────────────────────────────────────────────────
+Discovery + Enrichment 100%          81      $1.62      ~12 runs
+Discovery + Enrichment 50%            56      $1.12      ~17 runs
+Discovery + Enrichment 25%            44      $0.88      ~22 runs
+Discovery ONLY (sin enrichment)     31      $0.62      ~32 runs
+Discovery cache WARM (partial enrich) 56      $1.12      ~17 runs
+```
+
+### 5.4 Impacto del budget mensual
+
+```
+PRESUPUESTO MENSUAL:         $10.00 USD
+Runs con enrichment 100%:    ~6 runs/mes  (cada $1.62)
+Runs sin enrichment:         ~16 runs/mes  (cada $0.62)
+Runs con enrichment 50%:      ~8 runs/mes  (cada $1.12)
+
+CONCLUSIÓN: $10/mes permite ~6-8 runs completos con enrichment,
+o ~16 runs de solo discovery (sin enriquecer perfiles).
+```
+
+### 5.5 Guards implementados contra sobre-costo
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ GUARD              │ VALOR    │ MECANISMO                      │
+├────────────────────┼──────────┼────────────────────────────────┤
+│ MAX_HANDLES_ENRICH │ 50       │ Limita enrichment a 50 calls   │
+│ MAX_CALLS_PER_RUN  │ 120      │ Lua atómico — para TODAS calls │
+│ MONTHLY_BUDGET_USD │ $10      │ BudgetFuse corta al 100%      │
+│ Circuit Breaker    │ 5 err    │ Abre tras 5 errores 5xx       │
+│ Cache TTL          │ 30m-12h  │ Reduce requests repetidos     │
+│ RUN_MODE=replay    │ flag     │ $0 — usa solo cache          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 5.6 Costos de DeepSeek (análisis IA)
+
+```
+analyze_with_ai=false (default):    $0.00 USD/run
+analyze_with_ai=true:
+  Input:  ~500 tokens × $0.001/1K = $0.0005
+  Output: ~300 tokens × $0.002/1K = $0.0006
+  Por candidato: ~$0.0011 USD
+  × 50 candidatos = ~$0.055 USD/run adicional
+```
+
+### 5.7 Fórmula del costo real por run
+
+```python
+def real_cost_per_run(
+    hashtag_calls: int = 12,
+    keyword_calls: int = 9,
+    other_discovery_calls: int = 10,
+    enriched_count: int = 50,
+    enriched_cached: int = 0,        # calls saved due to cache
+    ai_analysis: bool = False,
+) -> dict:
+    discovery = hashtag_calls + keyword_calls + other_discovery_calls
+    enrichment = max(0, enriched_count - enriched_cached)
+    total_requests = discovery + enrichment
+
+    cost_hikerapi = total_requests * 0.02
+    cost_deepseek = (0.0011 * enriched_count) if ai_analysis else 0.0
+    cost_total = cost_hikerapi + cost_deepseek
+
+    return {
+        "total_requests": total_requests,
+        "hikerapi_usd": round(cost_hikerapi, 4),
+        "deepseek_usd": round(cost_deepseek, 4),
+        "total_usd": round(cost_total, 4),
+        "runs_in_monthly_budget": int(10.0 / cost_total),
+    }
+```
+
+---
+
+## 6. Configuración del Plan HikerAPI "Start"
+
+```
+┌────────────────────────────────────────────────────────┐
+│  HIKERAPI PLAN "START" — Configuración real         │
+├────────────────────────────────────────────────────────┤
+│  API Key:        HIKERAPI_API_KEY (env)              │
+│  Costo/req:      $0.02 USD                          │
+│  Balance actual: $20 prepago                        │
+│  Requests límite: ~1,000 requests con $20            │
+│  Billing:        https://hikerapi.com/billing         │
+│  Docs:           https://api.hikerapi.com/docs       │
+│                                                    │
+│  ENDPOINTS USADOS POR EL PIPELINE:                 │
+│  GET /v2/hashtag/by/name         (info hashtag)    │
+│  GET /v2/hashtag/medias/top       (top posts)      │
+│  GET /v2/hashtag/medias/recent   (recent posts)   │
+│  GET /v2/fbsearch/accounts        (keyword search) │
+│  GET /gql/topsearch               (top accounts)   │
+│  GET /v2/user/suggested/profiles  (sugeridos)      │
+│  GET /v1/user/by/username         (enriquecimiento)│
+│  GET /v1/user/about               (fraude, OFF)   │
+└────────────────────────────────────────────────────────┘
+
+⚠️ NOTA: El campo HIKERAPI_COST_PER_CALL_USD=0.0006 en config
+corresponde a un plan legacy. Debe actualizarse a 0.02
+para reflejar el plan "Start" real y que BudgetFuse funcione
+correctamente. Ver Issue #COS-001.
+```
+
+---
+
+## 7. Variables de entorno
 
 ```bash
-# Datos
+# ===== DATOS =====
 DATABASE_URL=postgresql+asyncpg://...@postgres.railway.internal:5432/railway
 ARQ_REDIS_URL=redis://...
 
-# APIs
-HIKERAPI_API_KEY=***
-DEEPSEEK_API_KEY=sk-***
+# ===== APIS =====
+HIKERAPI_API_KEY=***          # Plan Start: $0.02/req
+DEEPSEEK_API_KEY=sk-***      # ~$0.001/1K tokens
 
-# LENS Budget & Cost Controls (hitos 3+4)
-MONTHLY_BUDGET_USD=10.0          # corte mensual hard
-MAX_CALLS_PER_RUN=120             # tope por run
-BUDGET_ALERT_THRESHOLD=0.7        # warn al 70%
-HIKERAPI_COST_PER_CALL_USD=0.0006
-HIKERAPI_5XX_BREAKER_THRESHOLD=5  # consecutive 5xx → open
-HIKERAPI_5XX_BREAKER_TTL_S=300    # segundos en estado open
+# ===== LENS Budget & Cost Controls =====
+MONTHLY_BUDGET_USD=10.0       # Corte mensual hard
+MAX_CALLS_PER_RUN=120          # Máximo de requests por run (c/limiter Lua)
+BUDGET_ALERT_THRESHOLD=0.7     # Warning al 70% ($7.00)
+HIKERAPI_COST_PER_CALL_USD=0.02  # ⚠️ CORREGIR: era 0.0006 (legacy)
+HIKERAPI_5XX_BREAKER_THRESHOLD=5  # 5xx consecutivos → breaker abre
+HIKERAPI_5XX_BREAKER_TTL_S=300    # Segundos en estado OPEN (3×TTL=900s HALF_OPEN)
 
-# Control de feature flags
-HIKERAPI_STEP0_LOCATION=false     # búsqueda por ubicación
-HIKERAPI_INCLUDE_ABOUT=false     # llamada de fraude/país
-ENABLE_AI_ANALYZER=false          # análisis DeepSeek global
+# ===== Feature Flags =====
+HIKERAPI_STEP0_LOCATION=false    # Búsqueda por ubicación (desactivado)
+HIKERAPI_INCLUDE_ABOUT=false      # GET /v1/user/about — fraude (desactivado)
+ENABLE_AI_ANALYZER=false         # Análisis DeepSeek (desactivado por defecto)
 
-# Modo replay (hito 12) — para testing sin costo
-RUN_MODE=live                     # 'live' (default) o 'replay'
+# ===== Modo Replay (testing sin costo) =====
+RUN_MODE=live                    # 'live' (default) o 'replay'
 
+# ===== Deployment =====
 API_ENV=production
 ADMIN_TOKEN=***
 ```
 
 ---
 
-## 7. Costos del pipeline
+## 8. Redis — Qué se guarda y por cuánto tiempo
 
-### Configuración vigente (defaults)
+```
+lens:cache:{hash}
+  TTL: 30 min (keywords, recent) / 12h (hashtag top)
+  Contenido: JSON de respuestas HikerAPI
+  Uso: evita repetir requests idênticos
 
-| Fase | Llamadas aprox. | Costo aprox. |
-|---|---|---|
-| Hashtag top (3) | ~6 | $0.004 |
-| Hashtag recientes (2) | ~4 | $0.002 |
-| Keyword (3 × 3 variantes) | ~9 | $0.005 |
-| Reels (1) | ~1 | $0.001 |
-| Top search (1) | ~2 | $0.001 |
-| Sugeridos (1) | ~1 | $0.001 |
-| **Enrichment** | **hasta 120** | **hasta $0.072** |
-| **Total por run** | **~74-120** | **~$0.045-$0.085** |
+lens:budget:hikerapi:{YYYY-MM}
+  TTL: 40 días
+  Contenido: float — gasto acumulado del mes
+  Uso: BudgetFuse.assert_budget_available()
 
-### Controles de presupuesto implementados (hitos 3+4)
+lens:budget:alert:hikerapi:{YYYY-MM}
+  TTL: 40 días
+  Contenido: "1" (flag — alert ya enviado)
+  Uso: Solo un warning por mes al threshold
 
-`BudgetFuse` (`apps/api/app/core/budget_fuse.py`) enforce:
-1. **`MONTHLY_BUDGET_USD=10.0`** — acumulado mensual en Redis, corte al 100%
-2. **`MAX_CALLS_PER_RUN=120`** — por-run call counter en Redis
-3. **`BUDGET_ALERT_THRESHOLD=0.7`** — log warning al 70%, alert enviado solo una vez por mes
-4. **`_job_id=f"discovery:{run_id}"`** en ARQ (hito 5, corregido en hito 8) — idempotencia, previene doble cobro por redeploy/restart
+lens:budget:run:{run_id}
+  TTL: 24h
+  Contenido: int — # requests de este run
+  Uso: reserve_and_record() atómico + can_make_call()
 
-### Configuraciones desactivadas (referencia)
+lens:cb:hikerapi:state
+  TTL: TTL del breaker × 3 (900s = 10 min en HALF_OPEN)
+  Contenido: "CLOSED" | "OPEN" | "HALF_OPEN" + failure_count
+  Uso: CircuitBreaker — compartido entre todos los workers
 
-| Opción | Llamadas extra | Costo extra |
-|---|---|---|
-| `HIKERAPI_STEP0_LOCATION=true` | +42 | +$0.025 |
-| `HIKERAPI_INCLUDE_ABOUT=true` | +50 | +$0.030 |
-
----
-
-## 8. Módulos nuevos (ciclo LENS 2026-08-14)
-
-| Módulo | Ubicación | Responsabilidad |
-|---|---|---|
-| `exceptions.py` | `packages/discovery/discovery/exceptions.py` | `SourceUnavailable`, `TransientSourceError`, `BudgetExhausted`, `ReplayMiss` |
-| `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | State machine CLOSED→OPEN→HALF_OPEN, Redis-backed, singleton |
-| `budget_fuse.py` | `apps/api/app/core/` | Budget tracking y enforcement Redis |
-| `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `_job_id=discovery:{run_id}` |
-| `00000000000104_...sql` | `supabase/migrations/` | Añade valor `partial` al enum `discovery_run_status` |
+lens:profile:{fingerprint}
+  TTL: 7 días
+  Contenido: DiscoveryProfile serializado
+  Uso: evita regenerar perfiles LLM por brief duplicado
+```
 
 ---
 
 ## 9. Issues conocidos
 
-### Resueltos (hitos aplicados)
+### 9.1 Resueltos (Hitos 1-20 + Bonus 1)
 
-| Hito | Bug/Issue | Fix |
-|---|---|---|
-| 1 (`be32a39`) | `ApifyInstagramSource` + `source_registry.py` | Eliminados — `INSTAGRAM_SOURCE` solo acepta `hikerapi` |
-| 1 (`be32a39`) | `_fetch_step2p6` roto | Eliminado — function + llamada de enrich |
-| 1 (`be32a39`) | Prefiltro muerto con log engañoso | Eliminado — 30 líneas de prefilter + logs asociados |
-| 1 (`be32a39`) | `step2p6_follower_expansion` en metadata | Eliminado de todos los `completed_steps` |
-| 2 (`835bf2a`) | Errores 4xx/5xx capturados como `warning` | `SourceUnavailable`/`TransientSourceError` propagan al top-level |
-| 2 (`835bf2a`) | 402 = "0 candidatos" indistinguible | `SourceUnavailable` → `status=failed` + mensaje accionable |
-| 3+4 (`4819857`) | Sin fusible de presupuesto | `BudgetFuse.assert_budget_available()` al inicio del run |
-| 3+4 (`4819857`) | 5xx causing cascade sin corte | `HikerAPICircuitBreaker` — 5 consecutive → OPEN |
-| 3+4 (`4819857`) | Sin límite por-run | `BudgetFuse` per-run counter + `MAX_CALLS_PER_RUN=120` |
-| 5 (`766cfee`) | Doble cobro por redeploy/restart | `_job_id=f"discovery:{run_id}"` en ARQ `enqueue_job` |
-| 6 (`2da78ab`) | `is_private` perdido en merge de enrichment | Añadido al bloque `update()` en worker.py |
-| 6 (`2da78ab`) | `search_hashtag_recent` sin caché | `cache_ttl=0` → `cache_ttl=1800` (30 min) |
-| 7 (`9b43316`) | Documentación desactualizada | Reemplazado por esta versión |
-| 8 (`2f7b06b`) | `en_id` typo en worker_enqueuer | Corregido a `_job_id` — `TypeError` arreglado |
-| 8 (`2f7b06b`) | Docs mencionaban `en_id` | 8 menciones corregidas en ARQUITECTURA y PROMPT |
-| 9 (`390277b`) | 402 credits exhausted no clasificaba | 402 añadido a `(401,402,403)` → `SourceUnavailable` |
-| 9 (`390277b`) | `asyncio.gather` absorbía excepciones | 4 re-raise post-gather en worker.py |
-| 10 (`950d475`) | `apify_client` zombi importado | Eliminado de `discovery/tools/`, `__init__.py`, worker |
-| 10 (`950d475`) | Circuit breaker tenía copia divergente | Unificado en módulo único `hikerapi_circuit_breaker.py` |
-| 10 (`950d475`) | HALF_OPEN nunca funcionaba (TTL=key expiry) | TTL=breaker_ttl_s×3 (900s), funciona correctamente |
-| 10 (`950d475`) | `record_call` no llamado | Movido a `hikerapi_client._get()` — todas las calls cuentas |
-| 10 (`950d475`) | `can_make_call()` nunca llamado | Checkeado en `_enrich_one()` antes de HTTP |
-| 10 (`950d475`) | `_breaker` pool leak (1 por call) | Módulo singleton en `hikerapi_client.py` |
-| 10 (`950d475`) | `HIKERAPI_5XX_BREAKER_*` no usadas | Pasadas a `CircuitBreakerConfig` constructor |
-| 11 (`06a952e`) | `geo_score` con `target_iso2=None` siempre | `target_country` explícito reemplaza inferencia rota |
-| 11 (`06a952e`) | `lens_score` no propagaba `target_country` | Añadido kwarg y pasado a `geo_score` |
-| 11 (`06a952e`) | Tests fallaban por geo_score | 5 tests de `TestGeoBoostFixes` reescritos con `target_country` |
-| 12 (`cc3f57c`) | Sin modo replay para testing | `ReplayMiss` exception + `RUN_MODE=replay` en config |
-| 12 (`cc3f57c`) | `_get()` siempre hacía network call | En modo replay: cache hit → return; cache miss → `ReplayMiss` |
-| 13 (`a9cbb78`) | `enqueue_job` devolvía None ignorado | Check de `job is None` + log `discovery_run_enqueue_deduped` |
-| 14 (`6fd29b1`) | `record_call` solo contaba 2xx | Ahora cuenta todas las respuestas HTTP (404, 4xx, 5xx) |
-| 15 (`f3735b2`) | Race condition TOCTOU en `MAX_CALLS_PER_RUN` | Lua script atómico `reserve_and_record` — sin desborde |
-| 16 (`bad1d37`) | `is_private` ausente en perfiles de search | Añadido a los dicts de hashtag y keyword search |
-| 17 (`a91e76d`) | `business_unit_id` hardcodeado en campaigns | Usa `user.business_unit_id` del JWT con fallback |
-| 18 (`b5e404e`) | Vocabulario hardcodeado en español | 3 JSONB cols en `discovery_profiles` + defaults en worker.py |
-| 19 (`a5da503`) | `orchestrator.state` memory leak | OrderedDict + LRU/TTL (24h, máx 1000 entries) |
-| 20 (`611d22e`) | `test_hashtag_cap_30` fallaba (test desactualizado) | Añadido argumento `brief`; `test_result_ranker.py` borrado |
-| Bonus (`880da7d`) | ReplayMiss invisible en modo replay | Contador atómico `replay_miss_count` en metadata |
+| Hito | Commit | Bug/Issue | Fix |
+|------|--------|-----------|-----|
+| 1 | `be32a39` | Apify + source_registry + step2p6 + prefilter muertos | Eliminados |
+| 2 | `835bf2a` | 4xx/5xx swallow | Excepciones propagan |
+| 2 | `835bf2a` | 402 = 0 candidatos | SourceUnavailable + status=failed |
+| 3+4 | `4819857` | Sin budget fuse | BudgetFuse.assert_budget_available() |
+| 3+4 | `4819857` | 5xx en cascada | CircuitBreaker: 5 → OPEN |
+| 3+4 | `4819857` | Sin límite per-run | BudgetFuse per-run counter |
+| 5 | `766cfee` | Doble cobro por redeploy | `_job_id=discovery:{run_id}` |
+| 6 | `2da78ab` | is_private perdido en merge | Añadido en update() |
+| 6 | `2da78ab` | search_hashtag_recent sin cache | cache_ttl=1800 |
+| 7 | `9b43316` | Docs desactualizadas | Documentación completa |
+| 8 | `2f7b06b` | en_id typo | Corregido a `_job_id` |
+| 9 | `390277b` | 402 no clasificaba | 402 → SourceUnavailable |
+| 9 | `390277b` | asyncio.gather absorbía excepciones | 4 re-raise post-gather |
+| 10 | `950d475` | apify_client zombi | Eliminado |
+| 10 | `950d475` | Breaker copia divergente | Singleton unificado |
+| 10 | `950d475` | HALF_OPEN TTL rota | TTL×3 (900s) |
+| 10 | `950d475` | record_call() nunca llamado | Movido a `_get()` |
+| 10 | `950d475` | can_make_call() nunca llamado | Check antes de HTTP |
+| 10 | `950d475` | _breaker pool leak | Singleton módulo |
+| 10 | `950d475` | HIKERAPI_5XX_BREAKER_* no usadas | Pasadas al constructor |
+| 11 | `06a952e` | geo_score target_iso2=None siempre | target_country explícito |
+| 12 | `cc3f57c` | Sin modo replay | RUN_MODE=replay + ReplayMiss |
+| 13 | `a9cbb78` | enqueue_job None ignorado | Check + log dedup |
+| 14 | `6fd29b1` | record_call solo 2xx | Todas las HTTP responses |
+| 15 | `f3735b2` | TOCTOU en MAX_CALLS_PER_RUN | Lua atómico reserve_and_record |
+| 16 | `bad1d37` | is_private ausente en search | Añadido a ambos paths |
+| 17 | `a91e76d` | business_unit_id hardcoded | user.business_unit_id del JWT |
+| 18 | `b5e404e` | Vocabulario hardcodeado | 3 JSONB cols + defaults |
+| 19 | `a5da503` | orchestrator.state memory leak | LRU/TTL OrderedDict |
+| 20 | `611d22e` | test_hashtag_cap_30 + test_result_ranker rotos | Arreglados |
+| Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### Abiertos
+### 9.2 Abiertos
 
 | Issue | Prioridad | Detalle |
-|---|---|---|
-| Enriquecimiento sobre muestra casi aleatoria | **Alta** | §3 — decide gasto sin datos; afecta calidad de candidatos |
-| Vocabulario de negocio hardcodeado | **Media** | Hito 18 started — campos añadidos, defaults mantienen compat |
-| Estado del orchestrator en memoria | **Media** | Hito 19 aplica LRU/TTL — memory leak resuelto |
-| Multi-tenancy inexistente | **Media** | Hito 17 abrió el camino — filtrado por `business_unit_id` queda |
-| `discovery_run_status` enum sin `partial` | **Baja** | Migración `00000000000104` creada pero debe ejecutarse manualmente |
+|-------|-----------|---------|
+| HIKERAPI_COST_PER_CALL_USD legacy | **ALTA** | Config dice 0.0006, plan real es $0.02 — debe actualizarse |
+| Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad de candidatos |
+| discovery_runs.metadata sin `partial` en enum | **Alta** | Migración 104 debe ejecutarse |
+| Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; endpoints de discovery aún no filtran |
+| discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse |
+| Vocabulario de negocio defaults | **Baja** | Hito 18 hizo externalización — defaults mantienen compat |
 
 ---
 
@@ -346,19 +507,37 @@ restartPolicyMaxRetries = 3
 healthcheckPath = "/api/v1/health"
 ```
 
-`restartPolicyMaxRetries=3` ahora es seguro gracias a `_job_id` (hito 5, fix hito 8). Hito 13 añade visibilidad cuando un reintento es silenciosamente bloqueado por la ventana de deduplicación de arq (1h).
+**Seguridad de reintentos:** `restartPolicyMaxRetries=3` + `_job_id=discovery:{run_id}` previene doble cobro si el worker se reinicia a mitad de un run. Hito 13 añade visibilidad cuando un reintento es bloqueado por la ventana de deduplicación de arq (1h keep_result).
 
 ---
 
-## 11. Recursos
+## 11. Módulos nuevos o actualizados (ciclo LENS 2026-08-14/17)
+
+| Módulo | Ubicación | Responsabilidad |
+|--------|-----------|----------------|
+| `exceptions.py` | `packages/discovery/discovery/` | SourceUnavailable, TransientSourceError, BudgetExhausted, ReplayMiss |
+| `hikerapi_circuit_breaker.py` | `packages/discovery/discovery/tools/` | Singleton CLOSED→OPEN→HALF_OPEN, Redis, TTL×3 |
+| `budget_fuse.py` | `apps/api/app/core/` | Budget enforcement + Lua atómico `reserve_and_record` |
+| `worker_enqueuer.py` | `apps/api/app/core/` | `enqueue_job` con `_job_id` + check de dedup |
+| `hikerapi_client.py` | `packages/discovery/discovery/tools/` | `_get()` con record_call universal, replay mode, breaker singleton |
+| `orchestrator.py` | `packages/discovery/discovery/` | LRU/TTL en state cache |
+| `geo_boost.py` | `packages/discovery/discovery/scoring/` | geo_score con `target_country` explícito |
+| `lens_score.py` | `packages/discovery/discovery/scoring/` | lens_score con `target_country` kwarg |
+| `00000000000104_...sql` | `supabase/migrations/` | Enum `discovery_run_status` + `partial` |
+| `00000000000105_...sql` | `supabase/migrations/` | 3 JSONB cols en `discovery_profiles` |
+
+---
+
+## 12. Recursos
 
 | Recurso | URL |
-|---|---|
+|---------|-----|
 | API Docs | `https://lawebcore-production.up.railway.app/api/docs` |
 | HikerAPI billing | `https://hikerapi.com/billing` |
+| HikerAPI docs | `https://api.hikerapi.com/docs` |
 | Railway | `https://railway.app/project/lawebcore` |
 | Vercel | `https://vercel.com/lawebcore` |
 
 ---
 
-*Documento derivado de la auditoría LENS (`LENS_REVIEW_ARQUITECTURA_2026-08-14.md`) con los 20 hitos de fix aplicados (Hitos 1-7 en `be32a39`–`9b43316`; Hitos 8-12 en `2f7b06b`–`cc3f57c`; Hitos 13-20 + Bonus en `a9cbb78`–`880da7d`). Para detalle completo de la auditoría original, segunda-pass y tercera-pass, ver `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md` y `LENS_AUDIT3_2026-08-14.md`.*
+*Documento generado: 2026-08-17 — Arquitectura LENS v3.3 (20 hitos + Bonus 1 aplicados). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*

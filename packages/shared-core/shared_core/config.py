@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     MONTHLY_BUDGET_USD: float = 10.0
     MAX_CALLS_PER_RUN: int = 120
     BUDGET_ALERT_THRESHOLD: float = 0.7
-    HIKERAPI_COST_PER_CALL_USD: float = 0.0006
+    HIKERAPI_COST_PER_CALL_USD: float = 0.02
     HIKERAPI_5XX_BREAKER_THRESHOLD: int = 5
     HIKERAPI_5XX_BREAKER_TTL_S: int = 300
     RUN_MODE: Literal["live", "replay"] = "live"

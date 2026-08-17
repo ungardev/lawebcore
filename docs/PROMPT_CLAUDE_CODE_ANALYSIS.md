@@ -1,46 +1,84 @@
-# Cuarta Auditoría — LENS Discovery Module (Post-Tercera-Pass Fixes)
+# QUINTA AUDITORÍA — LENS Discovery Module (Análisis Exhaustivo de Costos + Fixes Completos)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Solicitud:** **CUARTA AUDITORÍA** — la tercera auditoría (2026-08-14) identificó 7 fixes en Hitos 13-20 + Bonus 1; todos fueron aplicados y commitados (`a9cbb78`, `6fd29b1`, `f3735b2`, `bad1d37`, `a91e76d`, `b5e404e`, `a5da503`, `611d22e`, `880da7d`). Esta es la auditoría final de confirmación — el auditor de la tercera-pass dijo: "el sistema está listo para usar con créditos reales en producción" conditional al Hito 13 aplicado. Confirmamos que Hito 13 está aplicado.
-> **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI + DeepSeek
+> **Solicitud:** **QUINTA AUDITORÍA EXHAUSTIVA** — el sistema tiene 20 hitos + Bonus 1 aplicados y 33/33 tests pasando. Necesitamos que valides todos los fixes, corrijas la configuración de costos (el plan real de HikerAPI es **$0.02/request**, no $0.0006), y hagas un análisis detallado del costo real de un discovery run con el plan "Start" actual.
+> **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI "Start" ($0.02/req) + DeepSeek
+
+---
+
+## CONTEXTO CRÍTICO — PLAN HIKERAPI "START"
+
+```
+╔══════════════════════════════════════════════════════════════════╗
+║  PLAN HIKERAPI "START" — $0.02 USD por request              ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Costo por request:   $0.02 USD                              ║
+║  Balance prepago:    $20 USD (~1,000 requests)               ║
+║  Todos los endpoints de Instagram incluidos (100+)           ║
+║                                                                  ║
+║  ⚠️ EL SISTEMA ACTUALMENTE TIENE CONFIGURADO:              ║
+║     HIKERAPI_COST_PER_CALL_USD = 0.0006                    ║
+║     ESTO ES 33 VECES MÁS BARATO QUE EL PLAN REAL          ║
+║     (legacy de cuando el plan costaba ~$0.0006/req)        ║
+║                                                                  ║
+║  IMPACTO: BudgetFuse muestra gastos incorrectos              ║
+║  Budget real se agota 33× más rápido de lo que muestra     ║
+╚══════════════════════════════════════════════════════════════════╝
+
+PRESUPUESTO OBJETIVO: < $10 USD/mes
+
+ESCENARIOS REALES CON $0.02/req:
+  Run completo (81 requests): $1.62 USD  →  ~6 runs/mes con $10
+  Run sin enrichment (31 req): $0.62 USD  →  ~16 runs/mes con $10
+  Run parcial cache (56 req): $1.12 USD  →  ~8 runs/mes con $10
+```
 
 ---
 
 ## OBJETIVO
 
-La primera auditoría de LENS encontró que **$50-72 USD se consumieron en 2 días** por bugs evitables. Ejecutamos 20 hitos de fix + 2 bonus:
-
-| Hito | Commit | Desc |
-|------|--------|------|
-| 1 | `be32a39` | Elimina Apify (roto), step2p6 (roto), prefilter muerto |
-| 2 | `835bf2a` | Excepciones `SourceUnavailable`/`TransientSourceError` que propagan |
-| 3+4 | `4819857` | `BudgetFuse` + `HikerAPICircuitBreaker` |
-| 5 | `766cfee` | ARQ idempotency key `discovery:{run_id}` |
-| 6 | `2da78ab` | `is_private` en merge + cache TTL 30min |
-| 7 | `9b43316` | Documentación actualizada |
-| 8 | `2f7b06b` | `en_id` → `_job_id` en worker_enqueuer; docs actualizadas |
-| 9 | `390277b` | 402 a `(401,402,403)`; re-raise post `asyncio.gather` |
-| 10 | `950d475` | `can_make_call` check; `record_call` en `_get`; breaker singleton; TTL×3; `apify_client` muerto |
-| 11 | `06a952e` | `geo_score(profile, geo_indicators, target_country=None)`; `lens_score` actualizado; tests corregidos |
-| 12 | `cc3f57c` | `ReplayMiss` exception; `RUN_MODE=replay`; `_get` en modo replay |
-| 13 | `a9cbb78` | `enqueue_job` retorna None detectado → log `discovery_run_enqueue_deduped` |
-| 14 | `6fd29b1` | `record_call` en todas las respuestas HTTP, no solo 2xx |
-| 15 | `f3735b2` | Lua script atómico `reserve_and_record` — cierra race TOCTOU |
-| 16 | `bad1d37` | `is_private` en perfiles de search (antes solo en enrichment) |
-| 17 | `a91e76d` | `business_unit_id` del usuario autenticado, no hardcoded |
-| 18 | `b5e404e` | Vocabulario externalizado a `discovery_profiles` (3 JSONB cols + defaults) |
-| 19 | `a5da503` | LRU/TTL en `orchestrator.state` — sin memory leak |
-| 20 | `611d22e` | Tests: `test_hashtag_cap_30` fix + `test_result_ranker.py` borrado |
-| Bonus | `880da7d` | Contador `replay_miss_count` en metadata + gather loops |
-
-**Pytest actual:** 33/33 pass (incluye 2 tests nuevos de Hito 13 y todos los fixes)
+Ejecutamos 20 hitos + 1 bonus de fixes. El sistema pasa 33/33 tests. Pero **la configuración de costos de HikerAPI está desactualizada** — usa $0.0006 cuando el plan real cobra $0.02. Esto significa que el BudgetFuse muestro números falsos.
 
 **Pedimos:**
-1. Confirmar que todos los Hitos 13-20 + Bonus 1 fueron correctamente aplicados
-2. Verificar `pytest` → 33/33 pass
-3. Confirmar que el sistema está **listo para producción con créditos reales**
-3. Proponer la siguiente tanda de mejoras priorizadas
+1. Validar que los 20 hitos + Bonus 1 fueron correctamente aplicados
+2. **Corregir `HIKERAPI_COST_PER_CALL_USD` a `$0.02`** en la configuración
+3. Hacer análisis de costos detallado: ¿cuántos requests por fase? ¿cómo optimizar?
+4. Proponer estrategias de reducción de costo sin perder calidad
+5. Verificar `pytest` → 33/33 pass
+6. Identificar cualquier issue que quede bloqueante para producción
+
+---
+
+## PLAN DE PRECIOS DETALLADO — HikerAPI "Start"
+
+### Costos por endpoint
+
+```
+Endpoint                          │ Requests/run │ Costo/run ($0.02)
+─────────────────────────────────┼──────────────┼────────────────
+/v2/hashtag/by/name              │  5 (3 top+2) │  $0.10
+/v2/hashtag/medias/top          │  9 (3×3 pág) │  $0.18
+/v2/hashtag/medias/recent        │  4 (2×2 pág) │  $0.08
+/v2/fbsearch/accounts           │  9 (3×3 var) │  $0.18
+/gql/reels_serp                  │  1           │  $0.02
+/gql/topsearch                   │  2           │  $0.04
+/v2/user/suggested/profiles      │  1           │  $0.02
+─────────────────────────────────┼──────────────┼────────────────
+SUBTOTAL Discovery               │ 31           │  $0.62
+─────────────────────────────────┼──────────────┼────────────────
+/v1/user/by/username (enrich)     │ hasta 50     │  $1.00
+─────────────────────────────────┼──────────────┼────────────────
+TOTAL RUN COMPLETO              │ hasta 81     │  $1.62
+```
+
+### Preguntas específicas sobre costos
+
+1. ¿Cómo afecta el enrichment completo ($1.62/run) vs enrichment parcial?
+2. ¿Cuántos runs con enrichment completo puedo hacer con $10/mes?
+3. ¿Merece la pena reducir MAX_HANDLES_TO_ENRICH para bajar el costo?
+4. ¿El cache realmente reduce los costos en un escenario real de uso?
+5. ¿DeepSeek (análisis IA) agrega costo significativo?
 
 ---
 
@@ -51,21 +89,21 @@ lawebcore/
 ├── apps/
 │   ├── api/                              # FastAPI backend (Railway)
 │   │   └── app/
-│   │       ├── api/v1/                  # 40+ endpoints
+│   │       ├── api/v1/                  # ~50 endpoints
 │   │       ├── core/
-│   │       │   ├── budget_fuse.py       # ★ nuevo — budget enforcement
-│   │       │   ├── hikerapi_circuit_breaker.py  # ★ nuevo
-│   │       │   └── worker_enqueuer.py   # ★ actualizado — _job_id
+│   │       │   ├── budget_fuse.py      # Budget + Lua atómico reserve_and_record
+│   │       │   ├── hikerapi_circuit_breaker.py  # Singleton Redis-backed
+│   │       │   └── worker_enqueuer.py   # ARQ _job_id + dedup check
 │   │       ├── models/                  # SQLAlchemy ORM
-│   │       ├── services/                # AI services
+│   │       ├── services/
 │   │       └── workers/
-│   │           └── worker.py            # ~1760 líneas
-│   └── web/                             # React 19 frontend (Vercel)
+│   │           └── worker.py            # ~1819 líneas
+│   └── web/                             # React 19 (Vercel)
 ├── packages/
-│   ├── discovery/                        # ★ LENS Discovery Module
+│   ├── discovery/
 │   │   └── discovery/
-│   │       ├── exceptions.py           # ★ nuevo — SourceUnavailable, TransientSourceError, BudgetExhausted
-│   │       ├── orchestrator.py
+│   │       ├── exceptions.py            # SourceUnavailable, TransientSourceError, BudgetExhausted, ReplayMiss
+│   │       ├── orchestrator.py          # LRU/TTL state cache
 │   │       ├── brief_parser.py
 │   │       ├── profile_generator.py
 │   │       ├── candidate_analyzer.py
@@ -73,213 +111,229 @@ lawebcore/
 │   │       ├── memory.py
 │   │       ├── result_ranker.py
 │   │       ├── scoring/
-│   │       │   ├── lens_score.py
-│   │       │   ├── geo_boost.py        # geo_score here
+│   │       │   ├── lens_score.py       # target_country kwarg
+│   │       │   ├── geo_boost.py        # target_country explícito
 │   │       │   └── niche.py
 │   │       └── tools/
-│   │           ├── hikerapi_client.py  # ★ actualizado — exceptions + breaker singleton + cache + replay
-│   │           ├── hikerapi_circuit_breaker.py  # ★ singleton unificado
-│   │           ├── instagram_source.py
+│   │           ├── hikerapi_client.py   # _get() con record_call universal + replay
+│   │           ├── hikerapi_circuit_breaker.py  # Singleton
+│   │           ├── instagram_source.py  # Protocol abstraction
 │   │           └── metricool_client.py
 │   ├── shared-core/
+│   │   └── shared_core/config.py       # ⚠️ HIKERAPI_COST_PER_CALL_USD = 0.0006 (LEGACY)
 │   └── shared-ai/
 ├── supabase/migrations/
-│   └── 00000000000104_discovery_run_partial_status.sql  # ★ nuevo
+│   ├── 00000000000104_discovery_run_partial_status.sql
+│   └── 00000000000105_discovery_profile_signal_keywords.sql
 └── docs/
-    ├── ARQUITECTURA_LENS.md            # v3.0 post-auditoría
-    └── LENS_REVIEW_ARQUITECTURA_2026-08-14.md  # auditoría original
-```
-
-**Archivos eliminados en Hito 1:** `apify_instagram_source.py`, `source_registry.py`.
-
----
-
-## ESTADO ACTUAL POST-FIXES
-
-### Lo que SE arregló
-
-```
-✅ 4xx/5xx ya no se swallow como warning — propagan como excepciones
-✅ BudgetFuse: monthly cap $10 USD + per-run limit 120 calls + 70% alert
-✅ CircuitBreaker: 5xx consecutive → OPEN, TTL 300s (×3=900s para HALF_OPEN), Redis-backed, singleton
-✅ ARQ idempotency: _job_id=discovery:{run_id} — no más doble cobro por redeploy
-✅ step2p6 follower expansion ELIMINADO (gastaba 1 enrich por run y devolvía vacío)
-✅ Apify ELIMINADO (estaba roto, no era fallback funcional) + apify_client.py borrado
-✅ Prefiltro muerto ELIMINADO (30 líneas + logs engañosos)
-✅ search_hashtag_recent ahora con cache_ttl=1800 (30 min vs 0)
-✅ is_private preservado en el merge de enrichment
-✅ discovery_run_status enum: valor 'partial' añadido (migración lista para ejecutar)
-✅ en_id → _job_id en worker_enqueuer (TypeError corregido)
-✅ 402 credits exhausted → SourceUnavailable (no más "0 candidatos" silencioso)
-✅ record_call() en hikerapi_client._get() — todas las API calls se cuentan
-✅ can_make_call() checkeado antes de HTTP en _enrich_one()
-✅ geo_score con target_country explícito (reemplaza target_iso2 inference rota)
-✅ Modo replay: RUN_MODE=replay + ReplayMiss exception — testing sin costo
-```
-
-### Lo que NO se arregló (abierto)
-
-```
-⚠️  Enriquecimiento decide sobre muestra casi aleatoria — decide el gasto ANTES de tener datos
-⚠️  Vocabulario de negocio hardcodeado en worker.py (~150 líneas en español)
-⚠️  Estado del orchestrator en memoria — columna state existe y no se usa
-⚠️  Multi-tenancy inexistente — bloquea segundo cliente
-⚠️  La migración 00000000000104 NO se ha ejecutado aún en producción
+    ├── ARQUITECTURA_LENS.md        # v3.3 — con análisis de costos
+    ├── LENS_REVIEW_ARQUITECTURA_2026-08-14.md
+    ├── LENS_AUDIT2_2026-08-14.md
+    └── LENS_AUDIT3_2026-08-14.md
 ```
 
 ---
 
-## PIPELINE ACTUAL (worker.py ~1781 líneas)
+## PIPELINE ACTUAL (worker.py ~1819 líneas)
 
 ```
-1. build brief → DeepSeek parsea brief_text → BriefStructured
-2. QueryBuilder genera plan: hashtags, keywords, reels, topsearch, suggested
-3. _fetch_step1 (hashtag top, 3)     → enrich: NO (usuario reducido)
-4. _fetch_step1_recent (hashtag, 2)  → enrich: NO (usuario reducido)  [TTL=30min]
-5. _fetch_step2 (keyword, 3×3)        → enrich: SÍ (perfil completo)
-6. _fetch_step2p5 (reels, 1)         → enrich: NO (usuario reducido)
-7. _fetch_step3 (topsearch, 1)       → enrich: SÍ (perfil completo)
-8. _fetch_step4 (suggested, 1)        → enrich: SÍ (perfil completo)
-9. PREFILTRO: se seleccionan hasta MAX_HANDLES_TO_ENRICH handles
-              ⚠️ PROBLEMA: scoring se hace sin bio ni seguidores
-10. ENRICHMENT: enrich_profile() por handle
-                 - can_make_call() check → si no hay budget/breaker → aborta
-                 - hikerapi_client._get() → record_call() al final
-                 - hasta MAX_CALLS_PER_RUN=120
-11. SCORING: lens_score (con target_country), geo_score (con target_country), niche_relevance
-12. CANDIDATE_ANALYZER: DeepSeek (si analyze_with_ai=true)
-13. upsert_many → PostgreSQL
+DeepSeek → BriefStructured
+    ↓
+QueryBuilder → DiscoveryPlan
+    ↓
+┌─ STEP 1: Hashtag Top (3 hashtags)
+│   1× /v2/hashtag/by/name  (info)
+│   3× /v2/hashtag/medias/top  (hasta 3 páginas cada uno)
+│   → usuario REDUCIDO (sin bio ni followers)
+│   → CACHE TTL 12h
+│   Costo: 12 requests = $0.24
+│
+├─ STEP 1_recent: Hashtag Recent (2 hashtags)
+│   1× /v2/hashtag/by/name
+│   2× /v2/hashtag/medias/recent (2 páginas)
+│   → usuario REDUCIDO
+│   → CACHE TTL 30 min
+│   Costo: 6 requests = $0.12
+│
+├─ STEP 2: Keyword (3 keywords × 3 variantes geo)
+│   9× /v2/fbsearch/accounts
+│   → usuario COMPLETO (bio, followers)
+│   → CACHE TTL 30 min
+│   Costo: 9 requests = $0.18
+│
+├─ STEP 2p5: Reels serp (1 keyword)
+│   1× /gql/reels_serp
+│   → usuario REDUCIDO
+│   Costo: 1 request = $0.02
+│
+├─ STEP 3: Top search (1 keyword)
+│   2× /gql/topsearch
+│   → usuario COMPLETO
+│   → CACHE TTL 12h
+│   Costo: 2 requests = $0.04
+│
+├─ STEP 4: Suggested (1 seed)
+│   1× /v2/user/suggested/profiles
+│   → usuario COMPLETO
+│   Costo: 1 request = $0.02
+│
+│  SUBTOTAL Discovery: 31 requests = $0.62
+│
+├─ PREFILTRO ( scoring sin bio para hashtag/reels )
+│   Commerce signals + creator signals (Hito 18 externalizable)
+│   Exclusion keywords filter (Hito 18)
+│
+└─ STEP 10: ENRICHMENT (hasta MAX_HANDLES_TO_ENRICH=50)
+    hasta 50× /v1/user/by/username
+    Lua atómico reserve_and_record() (Hito 15)
+    can_make_call() antes de cada HTTP (Hito 15)
+    record_call() en TODAS las respuestas HTTP (Hito 14)
+    → Costo: hasta 50 requests = $1.00
 
-MODO REPLAY (RUN_MODE=replay):
-- hikerapi_client._get() lee de Redis cache
-- Si cache hit → retorna cached response
-- Si cache miss → lanza ReplayMiss → worker log warning + status=partial
-- No hace ninguna network call → costo $0
+TOTAL RUN COMPLETO: hasta 81 requests = $1.62
 ```
 
 ---
 
-## CONSTANTES ACTUALES ( worker.py )
+## CONSTANTES DEL PIPELINE
 
 ```python
-MAX_HANDLES_TO_ENRICH = 50
-MAX_POSTS_PER_HASHTAG = 20
-ENRICHMENT_INCLUDE_ABOUT = False   # desactivado por defecto
-HASHTAGS_TOP = 3
-HASHTAGS_RECENT = 2
-KEYWORDS = 3
-TOP_SEARCH = 1
-SUGGESTED_SEEDS = 1
-REELS_KEYWORDS = 1
+MAX_HANDLES_TO_ENRICH = 50        # enrichment: hasta 50 calls
+MAX_POSTS_PER_HASHTAG = 20       # límite por hashtag
+HASHTAGS_TOP = 3                # step1: 3 hashtags
+HASHTAGS_RECENT = 2             # step1_recent: 2 hashtags
+KEYWORDS = 3                    # step2: 3 keywords base
+TOP_SEARCH = 1                  # step3: 1 keyword
+SUGGESTED_SEEDS = 1            # step4: 1 semilla
+ENRICHMENT_INCLUDE_ABOUT = False  # get_user_about OFF por defecto
 ```
 
-**Nuevas vars de entorno (Settings en shared_core):**
+**Vars de entorno en config:**
 ```python
-MONTHLY_BUDGET_USD = 10.0          # corte mensual hard
-MAX_CALLS_PER_RUN = 120            # por-run
-BUDGET_ALERT_THRESHOLD = 0.7       # warn al 70%
-HIKERAPI_COST_PER_CALL_USD = 0.0006
-HIKERAPI_5XX_BREAKER_THRESHOLD = 5
-HIKERAPI_5XX_BREAKER_TTL_S = 300
+MONTHLY_BUDGET_USD = 10.0           # Corte mensual hard
+MAX_CALLS_PER_RUN = 120             # Límite de requests por run
+BUDGET_ALERT_THRESHOLD = 0.7        # Warning al 70% ($7)
+HIKERAPI_COST_PER_CALL_USD = 0.0006  # ⚠️ LEGACY — corregir a 0.02
+HIKERAPI_5XX_BREAKER_THRESHOLD = 5   # 5xx → breaker OPEN
+HIKERAPI_5XX_BREAKER_TTL_S = 300     # 5min OPEN, ×3=15min HALF_OPEN
+RUN_MODE = "live"                    # 'live' o 'replay'
 ```
 
 ---
 
-## PREGUNTAS PARA CLAUDE CODE — TERCERA AUDITORÍA
+## LO QUE PEDIMOS QUE HAGAS
 
-### A. Validación de fixes
+### 1. Fix crítico: HIKERAPI_COST_PER_CALL_USD
 
-1. ¿Los 7 hitos aplicados son correctos y completos? ¿Hay edge cases donde pueden fallar?
-2. El circuit breaker se instancia DENTRO de `_get()` de hikerapi_client — ¿esto crea un nuevo estado por cada llamada o comparten estado vía Redis correctamente?
-3. `BudgetFuse.assert_budget_available()` se llama ANTES del gather de enrichment, pero `record_call()` está dentro de `_enrich_one()`. Si una excepción ocurre después de `assert_budget_available()` pero antes de `record_call()`, ¿el costo no se registra? ¿Es eso un bug?
-4. El `_job_id` de ARQ usa `discovery:{run_id}`. ¿ARQ deduplica solo jobs pending/running o también completed? Si un run falla Y se reintenta manualmente, ¿se permite?
+El archivo `packages/shared-core/shared_core/config.py` tiene:
+```python
+HIKERAPI_COST_PER_CALL_USD: float = 0.0006  # ← LEGACY
+```
 
-### B. Scoring — bugs abiertos
+**Debe ser:**
+```python
+HIKERAPI_COST_PER_CALL_USD: float = 0.02  # Plan Start real
+```
 
-5. Los tests de smoke fallan en `geo_score`: perfiles CO con `geo_indicators=["bogota","medellin"]` obtienen score 0.0 cuando el país del perfil es CO. ¿Está `geo_score` bien implementada?
-6. El test `test_no_ve_artifacts_in_non_ve_profile` falla: perfil CO con `geo_indicators=["colombia","bogota","medellin"]` devuelve `geo=0.0`. ¿El problema es en `geo_score` o en el test?
-7. ¿Cómo recalibrar `geo_score`, `lens_score` y `niche_relevance` para que funcionen correctamente con el flujo actual?
+Esto hace que BudgetFuse funcione correctamente con el plan real.
 
-### C. Arquitectura — issues abiertos
+**Verifica:** Busca `HIKERAPI_COST_PER_CALL_USD` en todo el codebase y actualiza en todos los lugares donde se use como hardcoded value.
 
-8. El vocabulario de negocio está hardcodeado en worker.py (~150 líneas de listas en español). ¿Cuál es la forma más limpia de externalizarlo a `discovery_profiles` sin romper el pipeline actual?
-9. El estado del orchestrator vive en memoria (se pierde al reiniciar). ¿Deberíamos usar la columna `state` de `discovery_conversations` o hay una solución más simple?
-10. Multi-tenancy: ¿cuál es el approach correcto — filtrado por `business_unit_id` en todas las queries, o un rol de base separado?
+### 2. Análisis exhaustivo de costos
 
-### D. Siguiente tanda de fixes
+Calcula para cada configuración:
 
-11. ¿Cuáles de los issues abiertos deberían resolverse ANTES deputar a producción con un segundo cliente?
-12. ¿Vale la pena implementar un "modo replay" (costo $0) para iterar scoring sin gastar llamadas? ¿cómo debería funcionar?
-13. ¿Cómo debería verse un dashboard de observabilidad mínimo viable para el pipeline?
+| Config | Discovery | Enrichment | Total req | Costo/run | Runs $10/mes |
+|--------|-----------|------------|-----------|-----------|--------------|
+| Completo (50 enrich) | 31 | 50 | 81 | $1.62 | ~6 |
+| Reducido (25 enrich) | 31 | 25 | 56 | $1.12 | ~8 |
+| Mínimo (10 enrich) | 31 | 10 | 41 | $0.82 | ~12 |
+| Discovery only | 31 | 0 | 31 | $0.62 | ~16 |
+
+**Pregunta:** ¿cuál es el Sweet Spot entre costo y calidad de candidatos?
+
+### 3. Estrategias de optimización de costos
+
+Evalúa estas estrategias con datos concretos:
+
+a) **Reducir MAX_HANDLES_TO_ENRICH a 25 o 10** — ¿cuántos candidatos de calidad se pierden?
+b) **Priorizar enrichment solo para perfiles con geo_score > threshold** — ya tenemos la data antes de enrichment
+c) **Cachear resultados de enrichment** — ¿feasible? ¿cuál TTL?
+d) **Discovery only (sin enrichment)** — ¿los candidatos de keyword/topsearch son suficientemente completos?
+e) **DeepSeek solo para top N candidatos** — ¿reduce costo significativamente?
+
+### 4. Validación de Hitos 13-20 + Bonus 1
+
+Confirma que estos cambios están correctos:
+
+- **Hito 13** (`a9cbb78`): `enqueue_job` check `job is None` + log `discovery_run_enqueue_deduped`
+- **Hito 14** (`6fd29b1`): `record_call` en todas las HTTP responses (404, 4xx, 5xx, 2xx)
+- **Hito 15** (`f3735b2`): Lua script `reserve_and_record` atómico en BudgetFuse
+- **Hito 16** (`bad1d37`): `is_private` en perfiles de hashtag y keyword search
+- **Hito 17** (`a91e76d`): `business_unit_id` del usuario autenticado en campaigns
+- **Hito 18** (`b5e404e`): 3 JSONB cols en `discovery_profiles` + defaults
+- **Hito 19** (`a5da503`): LRU/TTL en `orchestrator.state`
+- **Hito 20** (`611d22e`): test_hashtag_cap_30 + test_result_ranker.py borrado
+- **Bonus** (`880da7d`): `replay_miss_count` en metadata
+
+### 5. Ejecuta pytest
+
+```bash
+pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py -v
+```
+
+Reporta: **33/33 pass**
+
+### 6. Dashboard de observabilidad
+
+¿Qué métricas mínimo viables necesitamos?
+
+- `budget_fuse_monthly_spent` vs `MONTHLY_BUDGET_USD`
+- `budget_fuse_run_requests` vs `MAX_CALLS_PER_RUN`
+- `circuit_breaker_state` (CLOSED/OPEN/HALF_OPEN)
+- `discovery_run_status` (completed/partial/failed)
+- `replay_miss_count` (diagnóstico de modo replay)
 
 ---
 
-## LO QUE ESPERAMOS DE TI — TERCERA PASADA
+## LO QUE ESPERAMOS DE TI
 
 Sé brutalmente honesto. Enfócate en:
 
-### Validación (urgente antes de recarga de créditos)
-- [ ] ¿Los fixes de los Hitos 8-12 son correctos y completos?
-- [ ] ¿El breaker singleton, `record_call` en `_get()`, y `can_make_call` check están bien integrados?
-- [ ] ¿El modo replay (`RUN_MODE=replay`) está bien implementado?
+### Prioridad 1 — Fix de costo HIKERAPI
+- [ ] Cambia `HIKERAPI_COST_PER_CALL_USD` a `$0.02` en `config.py`
+- [ ] Verifica que no haya otros hardcoded $0.0006 en el codebase
+- [ ] Confirma que BudgetFuse ahora muestra números reales
 
-### Scoring y calidad
-- [ ] Ejecuta `pytest` — reporta 31/31 pass (el failure pre-existente `test_hashtag_cap_30` no cuenta)
-- [ ] Valida que `geo_score(profile, geo_indicators, target_country)` funciona correctamente
+### Prioridad 2 — Análisis de costos
+- [ ] Tabla completa de costo por fase (ya la tienes en ARQUITECTURA_LENS.md v3.3)
+- [ ] Sweet spot: ¿cuántos enrichment calls valen la pena con $10/mes?
+- [ ] Estrategia de optimización concreta (una o dos que sean implementables en 1-2 días)
 
-### Arquitectura (siguiente sprint)
-- [ ] Plan concreto para externalizar el vocabulario de negocio
-- [ ] Decisión: ¿usar la columna `state` o implementar un redis-based state?
+### Prioridad 3 — Validación de código
+- [ ] 33/33 tests pass
+- [ ] Lua script de `reserve_and_record` está bien
+- [ ] El replay mode funciona correctamente (nunca hace network call en modo replay)
 
-### Producto listo para escalar (multi-cliente)
-- [ ] Plan de multi-tenancy que no destruya el rendimiento
-- [ ] Dashboard de costos mínimo viable
-
-### Confirmación final
-- [ ] Confirma que el sistema está **listo para usar en producción** con créditos reales
-- [ ] Si hay issues restantes, clasifícalos: bloqueante vs. puedo vivir con ello
-
----
-
-## RECURSOS
-
-### Archivos clave para esta auditoría
-
-| Archivo | Líneas | Relevancia |
-|---|---|---|
-| `apps/api/app/workers/worker.py` | ~1781 | Pipeline completo, budget/breaker/replay integrados |
-| `packages/discovery/discovery/tools/hikerapi_client.py` | ~810 | Circuit breaker singleton + cache + replay + record_call |
-| `packages/discovery/discovery/exceptions.py` | ~75 | Excepciones: SourceUnavailable, TransientSourceError, BudgetExhausted, ReplayMiss |
-| `packages/discovery/discovery/scoring/geo_boost.py` | — | geo_score con `target_country` (Hito 11 — corregido) |
-| `packages/discovery/discovery/scoring/lens_score.py` | — | lens_score con `target_country` kwarg |
-| `apps/api/app/core/budget_fuse.py` | 183 | Budget enforcement |
-| `packages/discovery/discovery/tools/hikerapi_circuit_breaker.py` | 161 | Circuit breaker singleton unificado |
-| `apps/api/app/core/worker_enqueuer.py` | 63 | ARQ idempotency con `_job_id` |
-| `supabase/migrations/00000000000104_...sql` | 11 | Enum partial — **ejecutar manualmente** |
-| `docs/ARQUITECTURA_LENS.md` | — | Arquitectura v3.2 completa |
-
-### Información del proyecto
-- **Cliente actual:** Nestlé Venezuela / Purina Dog Chow
-- **Budget objetivo:** < $10 USD/mes
-- **Performance target:** Run completa en < 3 min, < 120 API calls
-- **Decisión de arquitectura:** short-term fixes — no se reactivó Apify
-- **Pytest actual:** 33/33 pass — todos los tests pasan
-- **El sistema está listo para producción con créditos reales** (tercera auditoría confirmó condicional a Hito 13 aplicado; Hito 13 commitado en `a9cbb78`)
+### Prioridad 4 — Producto listo
+- [ ] ¿Está el sistema listo para producción con créditos reales de HikerAPI Start?
+- [ ] ¿Cuántos runs de prueba podemos hacer con $20 de balance prepago?
+- [ ] ¿Cuándo debemos alertar al usuario que recargue?
 
 ---
 
 ## CÓMO EMPEZAR ESTA AUDITORÍA
 
-1. Lee `docs/ARQUITECTURA_LENS.md` (v3.2 — refleja el estado actual con Hitos 8-20 aplicados)
-2. Lee `apps/api/app/core/worker_enqueuer.py` — valida el fix de `enqueue_job` retornando None (Hito 13)
-3. Lee `apps/api/app/core/budget_fuse.py` — valida el Lua script `reserve_and_record` (Hito 15)
-4. Lee `packages/discovery/discovery/tools/hikerapi_client.py:_get()` — valida `record_call` en todas las respuestas HTTP (Hito 14)
-5. **Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py` y reporta 33/33 pass**
-6. **Confirma: ¿el sistema está listo para producción?**
+1. Lee `docs/ARQUITECTURA_LENS.md` (v3.3 — tiene el análisis de costos completo)
+2. Lee `packages/shared-core/shared_core/config.py` → busca `HIKERAPI_COST_PER_CALL_USD`
+3. Cambia el valor a `$0.02` y verifica que todo compile
+4. Lee `apps/api/app/core/budget_fuse.py` → verifica el Lua script
+5. Ejecuta `pytest apps/api/tests/test_pipeline_smoke.py apps/api/tests/test_universal_verticals.py`
+6. Reporta: costo real por run, runs posibles con $10/mes, y si el sistema está listo para producción
 
 **Sé directo, sé brutal en honestidad, enfócate en soluciones prácticas.**
 
 ---
 
-*Documento generado: 2026-08-14 — Cuarta auditoría post-Hitos 13-20 + Bonus 1*
+*Documento generado: 2026-08-17 — Quinta auditoría LENS post-Hitos 1-20 + Bonus 1*
 *Para: Claude Code Opus 5 / Senior Full-Stack Developer*
