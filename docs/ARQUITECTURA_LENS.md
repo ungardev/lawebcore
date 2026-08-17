@@ -1,8 +1,8 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.4)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.5)
 
-> **Versión:** 3.4 — 2026-08-17
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.3 (`c295e86`)
-> **Commit de referencia:** `c295e86` (Hitos 1-20 + Bonus 1 aplicados)
+> **Versión:** 3.5 — 2026-08-17
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.4 (`7b3bc5d`)
+> **Commit de referencia:** `7b3bc5d` (Hitos 1-21 + Bonus 1 aplicados)
 > **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17)
 
 ---
@@ -317,6 +317,56 @@ HikerAPIClient._get():
 - `budget_fuse_reserve_error_failing_closed` — Redis caído, fusible cerrado
 - `enrichment_budget_capped` — run se marca `partial` al alcanzar tope
 
+### 5.4.2 Test Run Real — 2026-08-17 (Run ID: `1a1d6128-d1e4-4922-b7c7-1c2cb949c658`)
+
+**Brief enviado:**
+```json
+{
+  "product_name": "Test fail-fast Hito 21",
+  "industry": "belleza",
+  "niches": ["skincare"],
+  "platforms": ["instagram"],
+  "audience_countries": ["VE"],
+  "max_candidates": 5,
+  "analyze_with_ai": false
+}
+```
+
+**Resultados del run:**
+
+| Campo | Valor | Análisis |
+|-------|-------|----------|
+| `status` | `completed` | Pipeline terminó sin errores |
+| `total_candidates` | **0** | ❌ NINGÚN candidato insertado |
+| `candidates_found` | **0** | ❌ Todos los perfiles fueron filtrados |
+| `actual_cost_usd` | **0.0** | ❌ Bug: no se persisten los costos en la DB |
+| `total_unique_handles` | **123** | ✅ Discovery encontró handles |
+| `keywords_count` | **20** | ⚠️Muchas variaciones de keywords generadas |
+| `step3_degraded` | `false` | ✅ Enrichment no falló |
+| `completed_steps` | todos | Pipeline ejecutó todas las fases |
+
+**Redis keys existentes:**
+```
+lens:budget:hikerapi:2026-08 = "1.64"  (82 calls × $0.02)
+```
+
+**Redis keys FALTANTES:**
+```
+lens:budget:run:1a1d6128-d1e4-4922-b7c7-1c2cb949c658  → NO EXISTE (nil)
+```
+
+**Hallazgos críticos:**
+
+1. **El worker estaba ejecutando código PRE-Hito 21.** El proceso ARQ mantiene el código en memoria — Railway hizo deploy pero el worker no recargó. Resultado: el accounting usó el modelo viejo (doble conteo parcial + sin run counter).
+
+2. **123 handles encontrados, 0 candidatos en DB.** Todos los perfiles fueron filtrados en la fase de scoring. El culpable más probable: filtro `geo_no_signal` (worker.py línea 1119) rechaza perfiles que tienen `geo_score < 0.4` sin `has_hard_geo_signal`. Perfiles de hashtag típicamente tienen bio vacía → geo_score = 0.0 → filtrados.
+
+3. **`actual_cost_usd = 0.0` no se persiste.** Después de Hito 21, el worker ya no llama `record_call()` — el costo total del run no se está grabando en `discovery_runs.actual_cost_usd`.
+
+4. **`accepted` permanece en 0 siempre.** El campo `discovery_runs.accepted` nunca se actualiza cuando un candidato se marca como "saved".
+
+5. **`lens:budget:run:{run_id}` no se crea.** El worker viejo no tenía este formato de key. Con Hito 21 activo, el formato correcto es `lens:budget:run:{run_id}` con valor = número de calls del run.
+
 ### 5.5 Guards implementados contra sobre-costo
 
 ```
@@ -519,6 +569,11 @@ lens:profile:{fingerprint}
 | Issue | Prioridad | Detalle |
 |-------|-----------|---------|
 | HIKERAPI_COST_PER_CALL_USD legacy | ~~**ALTA**~~ ✅ | **RESUELTO** en config.py + Hito 21 |
+| **Worker con código viejo (pre-Hito 21)** | 🔴 **CRÍTICA** | ARQ worker mantiene código en memoria — necesita redeploy para activar Hito 21 |
+| **geo_no_signal filter rechaza 100% de hashtag profiles** | 🔴 **CRÍTICA** | Perfiles de hashtag sin bio/location/country → geo_score=0.0 → filtrados. Filtro línea 1119 |
+| **actual_cost_usd no se persiste** | 🔴 **CRÍTICA** | Hito 21 remueve record_call() del worker — costo total del run no se graba |
+| **`accepted` nunca se actualiza** | 🔴 **CRÍTICA** | `discovery_runs.accepted` siempre 0 — no se actualiza al guardar candidatos |
+| **`lens:budget:run:{id}` no se crea** | **Alta** | Puede ser caused por worker old code o formato diferente de key |
 | Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad de candidatos |
 | discovery_runs.metadata sin `partial` en enum | **Alta** | Migración 104 debe ejecutarse |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; endpoints de discovery aún no filtran |
@@ -576,4 +631,4 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-*Documento generado: 2026-08-17 — Arquitectura LENS v3.4 (21 hitos + Bonus 1 aplicados). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
+*Documento generado: 2026-08-17 — Arquitectura LENS v3.5 (21 hitos + Bonus 1 aplicados + hallazgos del test run real). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
