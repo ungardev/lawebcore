@@ -1,9 +1,9 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.5)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.6)
 
-> **Versión:** 3.5 — 2026-08-17
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.4 (`7b3bc5d`)
+> **Versión:** 3.6 — 2026-08-17
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.5 (`7b3bc5d`)
 > **Commit de referencia:** `7b3bc5d` (Hitos 1-21 + Bonus 1 aplicados)
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17 post-test-run-real)
 
 ---
 
@@ -619,7 +619,98 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-## 12. Recursos
+## 12. Bugs Críticos Detectados (Test Run Real 2026-08-17)
+
+> Ejecutado con worker Hito 21 activo + saldo real HikerAPI. Run ID: `1a1d6128-d1e4-4922-b7c7-1c2cb949c658`
+
+### Bug 1 — Pydantic enum sin `partial` (🔴 CRÍTICA — 500 Error)
+
+**Archivo:** `packages/discovery/discovery/schemas.py` líneas 11-16
+**Endpoint afectado:** `GET /api/v1/lens/discovery/runs/{run_id}` → 500 Internal Server Error
+
+```python
+# ACTUAL (falla con status='partial' de la DB):
+class DiscoveryRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    # FALTA: PARTIAL = "partial"
+
+# FIJO:
+class DiscoveryRunStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    PARTIAL = "partial"  # ← AGREGAR
+```
+
+**Causa:** La migración `00000000000104_*` añadió `partial` a la columna PostgreSQL pero no actualizó el enum de Pydantic. Cuando `GET /runs/{id}` hace `return DiscoveryRunResponse(**result)`, Pydantic valida el enum y rechaza `partial` → 500.
+
+**Evidencia del log:**
+```
+pydantic_core._pydantic_core.ValidationError: 1 validation error for DiscoveryRunResponse
+status
+  Input should be 'pending', 'running', 'completed', 'failed' or 'cancelled'
+  [type=enum, input_value='partial', input_type=str]
+```
+
+---
+
+### Bug 2 — `actual_cost_usd` siempre 0 (🔴 CRÍTICA)
+
+**Archivos:** `packages/discovery/discovery/tools/hikerapi_client.py` + `apps/api/app/core/discovery_cost_tracker.py`
+
+**Causa raíz:** Sistema de tracking de costos fragmentado en 3 partes que nunca se conectan:
+
+```
+HikerAPIClient (hikerapi_client.py)
+  └─ NO tiene record_cost() → costos nunca se guardan
+
+ApifyClient (apify_client.py) 
+  └─ tiene record_cost() → guarda en self._costs (in-memory)
+  └─ PERO es instancia separada de DiscoveryCostTracker
+
+DiscoveryCostTracker (discovery_cost_tracker.py)
+  └─ get_run_summary() lee de self._apify_costs y self._deepseek_costs
+  └─ NUNCA recibe costos de HikerAPIClient
+```
+
+**Worker línea 1463-1472:**
+```python
+tracker = get_discovery_cost_tracker()      # nueva instancia
+cost_summary = tracker.get_run_summary(run_id)  # siempre {total_usd: 0}
+total_cost = cost_summary["total_usd"]      # 0.0
+await railway_pg.update(
+    table="discovery_runs",
+    values={"actual_cost_usd": total_cost},  #写入 0
+    ...
+)
+```
+
+**Fix requerido:** `HikerAPIClient` necesita grabar costos en `DiscoveryCostTracker` O el worker debe usar `ApifyClient.get_and_clear_cost()` (que sí tiene los costos reales de las llamadas Apify).
+
+---
+
+### Bug 3 — Balance agotado en enrichment (⚠️余额不足)
+
+**Problema:** El plan "Start" de HikerAPI ($5) se agota en la fase de discovery. Con 115 handles encontrados y ~50+ enrichment calls necesarias, los primeros enrichment calls reciben `402 Payment Required`.
+
+**Evidencia del log:**
+```
+Enrichment step failed: 402 Client Error: Payment Required
+enrichment_1_succeeded: false
+step3_degraded: true
+```
+
+**Fix sugerido:** Reducir el número de handles enriquecidos (prefilter más agresivo) o aumentar el balance de HikerAPI antes de runs de prueba.
+
+---
+
+## 13. Recursos
 
 | Recurso | URL |
 |---------|-----|
@@ -631,4 +722,4 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-*Documento generado: 2026-08-17 — Arquitectura LENS v3.5 (21 hitos + Bonus 1 aplicados + hallazgos del test run real). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
+*Documento generado: 2026-08-17 — Arquitectura LENS v3.6 (21 hitos + Bonus 1 aplicados + 3 bugs críticos del test run real). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
