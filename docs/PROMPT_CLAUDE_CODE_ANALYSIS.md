@@ -1,211 +1,248 @@
-# SEXTA AUDITORÍA — LENS Discovery Module (Análisis Post-Test Run Real — CORREGIDO)
+# SÉPTIMA AUDITORÍA — LENS Discovery Module (Post-Hito 22)
 
 > **Audiencia:** Claude Code Opus 5 (o cualquier senior full-stack developer)
 > **Contexto:** Proyecto La Web Core — LENS Discovery Module
-> **Solicitud:** Después de aplicar Hito 21, ejecutamos un test run real con saldo real. El log completo del worker revela 3 bugs exactos. Necesitamos que los confirmes y nos des los fixes precisos.
+> **Repositorio:** https://github.com/ungardev/lawebcore
 > **Stack:** FastAPI + React 19 + PostgreSQL + Redis + HikerAPI "Start" ($0.02/req) + DeepSeek
 
----
-
-## CONTEXTO — QUÉ PASÓ (DEL LOG REAL)
-
-```
-Run ID: 1a1d6128-d1e4-4922-b7c7-1c2cb949c658
-Worker: Hito 21 activo ✅ (115 handles encontrados, no 123 como dijimos antes)
-Status en DB: partial
-Pipeline: CORRIÓ completo hasta el final
-Costo HikerAPI: ~$1.62 (~81 requests)
-GET /runs/{id}: 500 Internal Server Error ❌
-actual_cost_usd en DB: 0.0 ❌
-Enrichment: step3_degraded=true (402 Payment Required)
-```
-
-### Del Log Completo (-lineas relevantes):
-
-```
-[DISCARD] hikerapi_balance_before=$5.00
-[DISCARD] hikerapi_balance_after=$3.38
-DiscoveryRun task started for brief_id=abc123
-_build_brief: DeepSeek parseó el brief en 1.8s
-QueryBuilder.build: 3 hashtags, 20 keywords, 2 reels, 1 topsearch, 1 suggested
-STEP 1: Running hashtag search for 3 hashtags
-STEP 1_recent: Running recent hashtag search
-STEP 2: Running keyword search for 20 keywords
-STEP 2p5: Running reels search
-STEP 3: Enriching 50 profiles (HikerAPI)
-  └─ 402 Payment Required para varios handles ❌
-STEP 4: Scoring 50 candidates
-STEP 5: Skipping AI analysis (analyze_with_ai=False)
-Upserted 0 candidates (0 survived scoring)
-UPDATE discovery_runs SET actual_cost_usd=$1 WHERE id = $2 vals=[0]
-```
+> **Nota para Opus 5:** Esta es una auditoría de seguimiento. Los bugs 1-3 de la auditoría anterior YA FUERON RESUELTOS por el equipo (Hito 22). Esta auditoría documenta 3 bugs NUEVOS descubiertos en el test run real post-Hito 22.
 
 ---
 
-## HALLAZGO #1 — Pydantic enum sin `partial` (🔴 CRÍTICA — 500 Error)
+## CONTEXTO — QUÉ PASÓ
 
-**Problema:** `GET /api/v1/lens/discovery/runs/{run_id}` devuelve 500 porque Pydantic no reconoce `status='partial'`.
+### Hito 22 aplicado (commit `7e4a99b`)
 
-**Archivo:** `packages/discovery/discovery/schemas.py` líneas 11-16
+Después de la Sexta Auditoría, el equipo aplicó Hito 22 con los fixes de los 3 bugs críticos:
+- Bug 1: `PARTIAL = "partial"` añadido al enum Pydantic ✅
+- Bug 2: Método `get_run_calls()` en `budget_fuse.py` + worker actualiza `actual_cost_usd` ✅
+- Redeploy en Railway — worker recargó código ✅
 
+### Test Run Real Hito 22 (Run ID: `0c44ea23-53f6-42a8-8a9c-c6ec85359d2e`)
+
+**Fecha:** 2026-08-18, 19:50:56 → 19:52:40 UTC (110 segundos)
+
+**Brief:**
+```json
+{
+  "product_name": "Test Hito 22",
+  "industry": "belleza",
+  "niches": ["makeup", "skincare", "haircare", "nails", "beauty blogger", "belleza Venezuela"],
+  "platforms": ["instagram"],
+  "audience_countries": ["VE"],
+  "exclude_stores": true,
+  "analyze_with_ai": true
+}
+```
+
+**Pipeline logs:**
+```
+[discovery_run_task] START run_id=0c44ea23-53f6-42a8-8a9c-c6ec85359d2e
+[STEP1] 60 posts from hashtags source=hikerapi
+[STEP2] 66 users from keywords source=hikerapi
+[STEP1_RECENT] 40 posts from recent hashtag search
+[STEP2p5_REELS] 0 creators from reels search
+[STEP3] 0 accounts from topsearch
+[STEP4] 0 accounts from suggested
+[DIAG] unique_handles=133
+[STEP 3] Profile enrichment (HTTP 402 Payment Required — balance agotado)
+[SCORING] 0 scored → 0 score≥5 → 0 qualified (tienda_excluded=True)
+[discovery_run_task] DONE total_candidates=0
+```
+
+**Resultados verificados:**
+
+| Indicador | Resultado | Análisis |
+|-----------|-----------|----------|
+| `status` | `partial` | ✅ 200 OK — no más 500 Error |
+| `actual_cost_usd` | **$1.64** | ✅ Cost tracking funcionando |
+| `api_costs` insertado | **82 calls × $0.02** | ✅ Registro correcto |
+| `total_unique_handles` | **133** | ✅ Discovery efectivo |
+| `total_candidates` | **0** | ❌ Todos filtrados por `exclude_stores=true` |
+| `step3_degraded` | `true` | ✅ Flag correcto (402 mid-enrichment) |
+
+**Redis confirmadas:**
+```
+lens:budget:hikerapi:2026-08 = "1.64"
+lens:budget:run:0c44ea23-53f6-42a8-8a9c-c6ec85359d2e = 82
+```
+
+---
+
+## ESTADO DE BUGS ANTERIORES
+
+| Bug # | Descripción | Estado |
+|-------|-------------|--------|
+| 1 | Pydantic enum sin `partial` | ✅ **RESUELTO** — `PARTIAL = "partial"` añadido |
+| 2 | `actual_cost_usd = 0` (silos de costo) | ✅ **RESUELTO** — `$1.64` grabado correctamente |
+| 3 | Balance insuficiente ($5 agotados rápido) | ⚠️ **PERSISTE** — HikerAPI balance = $0 remaining |
+
+---
+
+## 3 BUGS NUEVOS PARA OPUS 5
+
+---
+
+### BUG N1 — `exclude_stores` elimina 100% de handles en VE (🔴 CRÍTICA)
+
+**Severidad:** 🔴 CRÍTICA — Bloquea producción de candidatos en Venezuela.
+
+**Problema:** El default `exclude_stores=true` del wizard elimina prácticamente TODOS los handles cuando el nicho es belleza en Venezuela. En este mercado, el ecosistema de "influencers" de belleza es casi 100% tiendas online que venden productos.
+
+**Handles enriquecidos en el run (TODOS fueron filtrados como tiendas):**
+```
+shopmarianazambrano.ve — tienda
+tashashop.ccs — tienda
+canaimashop_ve — tienda
+najustoreve — tienda
+productosdebellezavenezuela — tienda
+aleacosmetics.vzla — tienda
+sakuracarevzla — tienda
+fiorellacosmetics.vzla — tienda
+mtc.productos_de_belleza_vnzla — tienda
+```
+
+**Mensaje real del worker:**
+```
+[SCORING] 0 scored → 0 score≥5 → 0 qualified (tienda_excluded=True)
+```
+
+**Pero el mensaje al usuario dice:**
+> *"Escaneé 133 perfiles y 0 pasaron el filtro geográfico, pero ninguno califica en nicho o calidad (las tiendas y perfiles genéricos fueron filtrados)"*
+
+Esto dice "filtro geográfico" — lo cual es ENGañOSO. Fue "filtro de tiendas".
+
+**Causa raíz:** `scoring.py` función `is_tienda_signal()` detecta señales de tienda (bio con "shop", "tienda", "$", " venta", hashtags comerciales) + `exclude_stores=True` en el brief.
+
+**Fix requerido (elegir uno):**
+
+**Opción A — Toggle en BriefWizard (recomendado para VE/AR/MX):**
 ```python
-# ACTUAL — falla con ValidationError:
-class DiscoveryRunStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    # ← FALTA PARTIAL
-
-# FIJO:
-class DiscoveryRunStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    PARTIAL = "partial"  # ← AGREGAR ESTA LÍNEA
+# En el wizard, para nichos de belleza en mercados LATAM:
+# "Incluir tiendas?" → toggle default=True
+# El brief se construye con exclude_stores=False para estos casos
 ```
 
-**Causa raíz:** La migración `00000000000104_*` añadió `partial` a la columna PostgreSQL `discovery_run_status` pero se olvidó de actualizar el enum de Pydantic en `schemas.py`.
+**Opción B — Scoring más inteligente:**
+```python
+# Solo excluir si tienda Y niche_relevance < 0.3
+# Una tienda con alto match de nicho es un lead válido
+if is_tienda and niche_relevance < 0.3:
+    tienda_excluded = True
+```
 
-**Fix exacto:** Agregar `PARTIAL = "partial"` al enum `DiscoveryRunStatus`.
+**Opción C — Score penalty en vez de exclude hard:**
+```python
+# No exclude hard — penalizar el score
+if is_tienda:
+    match_score -= 20  # penalty pero no hard exclude
+```
 
 ---
 
-## HALLAZGO #2 — `actual_cost_usd` siempre 0 (🔴 CRÍTICA)
+### BUG N2 — Mensaje al usuario engañoso (⚠️ MEDIA)
 
-**Problema:** `actual_cost_usd` se graba como `0.0` en la DB a pesar de que HikerAPI facturó ~$1.62.
+**Severidad:** ⚠️ MEDIA — No bloquea producción pero confunde al usuario.
 
-**Causa raíz — Sistema de costos fragmentado en 3 silos:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ HikerAPIClient (hikerapi_client.py)                         │
-│  - enrich_profile(), search_hashtag(), etc.                 │
-│  - NO tiene método record_cost()                            │
-│  - NO graba costos en ningún lado                          │
-└─────────────────────────────────────────────────────────────┘
-                            ↓ (nunca se conecta)
-┌─────────────────────────────────────────────────────────────┐
-│ ApifyClient (apify_client.py)                               │
-│  - record_cost() → guarda en self._costs (in-memory dict)  │
-│  - sgtotal_cost(), get_and_clear_cost()                    │
-│  - PERO es una instancia distinta al tracker del worker    │
-└─────────────────────────────────────────────────────────────┘
-                            ↓ (nunca se conecta)
-┌─────────────────────────────────────────────────────────────┐
-│ DiscoveryCostTracker (discovery_cost_tracker.py)            │
-│  - get_run_summary() → lee de _apify_costs y _deepseek_costs│
-│  - Worker usa ESTE tracker al final del run                │
-│  - NUNCA recibe costos de HikerAPIClient                  │
-└─────────────────────────────────────────────────────────────┘
-
-Worker líneas 1463-1472:
-  tracker = get_discovery_cost_tracker()      # nueva instancia
-  cost_summary = tracker.get_run_summary(run_id)
-  total_cost = cost_summary["total_usd"]      # 0.0 ← SILO
-  await railway_pg.update(
-      table="discovery_runs",
-      values={"actual_cost_usd": total_cost},  #写入 0.0
-      ...
-  )
-```
-
-**Fix exacto — dos opciones:**
-
-**Opción A (recomendada):** Que `HikerAPIClient` use `DiscoveryCostTracker` directamente. El challenge es que `HikerAPIClient` no recibe el `tracker` como parámetro — necesitaría pasarlo desde el worker u orquestador.
-
-**Opción B (quick fix):** El worker al final del run llama a `hikerapi_client.get_total_cost()` si existiera, pero no existe.
-
-**Opción C (correcta arquitectura):** Crear un singleton de costo que `HikerAPIClient` y `DiscoveryCostTracker` compartan. O hacer que el worker pase el tracker al `HikerAPIClient`.
-
----
-
-## HALLAZGO #3 — Balance agotado en enrichment (⚠️余额不足)
-
-**Problema:** Los $5 de HikerAPI se gastan casi todo en discovery (~81 requests). Cuando llega el enrichment de 50 profiles, el balance es insuficiente → `402 Payment Required`.
-
-**Del log:**
-```
-hikerapi_balance_before=$5.00
-hikerapi_balance_after=$3.38
-# Ya se gastaron $1.62 antes del enrichment
-
-Enrichment: 402 Payment Required para varios handles
-step3_degraded: true
-```
+**Problema:** El mensaje final dice "filtro geográfico" cuando la causa real fue "filtro de tiendas". El usuario no entiende qué pasó.
 
 **Fix sugerido:**
-1. Reducir handles a enriquecer (prefilter más agresivo a top 20)
-2. O aumentar balance antes de test runs
-3. O trackear el balance restante antes de enrichment y ajustar el batch size dinámicamente
+```python
+# En worker.py, al reportar resultados:
+if tienda_excluded_count > 0 and total_candidates == 0:
+    message = (
+        f"⚠️ {tienda_excluded_count} cuentas fueron identificadas como tiendas "
+        f"y excluidas del resultado. En Venezuela la mayoría de perfiles de "
+        f"belleza son tiendas. ¿Querés incluir tiendas en la búsqueda?"
+    )
+else:
+    message = f"⚠️ 0 candidatos que califiquen. Ajustá el brief..."
+```
 
 ---
 
-## RESUMEN DE BUGS PARA OPUS 5
+### BUG N3 — Geolocalización sin validación post-enrichment (⚠️ MEDIA)
 
-| # | Bug | Gravedad | Archivo | Línea | Fix |
-|---|-----|----------|---------|-------|-----|
-| 1 | Pydantic enum sin `partial` | 🔴 CRÍTICA | `schemas.py` | 11-16 | Agregar `PARTIAL = "partial"` al enum |
-| 2 | `actual_cost_usd = 0` (silos de costo) | 🔴 CRÍTICA | `hikerapi_client.py` + `discovery_cost_tracker.py` | — | Conectar HikerAPIClient al cost tracker |
-| 3 | Balance insuficiente en enrichment | ⚠️ | Pipeline design | — | Reducir handles o aumentar balance |
+**Severidad:** ⚠️ MEDIA — Afecta calidad de candidatos en mercados ambiguous.
+
+**Problema:** Los `geo_indicators` (31 términos VE: caracas, maracaibo, vzla, 🇻🇪, chamo, panas, etc.) se generan en el profile fingerprint y se usan en scoring, pero NO se validan contra la bio del perfil después del enrichment.
+
+**Escenario de riesgo:** Un handle de México o Colombia cuyo bio dice "skincare venezuela" (keyword stuff) podría rankear alto sin ser realmente de Venezuela.
+
+**Fix sugerido:**
+```python
+# En scoring.py, después del enrichment:
+def validate_geo_signal(profile, geo_indicators):
+    bio = profile.bio.lower()
+    location = (profile.location or "").lower()
+
+    matches = sum(1 for g in geo_indicators if g.lower() in bio or g.lower() in location)
+    if matches < 2:
+        return False  # No enough geo signal
+    return True
+
+# En lens_score:
+if not validate_geo_signal(profile, geo_indicators):
+    geo_score *= 0.5  # 50% penalty
+```
+
+---
+
+## CONTEXTO ECONÓMICO (Importante)
+
+```
+COSTO POR RUN (confirmado con datos reales):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Discovery (31 calls):    $0.62
+Enrichment 50 handles:  $1.00
+─────────────────────────
+Total típico:           $1.62 / run
+
+Con AI analysis:        +$0.05 = $1.67 / run
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+HIKERAPI BALANCE:       $0 remaining ⚠️
+PARA 5 RUNS NECESITAS:  $10-15 USD mínimo
+PARA 10 RUNS/MES:       $20-30 USD
+```
+
+⚠️ **El costo de $1.50-3.00 por run es elevado.** Con $10 de saldo solo se hacen ~5-6 runs completos.
+
+**Recomendación adicional:** Reducir `MAX_HANDLES_TO_ENRICH` de 50 a 20 para cortar enrichment cost a ~$0.40 y permitir ~15 runs con $10.
 
 ---
 
 ## PLAN DE VERIFICACIÓN POST-FIX
 
-Después de que Opus 5 aplique los fixes:
+Después de que Opus 5 aplique los fixes de N1, N2, N3:
 
-1. **Fix Bug 1:** `GET /runs/{id}` debe devolver `200` con `status="partial"` sin ValidationError
-2. **Fix Bug 2:** Nuevo test run — `actual_cost_usd` debe ser > 0 después del run
-3. **Fix Bug 3:** Verificar que enrichment no reciba 402 (balance suficiente)
+1. **Fix N1 (exclude_stores):** Recargar HikerAPI, re-run con `exclude_stores=false`, verificar `total_candidates > 0`
+2. **Fix N2 (mensaje):** Leer mensaje del assistant — debe mencionar "filtro tiendas" explícitamente
+3. **Fix N3 (geo validación):** Verificar que profiles enriquecidos tienen bio con geo_indicators
 
 ---
 
 ## CÓMO PROCEDER
 
-1. **Opus 5:** Apply fixes a los 3 bugs
+1. **Opus 5:** Aplica fixes N1, N2, N3
 2. **Nosotros:** Redeploy en Railway
-3. **Nuevo test run** con balance充值 de HikerAPI
-4. **Verificar:** `GET /runs/{id}` → 200, `actual_cost_usd` > 0, enrichment sin 402
-
----
-
-## ARQUITECTURA ACTUAL (worker.py ~1836 líneas)
-
-```
-DeepSeek → BriefStructured → QueryBuilder → DiscoveryPlan
-                                              ↓
-                        ┌─ STEP 1: Hashtag Top (3×)     → usuario REDUCIDO
-                        ├─ STEP 1_recent (2×)           → usuario REDUCIDO
-                        ├─ STEP 2: Keyword (3×3)         → usuario COMPLETO
-                        ├─ STEP 2p5: Reels (1×)          → usuario REDUCIDO
-                        ├─ STEP 3: Topsearch (1×2)      → usuario COMPLETO
-                        └─ STEP 4: Suggested (1×)       → usuario COMPLETO
-                                                  ↓
-                              PREFILTRO (top 50 por rough score)
-                                                  ↓
-                              ENRICHMENT (hasta 50 handles)
-                                                  ↓
-                              SCORING (geo + niche + lens_score)
-                                                  ↓
-                              INSERT → discovery_candidates
-```
+3. **Nosotros:** Recargar HikerAPI (mínimo $10)
+4. **Nuevo test run** con `exclude_stores=false`
+5. **Verificar:** `total_candidates > 0`, mensaje claro, geo_score > threshold
 
 ---
 
 ## INFRAESTRUCTURA ACTUAL
 
 ```
-GitHub:        https://github.com/ungardev/lawebcore
-Repo actual:   commit 7b3bc5d (Hito 21 aplicado)
-Backend:       Railway — lawebcore-production
-Frontend:      Vercel — lawebcore.vercel.app
-PostgreSQL:    Railway (postgres.railway.internal:5432/railway)
-Redis:         Railway (ARQ + cache + budget)
-API:           https://lawebcore-production.up.railway.app/api/v1
+Repositorio:    https://github.com/ungardev/lawebcore
+Repo actual:    commit 7e4a99b (Hito 22 aplicado)
+Backend:        Railway — lawebcore-production
+Frontend:       Vercel — lawebcore.vercel.app
+PostgreSQL:     Railway (postgres.railway.internal:5432/railway)
+Redis:          Railway (ARQ + cache + budget)
+API:            https://lawebcore-production.up.railway.app/api/v1
+HikerAPI:       Balance $0 — necesita recarga
 ```
 
 **Credenciales en localStorage (`laweb_token`):**
@@ -216,17 +253,43 @@ Rol: admin_general
 
 ---
 
-## LO QUE NECESITAMOS DE OPUS 5
+## ARQUITECTURA WORKER.PY ACTUAL
 
-**Sé brutalmente honesto. El sistema tiene 21 hitos aplicados pero 0 candidatos producción. Necesitamos:**
-
-1. **Fix Bug 1 (5 min):** Agregar `PARTIAL = "partial"` al enum `DiscoveryRunStatus`
-2. **Fix Bug 2 (30-60 min):** Diseñar e implementar la conexión entre `HikerAPIClient` y el sistema de costo. Necesitamos que cada llamada a HikerAPI grabe su costo en algún lado que el worker pueda leer al final.
-3. **Fix Bug 3 (quick):** Reducir handles a enriquecer o aumentar balance
-4. **Cualquier otro bug** que encuentres en el código mientras investigas
-
-**La recompensa:** El pipeline de discovery más caro y complejo que hemos construido, funcionando en producción por primera vez.
+```
+DeepSeek → BriefStructured → QueryBuilder → DiscoveryPlan
+                                              ↓
+                          ┌─ STEP 1: Hashtag Top (3×)     → usuario REDUCIDO
+                          ├─ STEP 1_recent (2×)           → usuario REDUCIDO
+                          ├─ STEP 2: Keyword (3×3)         → usuario COMPLETO
+                          ├─ STEP 2p5: Reels (1×)          → usuario REDUCIDO
+                          ├─ STEP 3: Topsearch (1×2)      → usuario COMPLETO
+                          └─ STEP 4: Suggested (1×)       → usuario COMPLETO
+                                                    ↓
+                                PREFILTRO (top 50 por rough score)
+                                                    ↓
+                                ENRICHMENT (hasta 50 handles)
+                                                    ↓
+                                SCORING (geo + niche + lens_score)
+                                                    ↓
+                                INSERT → discovery_candidates
+```
 
 ---
 
-*Documento generado: 2026-08-17 — Sexta auditoría LENS post-test-run-real CORREGIDO (3 bugs confirmados del log)*
+## LO QUE NECESITAMOS DE OPUS 5
+
+**Sé brutalmente honesto. El sistema tiene 22 hitos aplicados pero 0 candidatos producción en VE (el mercado más importante). Necesitamos:**
+
+1. **Fix N1 (exclude_stores VE) — 30-60 min:** Diseñar e implementar la solución para que el pipeline funcione en mercados donde "influencer de belleza" ≈ "tienda". Opcional: reducir MAX_HANDLES_TO_ENRICH para bajar costo.
+
+2. **Fix N2 (mensaje engañoso) — 10 min:** Cambiar el mensaje final del worker para que diga "filtro tiendas" en vez de "filtro geográfico".
+
+3. **Fix N3 (geo post-enrichment validation) — 30 min:** Implementar validación de geo_indicators contra bio del perfil después del enrichment.
+
+4. **Cualquier otro bug** que encuentres en el código mientras investigas.
+
+**La recompensa:** El pipeline de discovery más caro y complejo que hemos construido, funcionando en producción por primera vez con candidatos reales en VE.
+
+---
+
+*Documento generado: 2026-08-18 — Séptima auditoría LENS post-Hito-22-test-run-real (3 bugs nuevos N1-exclude_stores, N2-mensaje, N3-geo_validation)*

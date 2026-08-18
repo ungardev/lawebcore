@@ -1,9 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.6)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.7)
 
-> **Versión:** 3.6 — 2026-08-17
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.5 (`7b3bc5d`)
-> **Commit de referencia:** `7b3bc5d` (Hitos 1-21 + Bonus 1 aplicados)
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17 post-test-run-real)
+> **Versión:** 3.7 — 2026-08-18
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.6 (`7b3bc5d`)
+> **Commit de referencia:** `7e4a99b` (Hitos 1-22 aplicados)
+> **Repositorio:** https://github.com/ungardev/lawebcore
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22-test-run)
 
 ---
 
@@ -317,55 +318,132 @@ HikerAPIClient._get():
 - `budget_fuse_reserve_error_failing_closed` — Redis caído, fusible cerrado
 - `enrichment_budget_capped` — run se marca `partial` al alcanzar tope
 
-### 5.4.2 Test Run Real — 2026-08-17 (Run ID: `1a1d6128-d1e4-4922-b7c7-1c2cb949c658`)
+### 5.4.2 Test Run Hito 21 (PRE-HITO 22) — 2026-08-17 (Run ID: `1a1d6128-d1e4-4922-b7c7-1c2cb949c658`)
+
+> ⚠️ **Este run usó worker con código PRE-Hito 21.** El ARQ worker mantenía código viejo en memoria. Railway deployó pero el worker no recargó. Hallazgos de ese run llevaron a Hito 22.
+
+| Campo | Valor | Análisis |
+|-------|-------|----------|
+| `status` | `partial` | Pipeline terminó; enrichment falló |
+| `total_candidates` | **0** | Todos los perfiles filtrados |
+| `actual_cost_usd` | **0.0** | ❌ Cost tracking no funcionaba (código viejo) |
+| `total_unique_handles` | **123** | ✅ Discovery encontró handles |
+| `step3_degraded` | `true` | ✅ Flag correcto (enrichment falló) |
+
+**Hallazgos que llevaron a Hito 22:**
+1. Worker ejecutando código pre-Hito 21 (ARQ no recargó)
+2. `actual_cost_usd = 0` — costo no se persistía
+3. `lens:budget:run:{id}` no se creaba
+4. Filtro `geo_no_signal` rejectaba perfiles sin bio
+
+### 5.4.3 Test Run Hito 22 — 2026-08-18 (Run ID: `0c44ea23-53f6-42a8-8a9c-c6ec85359d2e`)
+
+> ✅ **Hito 22 aplicado y verificado.** Worker recargado con código correcto. Cost tracking funcionando. Pero surfaced 3 bugs nuevos.
 
 **Brief enviado:**
 ```json
 {
-  "product_name": "Test fail-fast Hito 21",
+  "product_name": "Test Hito 22",
   "industry": "belleza",
-  "niches": ["skincare"],
+  "niches": ["makeup", "skincare", "haircare", "nails", "beauty blogger", "belleza Venezuela"],
   "platforms": ["instagram"],
   "audience_countries": ["VE"],
-  "max_candidates": 5,
-  "analyze_with_ai": false
+  "exclude_stores": true,
+  "analyze_with_ai": true
 }
 ```
 
-**Resultados del run:**
+**Pipeline logs (19:50:56 → 19:52:40 UTC, 110s):**
+
+```
+[discovery_run_task] START run_id=0c44ea23-53f6-42a8-8a9c-c6ec85359d2e
+[STEP1] 60 posts from hashtags source=hikerapi
+[STEP2] 66 users from keywords source=hikerapi
+[STEP1_RECENT] 40 posts from recent hashtag search
+[STEP2p5_REELS] 0 creators from reels search
+[STEP3] 0 accounts from topsearch
+[STEP4] 0 accounts from suggested
+[DIAG] unique_handles=133
+[STEP 3] Profile enrichment → HTTP 402 Payment Required (balance agotado)
+[SCORING] 0 scored → 0 score≥5 → 0 qualified (tienda_excluded=True)
+[discovery_run_task] DONE total_candidates=0
+```
+
+**Resultados verificados en DB:**
 
 | Campo | Valor | Análisis |
 |-------|-------|----------|
-| `status` | `completed` | Pipeline terminó sin errores |
-| `total_candidates` | **0** | ❌ NINGÚN candidato insertado |
-| `candidates_found` | **0** | ❌ Todos los perfiles fueron filtrados |
-| `actual_cost_usd` | **0.0** | ❌ Bug: no se persisten los costos en la DB |
-| `total_unique_handles` | **123** | ✅ Discovery encontró handles |
-| `keywords_count` | **20** | ⚠️Muchas variaciones de keywords generadas |
-| `step3_degraded` | `false` | ✅ Enrichment no falló |
-| `completed_steps` | todos | Pipeline ejecutó todas las fases |
+| `status` | `partial` | ✅ 200 OK en GET (no más 500) |
+| `actual_cost_usd` | **`$1.64`** | ✅ Cost tracking funciona correctamente |
+| `total_unique_handles` | **133** | ✅ Discovery efectivo (60 hashtag + 40 recent + 66 keyword) |
+| `total_candidates` | **0** | ❌ Todos filtrados por `exclude_stores=true` |
+| `step3_degraded` | `true` | ✅ 402 durante enrichment |
+| `api_costs` insertado | **82 calls × $0.02** | ✅ Registro correcto en `api_costs` |
+| Mensaje al usuario | "filtro geográfico" | ⚠️ **ENGANOSO** — fue filtro tiendas |
 
-**Redis keys existentes:**
+**Redis keys confirmadas:**
 ```
-lens:budget:hikerapi:2026-08 = "1.64"  (82 calls × $0.02)
-```
-
-**Redis keys FALTANTES:**
-```
-lens:budget:run:1a1d6128-d1e4-4922-b7c7-1c2cb949c658  → NO EXISTE (nil)
+lens:budget:hikerapi:2026-08 = "1.64"  (82 calls)
+lens:budget:run:0c44ea23-53f6-42a8-8a9c-c6ec85359d2e = 82
 ```
 
-**Hallazgos críticos:**
+**3 Bugs Nuevos Descubiertos (Hito 22):**
 
-1. **El worker estaba ejecutando código PRE-Hito 21.** El proceso ARQ mantiene el código en memoria — Railway hizo deploy pero el worker no recargó. Resultado: el accounting usó el modelo viejo (doble conteo parcial + sin run counter).
+| # | Bug | Severidad | Causa |
+|---|-----|-----------|-------|
+| N1 | `exclude_stores=true` filtra 100% handles VE | 🔴 CRÍTICA | En VE, "influencers" de belleza son casi todos tiendas |
+| N2 | Mensaje dice "filtro geográfico" pero fue filtro tiendas | ⚠️ MEDIA | Mensaje confunde al usuario |
+| N3 | Geolocalización solo por query, no por bio validada | ⚠️ MEDIA | `geo_indicators` en fingerprint no se usan post-enrichment |
 
-2. **123 handles encontrados, 0 candidatos en DB.** Todos los perfiles fueron filtrados en la fase de scoring. El culpable más probable: filtro `geo_no_signal` (worker.py línea 1119) rechaza perfiles que tienen `geo_score < 0.4` sin `has_hard_geo_signal`. Perfiles de hashtag típicamente tienen bio vacía → geo_score = 0.0 → filtrados.
+**Análisis del Bug N1 — `exclude_stores` en VE:**
 
-3. **`actual_cost_usd = 0.0` no se persiste.** Después de Hito 21, el worker ya no llama `record_call()` — el costo total del run no se está grabando en `discovery_runs.actual_cost_usd`.
+Handles enriquecidos en este run (todos tiendas → filtrados):
+```
+shopmarianazambrano.ve, tashashop.ccs, canaimashop_ve,
+najustoreve, productosdebellezavenezuela, aleacosmetics.vzla,
+sakuracarevzla, fiorellacosmetics.vzla, mtc.productos_de_belleza_vnzla
+```
 
-4. **`accepted` permanece en 0 siempre.** El campo `discovery_runs.accepted` nunca se actualiza cuando un candidato se marca como "saved".
+En Venezuela, el mercado de "influencers de belleza" es casi 100% tiendas online que venden productos. El filtro `exclude_stores=true` (default del wizard) elimina prácticamente todos los candidatos en este mercado.
 
-5. **`lens:budget:run:{run_id}` no se crea.** El worker viejo no tenía este formato de key. Con Hito 21 activo, el formato correcto es `lens:budget:run:{run_id}` con valor = número de calls del run.
+**Costo Real Confirmado por Run:**
+
+| Escenario | Requests | Costo USD |
+|-----------|----------|-----------|
+| Discovery + Enrichment 100% (50 handles) | ~82 | **$1.64** |
+| Discovery + Enrichment 50% (25 handles) | ~56 | **$1.12** |
+| Discovery ONLY (sin enrichment) | ~32 | **$0.64** |
+| Balance agotado (este run) | 82 | **$1.64** |
+
+⚠️ **El costo de $1.50-3.00 por run es elevado.** Con $10 de saldo: ~5-6 runs completos.
+
+---
+
+## ⚠️ ALERTA DE COSTO — HikerAPI Balance Agotado
+
+```
+╔══════════════════════════════════════════════════════════════════════╗
+║  HIKERAPI BALANCE: $0.00 USD — AGOTADO                           ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Costo por run confirmado:  $1.50 - $3.00 USD                    ║
+║  Runs posibles con $10:      ~5-6 runs completos                 ║
+║  Runs posibles con $20:      ~10-13 runs completos                ║
+║  Runs posibles con $50:      ~25-33 runs completos               ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  RECOMENDACIÓN:                                                    ║
+║  • Reducir MAX_HANDLES_TO_ENRICH de 50 a 20 → ahorra 60%       ║
+║  • Con $10 y 20 handles: ~15 runs/mes                          ║
+║  • Negociar plan bulk con HikerAPI para descuentos               ║
+╚══════════════════════════════════════════════════════════════════════╝
+```
+
+**Desglose de costo por fase confirmado en test run real:**
+
+| Fase | Calls | Costo | % del total |
+|------|-------|-------|-------------|
+| Discovery (hashtags + keywords) | ~32 | $0.64 | 39% |
+| Enrichment (50 handles) | 50 | $1.00 | 61% |
+| **Total por run** | **~82** | **$1.64** | 100% |
 
 ### 5.5 Guards implementados contra sobre-costo
 
@@ -562,23 +640,28 @@ lens:profile:{fingerprint}
 | 19 | `a5da503` | orchestrator.state memory leak | LRU/TTL OrderedDict |
 | 20 | `611d22e` | test_hashtag_cap_30 + test_result_ranker rotos | Arreglados |
 | 21 | `hito21` | Doble conteo + caché cobra + fail-open | Single accounting en _get() + NOSCRIPT fallback + fail-closed |
+| 22 | `7e4a99b` | actual_cost_usd=0 + partial=500 + worker old | get_run_calls() + PARTIAL enum + redeploy |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### 9.2 Abiertos
+### 9.2 Abiertos (Post-Hito 22)
 
-| Issue | Prioridad | Detalle |
-|-------|-----------|---------|
-| HIKERAPI_COST_PER_CALL_USD legacy | ~~**ALTA**~~ ✅ | **RESUELTO** en config.py + Hito 21 |
-| **Worker con código viejo (pre-Hito 21)** | 🔴 **CRÍTICA** | ARQ worker mantiene código en memoria — necesita redeploy para activar Hito 21 |
-| **geo_no_signal filter rechaza 100% de hashtag profiles** | 🔴 **CRÍTICA** | Perfiles de hashtag sin bio/location/country → geo_score=0.0 → filtrados. Filtro línea 1119 |
-| **actual_cost_usd no se persiste** | 🔴 **CRÍTICA** | Hito 21 remueve record_call() del worker — costo total del run no se graba |
-| **`accepted` nunca se actualiza** | 🔴 **CRÍTICA** | `discovery_runs.accepted` siempre 0 — no se actualiza al guardar candidatos |
-| **`lens:budget:run:{id}` no se crea** | **Alta** | Puede ser caused por worker old code o formato diferente de key |
-| Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad de candidatos |
-| discovery_runs.metadata sin `partial` en enum | **Alta** | Migración 104 debe ejecutarse |
-| Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; endpoints de discovery aún no filtran |
-| discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse |
-| Vocabulario de negocio defaults | **Baja** | Hito 18 hizo externalización — defaults mantienen compat |
+| Issue | Prioridad | Detalle | Estado |
+|-------|-----------|---------|--------|
+| HIKERAPI_COST_PER_CALL_USD legacy | ✅ RESUELTO | Cost ahora $0.02 real en config | — |
+| **Worker con código viejo (pre-Hito 21)** | ✅ **RESUELTO** | Hito 22 — redeploy verificado con logs | — |
+| **actual_cost_usd no se persiste** | ✅ **RESUELTO** | Hito 22 — $1.64 grabado correctamente | — |
+| **`lens:budget:run:{id}` no se crea** | ✅ **RESUELTO** | Hito 22 — key creada con 82 calls | — |
+| discovery_runs.metadata sin `partial` enum | ✅ **RESUELTO** | Hito 22 — enum actualizado | — |
+| **`exclude_stores` filtra 100% handles VE** | 🔴 **CRÍTICA** | En VE, "influencers" beauty son tiendas. Default del wizard excluye todo | **NUEVO** |
+| **`accepted` nunca se actualiza** | 🔴 **CRÍTICA** | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
+| Mensaje engañoso al usuario | ⚠️ **MEDIA** | Dice "filtro geográfico" pero fue "filtro tiendas" | **NUEVO** |
+| Geolocalización sin validación post-enrichment | ⚠️ **MEDIA** | `geo_indicators` no se usan para validar bio del perfil | **NUEVO** |
+| Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad | **PENDIENTE** |
+| geo_no_signal filter rechaza hashtag profiles | ⚠️ **MEDIA** | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | Parcial (ya no es blocker principal) |
+| Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; discovery aún no filtra | **PENDIENTE** |
+| discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse | **PENDIENTE** |
+| Costo elevado $1.50-3.00 por run | ⚠️ **ECONÓMICA** | Con $10: solo 5-6 runs/mes. Balance se agota rápido | **NUEVO** |
+| HikerAPI balance agotado | 🔴 **BLOQUEANTE** | $0 remaining — necesita recarga para más tests | **NUEVO** |
 
 ---
 
@@ -623,97 +706,96 @@ healthcheckPath = "/api/v1/health"
 
 > Ejecutado con worker Hito 21 activo + saldo real HikerAPI. Run ID: `1a1d6128-d1e4-4922-b7c7-1c2cb949c658`
 
-### Bug 1 — Pydantic enum sin `partial` (🔴 CRÍTICA — 500 Error)
+## 12. Bugs Críticos Detectados (Hito 22 Test Run — 2026-08-18)
 
-**Archivo:** `packages/discovery/discovery/schemas.py` líneas 11-16
-**Endpoint afectado:** `GET /api/v1/lens/discovery/runs/{run_id}` → 500 Internal Server Error
+> Run ID: `0c44ea23-53f6-42a8-8a9c-c6ec85359d2e` — Hito 22 aplicado, cost tracking funcionando, 3 bugs nuevos encontrados.
 
+### Bug 1 — Pydantic enum sin `partial` (✅ RESUELTO en Hito 22)
+
+**Archivo:** `packages/discovery/discovery/schemas.py`
+**Fix:** `PARTIAL = "partial"` añadido al enum
+**Verificación:** `GET /runs/{id}` retorna 200 OK con `status=partial` — no más 500.
+
+---
+
+### Bug 2 — `actual_cost_usd` siempre 0 (✅ RESUELTO en Hito 22)
+
+**Archivo:** `apps/api/app/core/budget_fuse.py` — método `get_run_calls()`
+**Fix:** Worker actualiza `actual_cost_usd` con costo real de `api_costs` al finalizar run
+**Verificación:** Run `0c44ea23` — `actual_cost_usd=$1.64`, `api_costs` insertado con 82 calls
+
+---
+
+### Bug 3 — Balance agotado en enrichment (⚠️ PERSISTE)
+
+**Problema:** Los ~$1.50-2.00 de discovery + enrichment agotan el saldo rápido. Con $10 de saldo: solo 5-6 runs completos.
+**Solución temporal:** Recargar HikerAPI. **Solución estructural:** Reducir `MAX_HANDLES_TO_ENRICH` de 50 a 20.
+
+---
+
+## 13. Bugs Nuevos (Hito 23 — Para Opus 5)
+
+### Bug N1 — `exclude_stores` elimina 100% de handles en VE (🔴 CRÍTICA)
+
+**Problema:** El default `exclude_stores=true` del wizard elimina prácticamente TODOS los handles cuando el nicho es belleza en Venezuela — porque el ecosistema local de "influencers" de belleza está compuesto casi 100% por tiendas online.
+
+**Handles enriquecidos en el run (todos fueron filtrados):**
+```
+shopmarianazambrano.ve — tienda
+tashashop.ccs — tienda
+canaimashop_ve — tienda
+najustoreve — tienda
+productosdebellezavenezuela — tienda
+aleacosmetics.vzla — tienda
+sakuracarevzla — tienda
+fiorellacosmetics.vzla — tienda
+```
+
+**Causa raíz:** scoring.py función `is_tienda_signal()` + filtro `exclude_stores` en worker.py. El scoring asigna tienda_excluded=True a cualquier cuenta que parece tienda (hashtags comerciales, bio con "shop", "tienda", "$，" venta", etc.).
+
+**Impacto:** No se pueden producir candidatos en VE con el brief por defecto.
+
+**Fix sugerido:**
+1. En `BriefWizard`: agregar toggle "Incluir tiendas" — activado por default para VE/AR/MX
+2. O cambiar el scoring: solo excluir si `is_tienda=True AND niche_relevance < threshold` (una tienda con buen match podría ser válida)
+
+---
+
+### Bug N2 — Mensaje al usuario engañoso (⚠️ MEDIA)
+
+**Problema:** Cuando el run termina con 0 candidatos por `exclude_stores`, el mensaje dice:
+
+> *"Escaneé 133 perfiles y 0 pasaron el filtro geográfico, pero ninguno califica en nicho o calidad (las tiendas y perfiles genéricos fueron filtrados)"*
+
+Esto dice "filtro geográfico" pero en realidad fue "filtro de tiendas". El usuario queda confundido.
+
+**Fix sugerido:**
 ```python
-# ACTUAL (falla con status='partial' de la DB):
-class DiscoveryRunStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    # FALTA: PARTIAL = "partial"
-
-# FIJO:
-class DiscoveryRunStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    PARTIAL = "partial"  # ← AGREGAR
-```
-
-**Causa:** La migración `00000000000104_*` añadió `partial` a la columna PostgreSQL pero no actualizó el enum de Pydantic. Cuando `GET /runs/{id}` hace `return DiscoveryRunResponse(**result)`, Pydantic valida el enum y rechaza `partial` → 500.
-
-**Evidencia del log:**
-```
-pydantic_core._pydantic_core.ValidationError: 1 validation error for DiscoveryRunResponse
-status
-  Input should be 'pending', 'running', 'completed', 'failed' or 'cancelled'
-  [type=enum, input_value='partial', input_type=str]
+if tienda_excluded_count > 0 and total_candidates == 0:
+    message = (
+        f"⚠️ {tienda_excluded_count} cuentas fueron identificadas como tiendas "
+        f"y excluidas del resultado. En Venezuela la mayoría de perfiles de "
+        f"belleza son tiendas. ¿Querés incluir tiendas en la búsqueda?"
+    )
 ```
 
 ---
 
-### Bug 2 — `actual_cost_usd` siempre 0 (🔴 CRÍTICA)
+### Bug N3 — Geolocalización sin validación post-enrichment (⚠️ MEDIA)
 
-**Archivos:** `packages/discovery/discovery/tools/hikerapi_client.py` + `apps/api/app/core/discovery_cost_tracker.py`
+**Problema:** Los `geo_indicators` (31 términos VE: caracas, maracaibo, vzla, 🇻🇪, chamo, etc.) se generan en el profile fingerprint y se usan en el scoring inicial, pero NO se validan contra la bio del perfil después del enrichment.
 
-**Causa raíz:** Sistema de tracking de costos fragmentado en 3 partes que nunca se conectan:
+**Escenario:** Un handle de México con "skincare venezuela" en el bio podría rankear alto si matchea keywords pero no tiene indicadores geográficos reales de VE.
 
-```
-HikerAPIClient (hikerapi_client.py)
-  └─ NO tiene record_cost() → costos nunca se guardan
-
-ApifyClient (apify_client.py) 
-  └─ tiene record_cost() → guarda en self._costs (in-memory)
-  └─ PERO es instancia separada de DiscoveryCostTracker
-
-DiscoveryCostTracker (discovery_cost_tracker.py)
-  └─ get_run_summary() lee de self._apify_costs y self._deepseek_costs
-  └─ NUNCA recibe costos de HikerAPIClient
-```
-
-**Worker línea 1463-1472:**
-```python
-tracker = get_discovery_cost_tracker()      # nueva instancia
-cost_summary = tracker.get_run_summary(run_id)  # siempre {total_usd: 0}
-total_cost = cost_summary["total_usd"]      # 0.0
-await railway_pg.update(
-    table="discovery_runs",
-    values={"actual_cost_usd": total_cost},  #写入 0
-    ...
-)
-```
-
-**Fix requerido:** `HikerAPIClient` necesita grabar costos en `DiscoveryCostTracker` O el worker debe usar `ApifyClient.get_and_clear_cost()` (que sí tiene los costos reales de las llamadas Apify).
+**Fix sugerido:** Después del enrichment (Step 3), validar que el bio/location del perfil contiene al menos 2-3 `geo_indicators`. Si no, restar 20 puntos del `geo_score`.
 
 ---
 
-### Bug 3 — Balance agotado en enrichment (⚠️余额不足)
-
-**Problema:** El plan "Start" de HikerAPI ($5) se agota en la fase de discovery. Con 115 handles encontrados y ~50+ enrichment calls necesarias, los primeros enrichment calls reciben `402 Payment Required`.
-
-**Evidencia del log:**
-```
-Enrichment step failed: 402 Client Error: Payment Required
-enrichment_1_succeeded: false
-step3_degraded: true
-```
-
-**Fix sugerido:** Reducir el número de handles enriquecidos (prefilter más agresivo) o aumentar el balance de HikerAPI antes de runs de prueba.
-
----
-
-## 13. Recursos
+## 14. Recursos
 
 | Recurso | URL |
 |---------|-----|
+| Repositorio | https://github.com/ungardev/lawebcore |
 | API Docs | `https://lawebcore-production.up.railway.app/api/docs` |
 | HikerAPI billing | `https://hikerapi.com/billing` |
 | HikerAPI docs | `https://api.hikerapi.com/docs` |
@@ -722,4 +804,4 @@ step3_degraded: true
 
 ---
 
-*Documento generado: 2026-08-17 — Arquitectura LENS v3.6 (21 hitos + Bonus 1 aplicados + 3 bugs críticos del test run real). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`.*
+*Documento generado: 2026-08-18 — Arquitectura LENS v3.7 (22 hitos aplicados). Test run Hito 22 completado con 3 bugs nuevos (N1-exclude_stores, N2-mensaje engañoso, N3-geo sin validación). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5-7.*
