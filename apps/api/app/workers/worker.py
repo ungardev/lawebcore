@@ -1041,11 +1041,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         bots_filtered = 0
         untracked_no_followers = 0
         low_followers_skipped = 0
+        above_max_followers = 0   # hito 22 — antes se contaba como "low_followers"
+        no_engagement_data = 0    # hito 22 — perfiles sin latestPosts
         geo_country_mismatch = 0
         geo_no_signal = 0
         political_filtered = 0
         geo_passed = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
+        # HITO 22: el techo de seguidores viene del brief, no de una constante.
+        # Antes TIER_MAX_FOLLOWERS=50.000 hacía imposible devolver cualquier
+        # perfil mid/macro, aunque el cliente los pidiera explícitamente.
+        max_followers_cap = TIER_MAX_FOLLOWERS
+        if brief.influencer_preferences:
+            pref_max = brief.influencer_preferences.get("max_followers")
+            if isinstance(pref_max, int) and pref_max > 0:
+                max_followers_cap = pref_max
         exclusion_keywords = profile_data.get(
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
@@ -1057,27 +1067,39 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             if followers < plan.min_followers:
                 low_followers_skipped += 1
                 continue
-            if followers > TIER_MAX_FOLLOWERS:
-                low_followers_skipped += 1
+            if followers > max_followers_cap:
+                above_max_followers += 1
                 continue
 
             latest = p.get("latestPosts") or []
             er = 0.0
             likes_avg = 0.0
             comments_avg = 0.0
-            if latest and followers > 0:
+            # HITO 22: `latestPosts` sólo existe si alguna fuente lo pobló.
+            # HikerAPI `/v2/user/by/username` NO devuelve posts, así que hoy
+            # `latest` está vacío para todos los perfiles. Sin este flag, un ER
+            # de 0 por AUSENCIA de datos era indistinguible de un ER de 0 por
+            # cuenta inactiva, y el filtro de bots descartaba el 100% de los
+            # perfiles con más de 5.000 seguidores.
+            has_engagement_data = bool(latest) and followers > 0
+            if has_engagement_data:
                 likes_avg = sum((post.get("likesCount") or 0) for post in latest) / max(len(latest), 1)
                 comments_avg = sum((post.get("commentsCount") or 0) for post in latest) / max(len(latest), 1)
                 er = (likes_avg + comments_avg) / followers
 
-            p["engagement_rate"] = er
+            p["engagement_rate"] = er if has_engagement_data else None
+            p["_has_engagement_data"] = has_engagement_data
 
-            if er > 0.30:
-                bots_filtered += 1
-                continue
-            if er < 0.005 and followers > 5000:
-                bots_filtered += 1
-                continue
+            # El filtro anti-bot sólo puede opinar cuando hay datos reales.
+            if has_engagement_data:
+                if er > 0.30:
+                    bots_filtered += 1
+                    continue
+                if er < 0.005 and followers > 5000:
+                    bots_filtered += 1
+                    continue
+            else:
+                no_engagement_data += 1
 
             about = p.get("about") or {}
             about_country = (about.get("country") or "").strip().upper()
@@ -1295,13 +1317,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             distribution=score_distribution,
             skipped={
                 "untracked_no_followers": untracked_no_followers,
-                "low_followers_skipped": low_followers_skipped,
+                "below_min_followers": low_followers_skipped,
+                "above_max_followers": above_max_followers,
                 "bots_filtered": bots_filtered,
+                "no_engagement_data": no_engagement_data,
                 "geo_country_mismatch": geo_country_mismatch,
                 "geo_no_signal": geo_no_signal,
                 "political_filtered": political_filtered,
                 "geo_passed": geo_passed,
             },
+            total_handles=len(profiles),
             top_5=top_5_summary,
         )
 
@@ -1462,15 +1487,38 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         tracker = get_discovery_cost_tracker()
 
+        # HITO 22: el costo real de HikerAPI vive en el contador de BudgetFuse
+        # (`lens:budget:run:{run_id}`), que desde el hito 21 se incrementa una
+        # vez por llamada HTTP real. DiscoveryCostTracker sólo conoce Apify
+        # (eliminado) y DeepSeek, por eso `actual_cost_usd` salía siempre 0.
+        hikerapi_calls = await budget_fuse.get_run_calls(run_id)
+        hikerapi_cost = hikerapi_calls * settings.HIKERAPI_COST_PER_CALL_USD
         cost_summary = tracker.get_run_summary(run_id)
-        total_cost = cost_summary["total_usd"]
+        total_cost = round(hikerapi_cost + cost_summary.get("total_usd", 0.0), 6)
+
+        logger.info(
+            "run_cost_recorded",
+            run_id=run_id,
+            hikerapi_calls=hikerapi_calls,
+            hikerapi_usd=round(hikerapi_cost, 6),
+            other_usd=cost_summary.get("total_usd", 0.0),
+            total_usd=total_cost,
+        )
 
         await railway_pg.update(
             table="discovery_runs",
             values={"actual_cost_usd": total_cost},
             filters=[f"id=eq.{run_id}"],
         )
+        await railway_pg.insert("api_costs", {
+            "provider": "hikerapi",
+            "operation": "discovery_pipeline",
+            "entity_id": run_id,
+            "cost_usd": hikerapi_cost,
+            "request_count": hikerapi_calls,
+        })
         await tracker.flush(run_id)
+        # reset_run_counter va DESPUÉS de leer el contador, no antes.
         await budget_fuse.reset_run_counter(run_id)
 
         lens_active_runs.dec()

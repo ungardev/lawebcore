@@ -14,6 +14,7 @@ class DiscoveryRunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    PARTIAL = "partial"  # hito 22 — el worker ya lo emite (migración 104)
 
 
 class CandidateStatus(str, Enum):

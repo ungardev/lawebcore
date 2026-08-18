@@ -285,6 +285,21 @@ end
             alert_sent=alert_sent,
         )
 
+    async def get_run_calls(self, run_id: str) -> int:
+        """Número de llamadas HTTP reales cobradas a este run (hito 22).
+
+        Es la fuente de verdad del costo del run: desde el hito 21,
+        reserve_and_record() incrementa este contador una vez por request real
+        (los cache hits y el modo replay no lo tocan).
+        """
+        try:
+            r = await self._get_redis()
+            raw = await r.get(self._run_key(run_id))
+            return int(raw) if raw else 0
+        except Exception as e:
+            logger.warning("budget_fuse_get_run_calls_error", run_id=run_id, error=str(e))
+            return 0
+
     async def reset_run_counter(self, run_id: str) -> None:
         """Delete the per-run call counter. Called at end of run."""
         try:
