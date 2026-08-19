@@ -11,9 +11,12 @@ import { Slider } from '@/components/ui/slider';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import type { DiscoveryRun, Platform, RunProgress } from '../types/discovery';
+import { BulkActionBar } from '../components/BulkActionBar';
 import { CandidateList } from '../components/CandidateList';
 import { SearchProgress } from '../components/SearchProgress';
+import { lensApi } from '../api/lensApi';
 import { useDiscoveryRun } from '../hooks/useDiscoveryRun';
+import { useSelectionStore } from '@/stores/selectionStore';
 
 const PLATFORMS: Platform[] = ['instagram', 'tiktok', 'youtube', 'x', 'facebook'];
 
@@ -22,6 +25,10 @@ export function LensSearchPage() {
   const [searchParams] = useSearchParams();
   const { run, candidates, isLoading, error, createRun, pollRun, loadRun, cancelPoll, saveCandidate, dismissCandidate } = useDiscoveryRun();
   const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 65, audience_countries: '', platforms: [] as Platform[] });
+  const [analyzeLoading, setAnalyzeLoading] = useState(false);
+  const { selectedHandles, clear: clearSelection } = useSelectionStore();
+  const selectionMode = run?.status === 'explored';
+  const isSelectionEmpty = selectedHandles.length === 0;
 
   useEffect(() => {
     const runId = searchParams.get('runId');
@@ -49,6 +56,21 @@ export function LensSearchPage() {
     } catch (searchError) {
       if (searchError instanceof Error && searchError.message === 'SEARCH_CANCELLED') return;
       toast.error('Error al ejecutar la búsqueda');
+    }
+  };
+
+  const handleAnalyzeSelected = async () => {
+    if (!run || isSelectionEmpty) return;
+    try {
+      setAnalyzeLoading(true);
+      const newRun = await lensApi.search.analyzeSelected(run.id, selectedHandles);
+      clearSelection();
+      toast.success('Análisis iniciado — mirá el progreso en el historial');
+      navigate('/lens/runs');
+    } catch {
+      toast.error('Error al iniciar el análisis');
+    } finally {
+      setAnalyzeLoading(false);
     }
   };
 
@@ -106,8 +128,9 @@ export function LensSearchPage() {
             {run?.error && <p className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{run.error}</p>}
           </div>
 
-          {run && hasResults && <Card className="border-divider bg-panel p-5 shadow-none"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-eyebrow text-muted-foreground">Salida del run</p><h2 className="mt-1 text-lg font-semibold text-foreground">{run.total_candidates} candidatos encontrados</h2></div>{run.actual_cost_usd != null && <Badge variant="outline" className="border-success/30 bg-success/10 font-mono text-success">${run.actual_cost_usd.toFixed(4)} gastado</Badge>}</div><CandidateList candidates={candidates} onSave={saveCandidate} onDismiss={dismissCandidate} isLoading={isLoading} runId={run.id} /></Card>}
+          {run && hasResults && <Card className="border-divider bg-panel p-5 shadow-none"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><p className="text-eyebrow text-muted-foreground">Salida del run</p><h2 className="mt-1 text-lg font-semibold text-foreground">{run.total_candidates} candidatos encontrados</h2></div>{run.actual_cost_usd != null && <Badge variant="outline" className="border-success/30 bg-success/10 font-mono text-success">${run.actual_cost_usd.toFixed(4)} gastado</Badge>}</div><CandidateList candidates={candidates} onSave={saveCandidate} onDismiss={dismissCandidate} isLoading={isLoading} runId={run.id} selectionMode={selectionMode} /></Card>}
         </section>
+        {selectionMode && <BulkActionBar count={selectedHandles.length} onAnalyze={handleAnalyzeSelected} onClear={clearSelection} isLoading={analyzeLoading} isDisabled={isSelectionEmpty} />}
       </div>
     </div>
   );

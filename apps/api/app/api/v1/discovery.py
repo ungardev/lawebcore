@@ -528,6 +528,60 @@ async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDe
     )
 
 
+class AnalyzeSelectedRequest(BaseModel):
+    run_id: UUID
+    handles_to_analyze: list[str]
+
+
+@router.post("/analyze-selected", response_model=DiscoveryRunResponse)
+async def analyze_selected(body: AnalyzeSelectedRequest, user: CurrentUserDep):
+    """Crea un run en modo 'analyze' para enriquecer handles seleccionados en modo 'explore'.
+
+    El run padre (explore) ya descubrió los handles. Esta operación los enriquece
+    y scorea con los datos reales de HikerAPI.
+    """
+    from discovery.memory import conversation_memory
+
+    from app.core.worker_enqueuer import enqueue_discovery_run
+
+    parent_run = await railway_pg.select_one(
+        table="discovery_runs",
+        select="*",
+        filters=[f"id=eq.{body.run_id}"],
+    )
+    if not parent_run:
+        raise HTTPException(status_code=404, detail="Run padre no encontrado")
+
+    brief_parsed = parent_run.get("brief_parsed", {})
+    if isinstance(brief_parsed, str):
+        import json
+        brief_parsed = json.loads(brief_parsed)
+
+    brief_parsed["discovery_mode"] = "analyze"
+    brief_parsed["handles_to_analyze"] = body.handles_to_analyze
+
+    from discovery.schemas import DiscoverySearchRequest
+    brief = DiscoverySearchRequest(**brief_parsed)
+
+    run = await conversation_memory.launch_discovery_run(
+        brief=brief,
+        created_by=user.id,
+    )
+    await enqueue_discovery_run(str(run["id"]))
+
+    return DiscoveryRunResponse(
+        id=run["id"],
+        status=DiscoveryRunStatus.PENDING,
+        total_candidates=0,
+        accepted=0,
+        actual_cost_usd=None,
+        error=None,
+        started_at=None,
+        completed_at=None,
+        created_at=run["created_at"],
+    )
+
+
 @router.post("/enrich-influencers", response_model=EnrichResponse)
 async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
     """Enriquece perfiles de influencers con datos reales de Instagram via Apify.

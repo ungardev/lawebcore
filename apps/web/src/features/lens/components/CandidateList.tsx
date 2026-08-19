@@ -5,6 +5,7 @@ import type { DiscoveryCandidate, Platform } from '../types/discovery';
 import { CandidateCard } from './CandidateCard';
 import { PlatformBadge } from './PlatformBadge';
 import { lensApi } from '../api/lensApi';
+import { useSelectionStore } from '@/stores/selectionStore';
 
 interface CandidateListProps {
   candidates: DiscoveryCandidate[];
@@ -12,14 +13,16 @@ interface CandidateListProps {
   onDismiss?: (id: string) => void;
   isLoading?: boolean;
   runId?: string;
+  selectionMode?: boolean;
 }
 
 const ALL_PLATFORMS: Platform[] = ['instagram', 'tiktok', 'youtube', 'x', 'facebook'];
 const ALL_TIERS = ['NANO', 'MICRO', 'MID', 'MACRO'] as const;
 
-export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId }: CandidateListProps) {
+export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId, selectionMode }: CandidateListProps) {
   const [platformFilter, setPlatformFilter] = useState<Platform | 'all'>('all');
   const [tierFilter, setTierFilter] = useState<string>('all');
+  const { selectedHandles, toggle } = useSelectionStore();
 
   const savedCount = candidates.filter((c) => c.status === 'saved').length;
 
@@ -109,6 +112,9 @@ export function CandidateList({ candidates, onSave, onDismiss, isLoading, runId 
                 candidate={candidate}
                 onSave={onSave}
                 onDismiss={onDismiss}
+                selectionMode={selectionMode}
+                selected={selectedHandles.includes(candidate.handle)}
+                onToggleSelect={selectionMode ? toggle : undefined}
               />
             ))}
           </div>

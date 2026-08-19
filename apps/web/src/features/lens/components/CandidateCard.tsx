@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Bookmark, BookmarkCheck, ExternalLink, X, BadgeCheck } from 'lucide-react'
+import { Bookmark, BookmarkCheck, ExternalLink, X, BadgeCheck, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import {
@@ -21,9 +21,12 @@ interface CandidateCardProps {
   onSave?: (id: string) => void
   onDismiss?: (id: string) => void
   compact?: boolean
+  selectionMode?: boolean
+  selected?: boolean
+  onToggleSelect?: (handle: string) => void
 }
 
-export function CandidateCard({ candidate, onSave, onDismiss, compact }: CandidateCardProps) {
+export function CandidateCard({ candidate, onSave, onDismiss, compact, selectionMode, selected, onToggleSelect }: CandidateCardProps) {
   const [imgFailed, setImgFailed] = useState(false)
   const tier = candidate.tier ?? classifyTier(candidate.followers)
   const avatarUrl = candidate.avatar_url
@@ -43,10 +46,26 @@ export function CandidateCard({ candidate, onSave, onDismiss, compact }: Candida
   return (
     <article
       className={cn(
-        'group overflow-hidden rounded-lg border border-divider bg-card text-card-foreground transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-primary/35 hover:shadow-soft',
+        'group relative overflow-hidden rounded-lg border bg-card text-card-foreground transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-px hover:border-primary/35 hover:shadow-soft',
         compact ? 'p-3' : 'p-4',
+        selected && 'border-primary/60 bg-primary/5 ring-1 ring-primary/30',
       )}
     >
+      {selectionMode && onToggleSelect && (
+        <button
+          type="button"
+          onClick={() => onToggleSelect(candidate.handle)}
+          className={cn(
+            'absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 transition-colors',
+            selected
+              ? 'border-primary bg-primary text-background'
+              : 'border-muted-foreground/40 bg-background hover:border-primary/60',
+          )}
+          aria-label={selected ? `Deseleccionar @${candidate.handle}` : `Seleccionar @${candidate.handle}`}
+        >
+          {selected && <Check className="h-3 w-3" aria-hidden="true" />}
+        </button>
+      )}
       <div className="flex items-start gap-3">
         {showInitials ? (
           <div

@@ -80,6 +80,13 @@ export const lensApi = {
       return data;
     },
     getProposalUrl: (runId: string) => `/lens/discovery/runs/${runId}/proposal.csv`,
+    analyzeSelected: async (runId: string, handles: string[]) => {
+      const { data } = await api.post<DiscoveryRun>('/lens/discovery/analyze-selected', {
+        run_id: runId,
+        handles_to_analyze: handles,
+      });
+      return data;
+    },
   },
 
   candidates: {
