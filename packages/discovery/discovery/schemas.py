@@ -15,6 +15,7 @@ class DiscoveryRunStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
     PARTIAL = "partial"  # hito 22 — el worker ya lo emite (migración 104)
+    EXPLORED = "explored"  # hito 24 — modo explorar, discovery sin enrichment
 
 
 class CandidateStatus(str, Enum):
@@ -82,6 +83,14 @@ class BriefStructured(BaseModel):
     exclude_handles: list[str] = Field(default_factory=list)
     exclude_stores: bool = Field(default=True, description="Exclude commercial/store accounts from results")
     analyze_with_ai: bool = Field(default=True, description="Enable DeepSeek AI analysis for candidate scoring. Set to False to skip AI analysis and use faster rule-based scoring only.")
+    discovery_mode: str = Field(
+        default="auto",
+        description="Discovery mode: 'auto' = full pipeline with enrichment, 'explore' = discovery only (no enrichment, analyst decides), 'analyze' = enrich only specific handles passed in handles_to_analyze",
+    )
+    handles_to_analyze: list[str] = Field(
+        default_factory=list,
+        description="Handles selected by analyst in explore mode for enrichment in analyze mode",
+    )
 
 
 class DiscoveryPlan(BaseModel):

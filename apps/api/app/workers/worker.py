@@ -325,6 +325,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         plan = await query_builder.build(brief)
         profile_data = plan.profile
 
+        # HITO 24 — MODO EXPLORAR
+        # En modo explorar, el pipeline hace solo discovery (sin enrichment).
+        # El analista recibe la lista cruda y elige qué perfiles evaluar.
+        # Costo: ~$0.24/run (solo discovery). Sin enrichment no hay 402 que corte.
+        is_explore_mode = getattr(brief, "discovery_mode", "auto") == "explore"
+        is_analyze_mode = getattr(brief, "discovery_mode", "auto") == "analyze"
+
         await _run_update_metadata(run_id, {
             "current_step": "step1_hashtag_search",
             "completed_steps": [],
@@ -954,12 +961,47 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             top_score=prefilter_handles[0][1] if prefilter_handles else None,
         )
 
+        # HITO 24: en modo explorar, construimos un dict de rough scores
+        # para usarlo como match_score sin necesidad de enrichment.
+        rough_score_map: dict[str, float] = {h: s for h, s in prefilter_handles}
+
         enriched_profiles: list[dict] = []
         step3_degraded = False
         step3_error: str | None = None
         hikerapi_enrich_semaphore = asyncio.Semaphore(5)
 
-        if handles_to_enrich:
+        if handles_to_enrich and is_explore_mode:
+            # HITO 24 — MODO EXPLORAR: saltamos enrichment por completo.
+            # El analista recibe la lista de handles con rough score derivado
+            # de geo + niche. Costo: solo discovery (~$0.24).
+            logger.info(
+                "step3_explore_mode_skip_enrichment",
+                handles_count=len(handles_to_enrich),
+                reason="explore_mode — enrichment skipped",
+            )
+            await _save_progress_message(
+                run_id,
+                f"✅ Modo Explorar: encontré {len(handles_to_enrich)} candidatos con señales de nicho. "
+                f"Seleccioná los que quieras evaluar y ejecutá 'Analizar' para enriquecerlos.",
+            )
+        elif is_analyze_mode and brief.handles_to_analyze:
+            # HITO 24 — MODO ANALIZAR: enrichment SOLO de los handles seleccionados.
+            # El pipeline completo (discovery + scoring) ya corrió en modo explorar.
+            # Esta etapa enriquece y scorea solo los handles elegidos por el analista.
+            handles_to_enrich = [
+                h for h in brief.handles_to_analyze
+                if h in profiles
+            ]
+            logger.info(
+                "step3_analyze_mode_enrich_selected",
+                handles_count=len(handles_to_enrich),
+                selected=list(handles_to_enrich)[:10],
+            )
+            await _save_progress_message(
+                run_id,
+                f"🔍 Analizando {len(handles_to_enrich)} perfiles seleccionados...",
+            )
+        elif handles_to_enrich:
             logger.info(
                 "step3_hikerapi_pure_enrichment_start",
                 handles_count=len(handles_to_enrich),
@@ -1165,6 +1207,25 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             followers = p.get("followersCount") or p.get("follower_count") or 0
             if followers == 0:
                 untracked_no_followers += 1
+                if is_explore_mode:
+                    # HITO 24: en modo explorar, usamos rough score aunque no haya followers.
+                    # El analista decide si el perfil es relevante sin datos de enrichment.
+                    rough = rough_score_map.get(handle, 0.0)
+                    if rough > 0:
+                        scored.append({
+                            "handle": handle,
+                            "profile": p,
+                            "match_score": rough * 100,  # rough is 0-1, convert to 0-100
+                            "rough_score": rough,
+                            "niche_relevance": rough * 100,
+                            "geo_relevance": rough * 100,
+                            "content_quality": None,
+                            "audience_relevance": None,
+                            "engagement_rate": None,
+                            "is_tienda": False,
+                            "_is_explore_mode": True,
+                        })
+                    continue
                 continue
             if followers < plan.min_followers:
                 low_followers_skipped += 1
@@ -1515,23 +1576,43 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 profiles_scored=len(profiles),
                 ve_candidates=len(scored),
             )
-            await _save_progress_message(
-                run_id,
-                "⚠️ Esta vez no encontré candidatos que califiquen. "
-                "Probemos con hashtags más específicos o ajustes al brief...",
-            )
+            if is_explore_mode:
+                await _save_progress_message(
+                    run_id,
+                    f"✅ Encontré {len(scored)} perfiles con señales de nicho. "
+                    f"Seleccioná los que quieras que analice en profundidad.",
+                )
+            else:
+                await _save_progress_message(
+                    run_id,
+                    "⚠️ Esta vez no encontré candidatos que califiquen. "
+                    "Probemos con hashtags más específicos o ajustes al brief...",
+                )
         else:
-            await _save_progress_message(
-                run_id,
-                f"✅ Listo. {len(qualified)} creadores calificados para tu campaña. "
-                f"El mejor candidato tiene {qualified[0].get('match_score', 0):.0f}/100 de match.",
-            )
+            if is_explore_mode:
+                await _save_progress_message(
+                    run_id,
+                    f"✅ Encontré {len(scored)} perfiles con señales de nicho. "
+                    f"Seleccioná los que quieras que analice en profundidad.",
+                )
+            else:
+                await _save_progress_message(
+                    run_id,
+                    f"✅ Listo. {len(qualified)} creadores calificados para tu campaña. "
+                    f"El mejor candidato tiene {qualified[0].get('match_score', 0):.0f}/100 de match.",
+                )
 
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
         total = inserted_count
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
-        final_status = "partial" if step3_degraded else "completed"
+
+        # HITO 24: modo explorar usa status "explored" en vez de completed/partial
+        if is_explore_mode:
+            final_status = "explored"
+        else:
+            final_status = "partial" if step3_degraded else "completed"
+
         await _run_update(run_id, {
             "status": final_status,
             "total_candidates": total,
@@ -1544,6 +1625,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "step3_degraded": step3_degraded,
             "step3_error": step3_error,
             "replay_miss_count": _replay_miss_count_for_run,
+            "is_explore_mode": is_explore_mode,
         })
 
         conv = await railway_pg.select_one(

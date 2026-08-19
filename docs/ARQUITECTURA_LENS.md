@@ -1,10 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.8)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.9)
 
-> **Versión:** 3.8 — 2026-08-19
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.7 (`da9cf5e`)
-> **Commit de referencia:** `hito23` (Hitos 1-23 aplicados)
+> **Versión:** 3.9 — 2026-08-19
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.8 (`42b900b`)
+> **Commit de referencia:** `hito24` (Hitos 1-24 aplicados)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar)
 
 ---
 
@@ -634,6 +634,8 @@ lens:profile:{fingerprint}
 | 20 | `611d22e` | test_hashtag_cap_30 + test_result_ranker rotos | Arreglados |
 | 21 | `hito21` | Doble conteo + caché cobra + fail-open | Single accounting en _get() + NOSCRIPT fallback + fail-closed |
 | 22 | `7e4a99b` | actual_cost_usd=0 + partial=500 + worker old | get_run_calls() + PARTIAL enum + redeploy |
+| 23 | `42b900b` | Run condenado sin pre-flight + mensaje fijo | get_balance() pre-flight + except SourceUnavailable raise + _build_zero_candidates_message + EXPLORED status |
+| 24 | `hito24` | Pipeline automático decide solo — 0 candidatos tras 3 semanas | Modo Explorar + Modo Analizar — analista como prefiltro |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
 ### 9.2 Abiertos (Post-Hito 23)
@@ -800,7 +802,90 @@ Después del enrichment, verificar que el bio contiene al menos 2-3 `geo_indicat
 
 ---
 
-## 14. Recursos
+## 14. Hito 24 — Modo Explorar + Modo Analizar (Rediseño de Producto)
+
+> **Fecha:** 2026-08-19
+> **Inspirado por:** Análisis de Claude Code Opus 5 — "El problema de fondo no es técnico, es de proporción"
+> **Commit:** `hito24` (próximo commit)
+
+### 14.1 El Problema
+
+El pipeline automático descubría 133 handles pero solo podía evaluar 25 (por presupuesto). El prefiltro decidía a ciegas cuáles 25 sobrevivían. Con $10/mes: ~13 runs, ninguno entregaba valor.
+
+**El diagnóstico de Opus 5:**
+> *"Eso no se arregla afinando el prefiltro: está mal repartido de origen."*
+
+### 14.2 La Solución: Dos Modos
+
+#### Modo Explorar — ~$0.24/búsqueda
+- Solo discovery, **sin enrichment**
+- Devuelve la lista cruda de handles con nombre, foto, bio y rough score (geo + niche)
+- El analista revisa y marca cuáles quiere evaluar
+- Costo: solo discovery (~32 calls = $0.64, pero con pre-flight se puede abortar antes si saldo insuficiente)
+
+#### Modo Analizar — $0.02/perfil
+- El analista seleccionó handles en modo explorar
+- Lens enriquece y puntúa **solo esos** handles
+- Costo: ~$0.02 × N handles seleccionados
+
+#### Campaña Completa (Explorar + Analizar 15 handles)
+- Explorar: ~$0.24
+- Analizar 15: ~$0.30
+- **Total: ~$0.54** vs $1.14 del pipeline automático
+- Con $10: **~18 campañas completas** vs 8-9 intentos del pipeline anterior
+
+### 14.3 Cambios en el Código
+
+**`schemas.py` — BriefStructured:**
+```python
+discovery_mode: str = Field(
+    default="auto",
+    description="'auto' = full pipeline, 'explore' = discovery only, 'analyze' = enrich selected handles"
+)
+handles_to_analyze: list[str] = Field(default_factory=list)
+```
+
+**`schemas.py` — DiscoveryRunStatus:**
+```python
+EXPLORED = "explored"  # Hito 24 — modo explorar completado
+```
+
+**`worker.py`:**
+- Si `discovery_mode == "explore"`: skip enrichment, usa rough score (geo + niche) como match_score
+- Si `discovery_mode == "analyze"`: enrichment SOLO de `brief.handles_to_analyze`
+- Status: `explored` en vez de `completed` para modos de dos pasos
+
+**`migration 00106`:** Añade valor `explored` al enum `discovery_run_status`
+
+### 14.4 Por Qué Es Mejor
+
+1. **Elimina el problema en vez de mitigarlo**: No hay prefiltro automático — decide una persona
+2. **Encaja con cómo trabaja una agencia**: Nadie acepta 15 influencers que eligió un algoritmo sin mirarlos
+3. **Se puede lanzar YA**: No requiere arreglar el prefiltro, ni el geo, ni el ER
+4. **La señal de cuándo parar está bien definida**: Si modo explorar no devuelve lista usable, el problema es el proveedor
+
+### 14.5 Flujo de Usuario
+
+```
+1. Usuario crea brief → discovery_mode="explore"
+2. Pipeline descubre handles → status="explored"
+3. Frontend muestra lista con rough scores
+4. Usuario selecciona handles → discovery_mode="analyze" + handles_to_analyze=[...]
+5. Pipeline enriquece y scorea solo esos → status="completed"
+6. Usuario ve candidatos finales con match_score real
+```
+
+### 14.6 Costo Comparado
+
+| Escenario | Costo/run | Runs con $10 |
+|-----------|-----------|--------------|
+| Pipeline automático (Hito 23) | ~$1.14 | ~8-9 |
+| Explorar + Analizar (15 handles) | ~$0.54 | ~18 |
+| Solo Explorar | ~$0.24 | ~41 |
+
+---
+
+## 15. Recursos
 
 | Recurso | URL |
 |---------|-----|
@@ -813,4 +898,4 @@ Después del enrichment, verificar que el bio contiene al menos 2-3 `geo_indicat
 
 ---
 
-*Documento generado: 2026-08-19 — Arquitectura LENS v3.8 (23 hitos aplicados + Opus 5 audit7 refutations). Hito 23 aplicado: pre-flight balance, except SourceUnavailable raise, _build_zero_candidates_message, MAX_ENRICH 50→25. Bug N1 refutado por Opus 5 — causa real era enrichment 402. Test runs 0c44ea23 + 1a1d6128 condenado sin pre-flight ($3.26 desperdiciado). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5-7, `LENS_AUDIT7_2026-08-18.md`, `LENS_AUDIT8_2026-08-19.md`.*
+*Documento generado: 2026-08-19 — Arquitectura LENS v3.9 (24 hitos aplicados). Hito 24: Modo Explorar + Modo Analizar — rediseño de producto inspirado en Opus 5. Discovery sin enrichment ($0.24), analista decide, luego enrichment selectivo ($0.02/handle). Costo campaña: ~$0.54 vs $1.14 automático. Con $10: ~18 campañas vs ~8 intentos. Bugs N1 refutado por Opus 5 — causa real era enrichment 402.*
