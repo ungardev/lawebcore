@@ -206,6 +206,14 @@ class DiscoverySearchRequest(BaseModel):
     exclude_handles: list[str] = Field(default_factory=list)
     exclude_stores: bool = Field(default=True)
     analyze_with_ai: bool = Field(default=True)
+    discovery_mode: str = Field(
+        default="auto",
+        description="Discovery mode: 'auto' = full pipeline, 'explore' = discovery only (no enrichment), 'analyze' = enrich selected handles",
+    )
+    handles_to_analyze: list[str] = Field(
+        default_factory=list,
+        description="Handles selected in explore mode to enrich in analyze mode",
+    )
 
 
 class DiscoveryRunResponse(BaseModel):

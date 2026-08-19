@@ -16,6 +16,7 @@ const STATUS_CONFIG: Record<DiscoveryRunStatus, { label: string; icon: ReactNode
   completed: { label: 'Completado', icon: <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-success/30 bg-success/10 text-success' },
   failed: { label: 'Fallido', icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-destructive/30 bg-destructive/10 text-destructive' },
   cancelled: { label: 'Cancelado', icon: <XCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-divider bg-surface-raised text-muted-foreground' },
+  explored: { label: 'Explorado', icon: <CheckCircle className="h-3.5 w-3.5" aria-hidden="true" />, className: 'border-info/30 bg-info/10 text-info' },
 };
 
 export function LensRunsListPage() {

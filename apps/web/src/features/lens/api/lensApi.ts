@@ -62,6 +62,8 @@ export const lensApi = {
       platforms?: Platform[];
       max_candidates?: number;
       hashtags?: string[];
+      discovery_mode?: 'auto' | 'explore' | 'analyze';
+      handles_to_analyze?: string[];
     }) => {
       const { data } = await api.post<DiscoveryRun>('/lens/discovery/search', brief);
       return data;

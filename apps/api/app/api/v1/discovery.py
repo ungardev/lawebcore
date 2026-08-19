@@ -327,6 +327,8 @@ async def send_message(
                         tone=brief.tone,
                         platforms=brief.platforms,
                         exclude_handles=brief.exclude_handles if hasattr(brief, "exclude_handles") else [],
+                        discovery_mode=getattr(brief, "discovery_mode", "auto"),
+                        handles_to_analyze=getattr(brief, "handles_to_analyze", []),
                     ),
                     created_by=user.id,
                 )
@@ -819,6 +821,13 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
             "saved_as_influencer_id": influencer["id"],
         },
     )
+
+    run_id = candidate.get("run_id")
+    if run_id:
+        await railway_pg.execute(
+            "UPDATE discovery_runs SET accepted = accepted + 1 WHERE id = $1",
+            [str(run_id)],
+        )
 
     return {"influencer_id": influencer["id"], "candidate_id": str(candidate_id)}
 

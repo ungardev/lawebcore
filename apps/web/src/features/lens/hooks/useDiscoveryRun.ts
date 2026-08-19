@@ -29,7 +29,7 @@ export function useDiscoveryRun() {
     setError(null);
     try {
       const loadedRun = await lensApi.search.getRun(runId);
-      const shouldLoadCandidates = ['completed', 'partial'].includes(loadedRun.status);
+      const shouldLoadCandidates = ['completed', 'partial', 'explored'].includes(loadedRun.status);
       const loadedCandidates = shouldLoadCandidates
         ? await lensApi.search.getCandidates(runId, { limit: 50 })
         : [];
@@ -55,7 +55,7 @@ export function useDiscoveryRun() {
       if (cancelledRef.current) {
         return { run: null, candidates: [] };
       }
-      if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial') {
+      if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial' || currentRun.status === 'explored') {
         return { run: currentRun, candidates: currentCandidates };
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));

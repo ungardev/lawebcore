@@ -85,7 +85,7 @@ export function useDiscoveryConversation() {
       if (conv.discovery_run_id) {
         try {
           const run = await lensApi.search.getRun(conv.discovery_run_id);
-          if ((run.status as string) === 'completed' || (run.status as string) === 'partial') {
+          if ((run.status as string) === 'completed' || (run.status as string) === 'partial' || (run.status as string) === 'explored') {
             candidates = await lensApi.search.getCandidates(conv.discovery_run_id, { limit: 20 });
           }
         } catch {

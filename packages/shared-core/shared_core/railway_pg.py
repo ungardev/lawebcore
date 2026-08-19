@@ -430,6 +430,18 @@ class RailwayPg:
                 filters.append(f"{col}.is.null")
         return await self.select(name, select, filters, order, limit, offset)
 
+    async def execute(self, sql: str, params: list | None = None) -> None:
+        """Execute raw SQL (INSERT/UPDATE/DELETE) with parameters. Returns None."""
+        pool = await self._ensure_pool()
+        logger.info("[railway_pg.execute] EXEC: %s params=%s", sql, params)
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(sql, *(params or []))
+            logger.info("[railway_pg.execute] OK")
+        except Exception as e:
+            logger.error("[railway_pg.execute] FAILED: %s | sql=%s params=%s", e, sql, params, exc_info=True)
+            raise
+
 
 _railway_pg: RailwayPg | None = None
 

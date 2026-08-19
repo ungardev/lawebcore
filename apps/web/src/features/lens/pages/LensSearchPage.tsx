@@ -52,7 +52,7 @@ export function LensSearchPage() {
     }
   };
 
-  const hasResults = run?.status === 'completed' || run?.status === 'partial';
+  const hasResults = run?.status === 'completed' || run?.status === 'partial' || run?.status === 'explored';
   const statusLabel = run?.status === 'running'
     ? 'Discovery en curso'
     : run?.status === 'pending'
@@ -61,11 +61,13 @@ export function LensSearchPage() {
         ? 'Resultados parciales'
         : run?.status === 'completed'
           ? 'Resultados listos'
-          : run?.status === 'failed'
-            ? 'La búsqueda falló'
-            : run?.status === 'cancelled'
-              ? 'Seguimiento detenido'
-              : 'Sin ejecución';
+          : run?.status === 'explored'
+            ? 'Handles descubiertos — seleccioná los que quieras analizar'
+            : run?.status === 'failed'
+              ? 'La búsqueda falló'
+              : run?.status === 'cancelled'
+                ? 'Seguimiento detenido'
+                : 'Sin ejecución';
   const runProgress = getRunProgress(run);
 
   return (
