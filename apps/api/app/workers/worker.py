@@ -1795,6 +1795,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "cost_usd": hikerapi_cost,
             "request_count": hikerapi_calls,
         })
+        # G12 — budget_transactions: ledger inmutable como source of truth
+        # para reconciliación Redis↔DB. Cada evento de costo se registra aquí.
+        await railway_pg.insert("budget_transactions", {
+            "run_id": run_id,
+            "provider": "hikerapi",
+            "operation": "discovery_pipeline",
+            "amount_usd": hikerapi_cost,
+            "request_count": hikerapi_calls,
+            "metadata": {
+                "mode": "explore" if is_explore_mode else ("analyze" if is_analyze_mode else "auto"),
+                "candidates_found": total,
+            },
+        })
         await tracker.flush(run_id)
         # reset_run_counter va DESPUÉS de leer el contador, no antes.
         await budget_fuse.reset_run_counter(run_id)
