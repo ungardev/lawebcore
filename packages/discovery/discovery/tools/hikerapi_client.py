@@ -74,9 +74,11 @@ class HikerAPIClient:
         Un run abortado antes de gastar cuesta $0; uno que muere a mitad del
         enrichment cuesta el descubrimiento completo (~$0.64) y produce cero.
 
-        ⚠️ VERIFICAR LA RUTA contra https://api.hikerapi.com/docs — no está
-        confirmada. Ante cualquier fallo devuelve None y el worker continúa
-        sin pre-flight, que es el comportamiento actual (nunca bloquea).
+        HITO 25 FIX: Cuando el saldo es $0, HikerAPI retorna
+        `{state: false, error: "...", exc_type: "InsufficientFunds"}` SIN
+        campo `balance`. El parser original buscaba `balance`, no lo encontraba,
+        retornaba None, y el pre-flight se omitía silenciosamente.
+        Ahora detecta `state: false` y retorna 0.0 para activar el abort.
         """
         for path in ("/v1/account", "/v1/user/balance", "/account"):
             try:
@@ -85,9 +87,29 @@ class HikerAPIClient:
                 if resp.status_code != 200:
                     continue
                 data = resp.json()
+
+                # HITO 25 FIX: detectar respuesta de saldo insuficiente.
+                # HikerAPI retorna {state: false, exc_type: "InsufficientFunds"}
+                # cuando el balance es 0, SIN campo balance/credit/amount.
+                if data.get("state") is False:
+                    logger.warning(
+                        "hikerapi_balance_insufficient",
+                        path=path,
+                        exc_type=data.get("exc_type"),
+                        error=data.get("error"),
+                    )
+                    return 0.0  # Saldo confirmado insuficiente → activa pre-flight abort
+
                 for key in ("balance", "balance_usd", "credits_usd", "amount"):
                     if key in data:
                         return float(data[key])
+
+                # state:true pero sin campo de balance conocido
+                logger.warning(
+                    "hikerapi_balance_response_unrecognized",
+                    path=path,
+                    data_keys=list(data.keys()),
+                )
             except Exception:
                 continue
         logger.info("hikerapi_balance_unavailable", hint="pre-flight omitido")

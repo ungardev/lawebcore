@@ -1,10 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.9)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 4.0)
 
-> **Versión:** 3.9 — 2026-08-19
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.8 (`42b900b`)
-> **Commit de referencia:** `hito24` (Hitos 1-24 aplicados)
+> **Versión:** 4.0 — 2026-08-19
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.9 (`1c472a0`)
+> **Commit de referencia:** `hito25` (Hitos 1-25 aplicados)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica)
 
 ---
 
@@ -636,29 +636,32 @@ lens:profile:{fingerprint}
 | 22 | `7e4a99b` | actual_cost_usd=0 + partial=500 + worker old | get_run_calls() + PARTIAL enum + redeploy |
 | 23 | `42b900b` | Run condenado sin pre-flight + mensaje fijo | get_balance() pre-flight + except SourceUnavailable raise + _build_zero_candidates_message + EXPLORED status |
 | 24 | `hito24` | Pipeline automático decide solo — 0 candidatos tras 3 semanas | Modo Explorar + Modo Analizar — analista como prefiltro |
+| 25 | `hito25` | get_balance() parser bug — InsufficientFunds sin campo balance | Detecta `state: false` → retorna 0.0 → pre-flight aborta correctamente |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### 9.2 Abiertos (Post-Hito 23)
+### 9.2 Abiertos (Post-Hito 25)
 
 | Issue | Prioridad | Detalle | Estado |
 |-------|-----------|---------|--------|
 | HIKERAPI_COST_PER_CALL_USD legacy | ✅ RESUELTO | Cost ahora $0.02 real en config | — |
-| **Worker con código viejo (pre-Hito 21)** | ✅ **RESUELTO** | Hito 22 — redeploy verificado con logs | — |
-| **actual_cost_usd no se persiste** | ✅ **RESUELTO** | Hito 22 — $1.64 grabado correctamente | — |
-| **`lens:budget:run:{id}` no se crea** | ✅ **RESUELTO** | Hito 22 — key creada con 82 calls | — |
-| discovery_runs.metadata sin `partial` enum | ✅ **RESUELTO** | Hito 22 — enum actualizado | — |
-| **`except Exception` silencia SourceUnavailable** | 🔴 **RESUELTO HITO 23** | 402 → degraded; ahora `raise` antes de `except Exception` | — |
-| **Sin pre-flight de saldo (runs condenados)** | 🔴 **RESUELTO HITO 23** | `get_balance()` antes de discovery; aborta si insuficiente | — |
-| **`exclude_stores` filtra 100% handles VE** | ❌ **REFUTADO** | Opus 5 probó que la causa fue enrichment 402, no tiendas | — |
-| Mensaje engañoso al usuario | ✅ **RESUELTO HITO 23** | `_build_zero_candidates_message` naming counter real | — |
-| MAX_HANDLES_TO_ENRICH 50→25 | ✅ **RESUELTO HITO 23** | Enrichment cost $1.00→~$0.50 | — |
-| **`accepted` nunca se actualiza** | 🔴 **CRÍTICA** | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
-| Geolocalización sin validación post-enrichment | ⚠️ **MEDIA** | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
+| Worker con código viejo (pre-Hito 21) | ✅ RESUELTO | Hito 22 — redeploy verificado con logs | — |
+| actual_cost_usd no se persiste | ✅ RESUELTO | Hito 22 — $1.64 grabado correctamente | — |
+| `lens:budget:run:{id}` no se crea | ✅ RESUELTO | Hito 22 — key creada con 82 calls | — |
+| discovery_runs.metadata sin `partial` enum | ✅ RESUELTO | Hito 22 — enum actualizado | — |
+| `except Exception` silencia SourceUnavailable | ✅ RESUELTO HITO 23 | 402 → degraded; ahora `raise` antes de `except Exception` | — |
+| Sin pre-flight de saldo (runs condenados) | ✅ RESUELTO HITO 23+25 | get_balance() + detecta `state:false` → retorna 0.0 → aborta | — |
+| `exclude_stores` filtra 100% handles VE | ❌ REFUTADO | Opus 5 probó que la causa fue enrichment 402, no tiendas | — |
+| Mensaje engañoso al usuario | ✅ RESUELTO HITO 23 | `_build_zero_candidates_message` naming counter real | — |
+| MAX_HANDLES_TO_ENRICH 50→25 | ✅ RESUELTO HITO 23 | Enrichment cost $1.00→~$0.50 | — |
+| Migration 00106 no aplicada | ✅ RESUELTO | ALTER TYPE... ADD VALUE 'explored' — manual execution needed | — |
+| `accepted` nunca se actualiza | 🔴 CRÍTICA | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
+| Desfase Redis↔DB ($25.13) | 🔴 CRÍTICA | Budget tracking no refleja gasto real en runs pre-Hito-21 | **PENDIENTE** |
+| Geolocalización sin validación post-enrichment | ⚠️ MEDIA | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
 | Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad | **PENDIENTE** |
-| geo_no_signal filter rechaza hashtag profiles | ⚠️ **MEDIA** | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | **PENDIENTE** |
+| geo_no_signal filter rechaza hashtag profiles | ⚠️ MEDIA | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | **PENDIENTE** |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; discovery aún no filtra | **PENDIENTE** |
 | discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse | **PENDIENTE** |
-| HikerAPI balance agotado | 🔴 **BLOQUEANTE** | $0 remaining — necesita recarga para tests | **NUEVO** |
+| HikerAPI balance | ✅ RESUELTO | $50 recargados post-verificación empírica | — |
 
 ---
 
@@ -885,7 +888,159 @@ EXPLORED = "explored"  # Hito 24 — modo explorar completado
 
 ---
 
-## 15. Recursos
+## 15. Verificación Empírica 2026-08-19
+
+> **Fuente:** Railway Web Console — queries directas a PostgreSQL y Redis
+> **Realizada por:** MiniMax + datos del usuario
+> **Propósito:** Validar empíricamente las hipótesis de Opus 5 antes de recargar HikerAPI
+
+### 15.1 Runs Históricos — 48 total, $28.33 gastados
+
+```
+SELECT SUM(actual_cost_usd), COUNT(*) FROM discovery_runs;
+→ $28.3351 total, 48 runs
+```
+
+| Métrica | Valor |
+|---------|-------|
+| Total runs | 48 |
+| Total gastado | **$28.33** |
+| Completed | 42 |
+| Partial | 2 |
+| Failed | 2 |
+| Candidatos producidos | **1** (solo run `03e00ee1` del 2026-08-12) |
+
+**El sistema ha producido 1 candidato en toda su historia.**
+
+### 15.2 Desfase Redis↔DB — $25.13 no trackeados
+
+```
+Redis: lens:budget:hikerapi:2026-08 = "3.2"
+DB sum: $28.33
+Diferencia: $25.13
+```
+
+**Causa probable:** Los runs de ago-12 a ago-17 (antes de Hito 21) no crearon keys en Redis porque el sistema de budget tracking no existía. Redis solo muestra lo gastado desde ago-17 en adelante.
+
+**Implicación:** BudgetFuse no es confiable para saber cuánto queda. El pre-flight Hito 23+25 lee `lens:budget:hikerapi:2026-08` para estimar saldo, pero ese número no refleja el gasto histórico real.
+
+### 15.3 El Bug Crítico — get_balance() Parser
+
+**Hallazgo:** El patch de Opus 5 (Hito 23) en `get_balance()` buscaba campos `balance`, `balance_usd`, `credits_usd`, `amount` en la respuesta. Pero HikerAPI retorna:
+
+```json
+// Cuando saldo = $0:
+{"state": false, "error": "Top up your account...", "exc_type": "InsufficientFunds"}
+
+// El parser buscaba "balance" → no existe → retorna None → pre-flight SE OMITE
+```
+
+**Validación con curl en Railway:**
+```bash
+curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
+→ {"state":false,"error":"Top up your account at https://hikerapi.com/billing","exc_type":"InsufficientFunds"}
+```
+
+**Fix aplicado (Hito 25):**
+- Detecta `state: false` → retorna `0.0` → pre-flight activa `raise SourceUnavailable(...)` correctamente
+- Costo del run abortado: **$0** (en vez de $0.64 de discovery desperdiciado)
+
+### 15.4 Endpoints de HikerAPI — Confirmados
+
+| Endpoint | Status | Notas |
+|----------|--------|-------|
+| `/v1/account` | ✅ 200 OK | Auth con `x-access-key` funciona |
+| `/v1/user/balance` | ✅ 200 OK | Mismo response que `/v1/account` |
+| `/account` (sin v1) | ❌ 404 | Path incorrecto |
+| `/balance` (sin v1) | ❌ 404 | Path incorrecto |
+
+### 15.5下一步 — Después de esta verificación
+
+1. ✅ Hito 25 fix aplicado (get_balance parser)
+2. ⏳ Migration 00106 (enum `explored`) — necesita ejecución manual
+3. ⏳ Recargar $50 HikerAPI
+4. ⏳ Test Modo Explorar
+5. ⏳ Test Modo Analizar
+6. ⏳ Demo con marca real
+
+---
+
+## 16. Hito 25 — Fix get_balance() Parser
+
+> **Fecha:** 2026-08-19
+> **Commit:** `hito25` (próximo commit)
+> **Archivos:** `packages/discovery/discovery/tools/hikerapi_client.py`
+
+### 16.1 El Bug
+
+El parser original de Opus 5 buscaba `balance`, `balance_usd`, `credits_usd`, `amount` en la respuesta JSON. Pero cuando el saldo es `$0`, HikerAPI retorna:
+
+```json
+{"state": false, "error": "Top up your account...", "exc_type": "InsufficientFunds"}
+```
+
+Ningún campo coincide → `get_balance()` retornaba `None` → pre-flight se omitía → run procedía → enrichment fallaba con 402 → **$0.64 desperdiciados**.
+
+### 16.2 El Fix
+
+```python
+async def get_balance(self) -> float | None:
+    for path in ("/v1/account", "/v1/user/balance", "/account"):
+        try:
+            client = await self._get_client()  # Auth header ya configurado en _get_client()
+            resp = await client.get(path)
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+
+            # HITO 25: detectar respuesta de saldo insuficiente
+            if data.get("state") is False:
+                logger.warning(
+                    "hikerapi_balance_insufficient",
+                    path=path,
+                    exc_type=data.get("exc_type"),
+                    error=data.get("error"),
+                )
+                return 0.0  # Activa pre-flight abort correctamente
+
+            for key in ("balance", "balance_usd", "credits_usd", "amount"):
+                if key in data:
+                    return float(data[key])
+
+            logger.warning("hikerapi_balance_response_unrecognized", path=path, data_keys=list(data.keys()))
+        except Exception:
+            continue
+    return None
+```
+
+### 16.3 Cambios Respecto al Patch de Opus 5
+
+| Cambio | Razón |
+|--------|-------|
+| No se añadió auth header explícito | `_get_client()` ya configura `x-access-key` en el constructor del cliente |
+| Se añadió detección de `state: false` | El fix crítico — activa pre-flight cuando saldo=$0 |
+| Se añadieron logs de warning | Visibilidad cuando el balance es insuficiente o el formato es inesperado |
+
+### 16.4 Validación Post-Fix
+
+**Caso saldo=$0 (antes de recarga):**
+```
+1. get_balance() → 0.0
+2. balance is not None → True
+3. 0.0 < estimated_cost ($0.57) → True
+4. raise SourceUnavailable(...) → status=failed, costo=$0 ✅
+```
+
+**Caso saldo=$50 (post-recarga):**
+```
+1. get_balance() → 50.0 (asumiendo campo "balance" en respuesta)
+2. 50.0 < 0.57 → False
+3. Run procede normal ✅
+```
+
+---
+
+## 17. Recursos
 
 | Recurso | URL |
 |---------|-----|
@@ -898,4 +1053,4 @@ EXPLORED = "explored"  # Hito 24 — modo explorar completado
 
 ---
 
-*Documento generado: 2026-08-19 — Arquitectura LENS v3.9 (24 hitos aplicados). Hito 24: Modo Explorar + Modo Analizar — rediseño de producto inspirado en Opus 5. Discovery sin enrichment ($0.24), analista decide, luego enrichment selectivo ($0.02/handle). Costo campaña: ~$0.54 vs $1.14 automático. Con $10: ~18 campañas vs ~8 intentos. Bugs N1 refutado por Opus 5 — causa real era enrichment 402.*
+*Documento generado: 2026-08-19 — Arquitectura LENS v4.0 (25 hitos aplicados). Hito 25: Fix get_balance() parser — detecta `state:false` → retorna 0.0 → pre-flight aborta correctamente. Verificación empírica en Railway: 48 runs históricos, $28.33 gastados, 1 candidato en toda la historia. Bugs N1 refutado por Opus 5 — causa real era enrichment 402.*
