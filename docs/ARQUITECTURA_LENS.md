@@ -1,10 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.7)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 3.8)
 
-> **Versión:** 3.7 — 2026-08-18
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.6 (`7b3bc5d`)
-> **Commit de referencia:** `7e4a99b` (Hitos 1-22 aplicados)
+> **Versión:** 3.8 — 2026-08-19
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.7 (`da9cf5e`)
+> **Commit de referencia:** `hito23` (Hitos 1-23 aplicados)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22-test-run)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23)
 
 ---
 
@@ -387,35 +387,28 @@ lens:budget:hikerapi:2026-08 = "1.64"  (82 calls)
 lens:budget:run:0c44ea23-53f6-42a8-8a9c-c6ec85359d2e = 82
 ```
 
-**3 Bugs Nuevos Descubiertos (Hito 22):**
+**3 Bugs Nuevos Descubiertos (Hito 22) — CORREGIDOS POR OPUS 5:**
 
-| # | Bug | Severidad | Causa |
-|---|-----|-----------|-------|
-| N1 | `exclude_stores=true` filtra 100% handles VE | 🔴 CRÍTICA | En VE, "influencers" de belleza son casi todos tiendas |
-| N2 | Mensaje dice "filtro geográfico" pero fue filtro tiendas | ⚠️ MEDIA | Mensaje confunde al usuario |
-| N3 | Geolocalización solo por query, no por bio validada | ⚠️ MEDIA | `geo_indicators` en fingerprint no se usan post-enrichment |
+| # | Bug | Severidad | Causa real (Opus 5) |
+|---|-----|-----------|----------------------|
+| N1 | `exclude_stores=true` filtra 100% handles VE | ❌ REFUTADO | Enrichment falló con 402 → sin followers → 0 scored |
+| N2 | Mensaje fijo "filtro geográfico" misleading | ⚠️ MEDIA | Corregido en Hito 23 con `_build_zero_candidates_message` |
+| N3 | Geolocalización sin validación post-enrichment | ⚠️ MEDIA | POSTERGADO hasta que haya candidatos |
+| **REAL** | Run condenado sin pre-flight de saldo | 🔴 CRÍTICA | $1.64 gastados en discovery, 0 candidatos garantizados |
 
-**Análisis del Bug N1 — `exclude_stores` en VE:**
+> ⚠️ **El Bug N1 estaba equivocado.** El log `tienda_excluded=True` es el **valor del flag de configuración**, NO un conteo. Los handles nunca fueron enriquecidos — enrichment murió con 402. Causa real: `followers=0` para todos → filtrados en scoring. Ver `LENS_AUDIT7_2026-08-18.md` §1.
 
-Handles enriquecidos en este run (todos tiendas → filtrados):
-```
-shopmarianazambrano.ve, tashashop.ccs, canaimashop_ve,
-najustoreve, productosdebellezavenezuela, aleacosmetics.vzla,
-sakuracarevzla, fiorellacosmetics.vzla, mtc.productos_de_belleza_vnzla
-```
-
-En Venezuela, el mercado de "influencers de belleza" es casi 100% tiendas online que venden productos. El filtro `exclude_stores=true` (default del wizard) elimina prácticamente todos los candidatos en este mercado.
-
-**Costo Real Confirmado por Run:**
+**Costo Real Confirmado por Run (Hito 23 optimizado):**
 
 | Escenario | Requests | Costo USD |
 |-----------|----------|-----------|
-| Discovery + Enrichment 100% (50 handles) | ~82 | **$1.64** |
-| Discovery + Enrichment 50% (25 handles) | ~56 | **$1.12** |
+| Discovery + Enrichment 100% (50 handles) | ~82 | **$1.64** (pre-Hito 23) |
+| Discovery + Enrichment 50% (25 handles) | ~56 | **$1.12** (pre-Hito 23) |
+| **Discovery + Enrichment 50%→25 (Hito 23)** | **~57** | **~$1.14** |
 | Discovery ONLY (sin enrichment) | ~32 | **$0.64** |
-| Balance agotado (este run) | 82 | **$1.64** |
+| **Con discovery reducido + 25 handles** | **~37** | **~$0.74** |
 
-⚠️ **El costo de $1.50-3.00 por run es elevado.** Con $10 de saldo: ~5-6 runs completos.
+⚠️ **Hito 23 optimiza el enrichment de 50→25 handles** ($1.00→~$0.50) y añade pre-flight de saldo para evitar runs condenados. El costo por run baja de ~$1.64 a ~$1.14. Con $10 de saldo: ~8-9 runs completos.
 
 ---
 
@@ -643,7 +636,7 @@ lens:profile:{fingerprint}
 | 22 | `7e4a99b` | actual_cost_usd=0 + partial=500 + worker old | get_run_calls() + PARTIAL enum + redeploy |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### 9.2 Abiertos (Post-Hito 22)
+### 9.2 Abiertos (Post-Hito 23)
 
 | Issue | Prioridad | Detalle | Estado |
 |-------|-----------|---------|--------|
@@ -652,16 +645,18 @@ lens:profile:{fingerprint}
 | **actual_cost_usd no se persiste** | ✅ **RESUELTO** | Hito 22 — $1.64 grabado correctamente | — |
 | **`lens:budget:run:{id}` no se crea** | ✅ **RESUELTO** | Hito 22 — key creada con 82 calls | — |
 | discovery_runs.metadata sin `partial` enum | ✅ **RESUELTO** | Hito 22 — enum actualizado | — |
-| **`exclude_stores` filtra 100% handles VE** | 🔴 **CRÍTICA** | En VE, "influencers" beauty son tiendas. Default del wizard excluye todo | **NUEVO** |
+| **`except Exception` silencia SourceUnavailable** | 🔴 **RESUELTO HITO 23** | 402 → degraded; ahora `raise` antes de `except Exception` | — |
+| **Sin pre-flight de saldo (runs condenados)** | 🔴 **RESUELTO HITO 23** | `get_balance()` antes de discovery; aborta si insuficiente | — |
+| **`exclude_stores` filtra 100% handles VE** | ❌ **REFUTADO** | Opus 5 probó que la causa fue enrichment 402, no tiendas | — |
+| Mensaje engañoso al usuario | ✅ **RESUELTO HITO 23** | `_build_zero_candidates_message` naming counter real | — |
+| MAX_HANDLES_TO_ENRICH 50→25 | ✅ **RESUELTO HITO 23** | Enrichment cost $1.00→~$0.50 | — |
 | **`accepted` nunca se actualiza** | 🔴 **CRÍTICA** | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
-| Mensaje engañoso al usuario | ⚠️ **MEDIA** | Dice "filtro geográfico" pero fue "filtro tiendas" | **NUEVO** |
-| Geolocalización sin validación post-enrichment | ⚠️ **MEDIA** | `geo_indicators` no se usan para validar bio del perfil | **NUEVO** |
+| Geolocalización sin validación post-enrichment | ⚠️ **MEDIA** | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
 | Enriquecimiento sobre muestra casi aleatoria | **Alta** | Prefiltro decide sin bio; afecta calidad | **PENDIENTE** |
-| geo_no_signal filter rechaza hashtag profiles | ⚠️ **MEDIA** | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | Parcial (ya no es blocker principal) |
+| geo_no_signal filter rechaza hashtag profiles | ⚠️ **MEDIA** | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | **PENDIENTE** |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; discovery aún no filtra | **PENDIENTE** |
 | discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse | **PENDIENTE** |
-| Costo elevado $1.50-3.00 por run | ⚠️ **ECONÓMICA** | Con $10: solo 5-6 runs/mes. Balance se agota rápido | **NUEVO** |
-| HikerAPI balance agotado | 🔴 **BLOQUEANTE** | $0 remaining — necesita recarga para más tests | **NUEVO** |
+| HikerAPI balance agotado | 🔴 **BLOQUEANTE** | $0 remaining — necesita recarga para tests | **NUEVO** |
 
 ---
 
@@ -733,61 +728,75 @@ healthcheckPath = "/api/v1/health"
 
 ---
 
-## 13. Bugs Nuevos (Hito 23 — Para Opus 5)
+## 13. Bugs Descubiertos — Hitos 22-23 + Auditoría Opus 5
 
-### Bug N1 — `exclude_stores` elimina 100% de handles en VE (🔴 CRÍTICA)
+> **Nota importante sobre Bug N1:** El Bug N1 documentado en Hito 22 fue REFUTADO por Claude Code Opus 5. El análisis original estaba equivocado — la causa real de 0 candidatos era el enrichment fallido con 402, NO el filtro `exclude_stores`. Los cambios documentados aquí reflejan los hallazgos reales de Opus 5.
 
-**Problema:** El default `exclude_stores=true` del wizard elimina prácticamente TODOS los handles cuando el nicho es belleza en Venezuela — porque el ecosistema local de "influencers" de belleza está compuesto casi 100% por tiendas online.
+### Bug Real — Run condenado sin pre-flight de saldo (🔴 CRÍTICA)
 
-**Handles enriquecidos en el run (todos fueron filtrados):**
-```
-shopmarianazambrano.ve — tienda
-tashashop.ccs — tienda
-canaimashop_ve — tienda
-najustoreve — tienda
-productosdebellezavenezuela — tienda
-aleacosmetics.vzla — tienda
-sakuracarevzla — tienda
-fiorellacosmetics.vzla — tienda
-```
+**Descubierto por:** Auditoría Opus 5 (LENS_AUDIT7_2026-08-18.md)
 
-**Causa raíz:** scoring.py función `is_tienda_signal()` + filtro `exclude_stores` en worker.py. El scoring asigna tienda_excluded=True a cualquier cuenta que parece tienda (hashtags comerciales, bio con "shop", "tienda", "$，" venta", etc.).
+**Problema:** BudgetFuse valida el presupuesto INTERNO (contador en Redis), pero NO el saldo REAL del proveedor HikerAPI. El run `0c44ea23` gastó $1.64 en discovery y murió con 402 en la primera llamada de enrichment. Sin enrichment ningún perfil tiene seguidores y el resultado es 0 candidatos.
 
-**Impacto:** No se pueden producir candidatos en VE con el brief por defecto.
+**Costo confirmado:**
+| Run | Costo | Resultado | Causa |
+|-----|-------|-----------|-------|
+| `0c44ea23` (Hito 22) | **$1.64** | 0 candidatos | Enrichment 402 — sin pre-flight |
+| `1a1d6128` (pre-Hito 22) | **~$1.64** | 0 candidatos | Misma causa (código viejo no registraba costo) |
+| **Total desperdiciado** | **$3.26** | — | 2 runs condenados antes de enrichment |
 
-**Fix sugerido:**
-1. En `BriefWizard`: agregar toggle "Incluir tiendas" — activado por default para VE/AR/MX
-2. O cambiar el scoring: solo excluir si `is_tienda=True AND niche_relevance < threshold` (una tienda con buen match podría ser válida)
+**Causa raíz:** `except Exception` en el bloque de enrichment (worker.py ~línea 1035) capturaba `SourceUnavailable` (el 402) y lo convertía en `step3_degraded=True`, permitiendo que el run continuara en silencio. Esto gastar el discovery completo ($0.64) para un resultado garantizado de 0 candidatos.
 
----
-
-### Bug N2 — Mensaje al usuario engañoso (⚠️ MEDIA)
-
-**Problema:** Cuando el run termina con 0 candidatos por `exclude_stores`, el mensaje dice:
-
-> *"Escaneé 133 perfiles y 0 pasaron el filtro geográfico, pero ninguno califica en nicho o calidad (las tiendas y perfiles genéricos fueron filtrados)"*
-
-Esto dice "filtro geográfico" pero en realidad fue "filtro de tiendas". El usuario queda confundido.
-
-**Fix sugerido:**
-```python
-if tienda_excluded_count > 0 and total_candidates == 0:
-    message = (
-        f"⚠️ {tienda_excluded_count} cuentas fueron identificadas como tiendas "
-        f"y excluidas del resultado. En Venezuela la mayoría de perfiles de "
-        f"belleza son tiendas. ¿Querés incluir tiendas en la búsqueda?"
-    )
-```
+**Fix aplicado (Hito 23):**
+1. `except SourceUnavailable: raise` ANTES de `except Exception` — el 402 ya no se silencia
+2. Pre-flight `get_balance()` antes de gastar nada — si saldo < costo estimado, se aborta con mensaje claro
+3. `MAX_HANDLES_TO_ENRICH` 50→25 — reduce enrichment cost de $1.00 a ~$0.50
+4. Mensaje al usuario derivado del contador dominante — ya no dice "filtro geográfico" fijo
 
 ---
 
-### Bug N3 — Geolocalización sin validación post-enrichment (⚠️ MEDIA)
+### Bug N1 (REFUTADO) — `exclude_stores` como causa de 0 candidatos
 
-**Problema:** Los `geo_indicators` (31 términos VE: caracas, maracaibo, vzla, 🇻🇪, chamo, etc.) se generan en el profile fingerprint y se usan en el scoring inicial, pero NO se validan contra la bio del perfil después del enrichment.
+**Estado: NO ES UN BUG — Diagnóstico incorrecto en Hito 22**
 
-**Escenario:** Un handle de México con "skincare venezuela" en el bio podría rankear alto si matchea keywords pero no tiene indicadores geográficos reales de VE.
+**Lo que decían los logs:**
+```
+[SCORING] 0 scored → 0 score≥5 → 0 qualified (tienda_excluded=True)
+```
 
-**Fix sugerido:** Después del enrichment (Step 3), validar que el bio/location del perfil contiene al menos 2-3 `geo_indicators`. Si no, restar 20 puntos del `geo_score`.
+**Lo que esto significa:**
+- `tienda_excluded=True` es el **valor del flag de configuración** (`exclude_stores` del brief), NO un conteo de tiendas excluidas
+- `0 scored` significa que la lista llegó VACÍA al scoring — no que las tiendas fueran filtradas
+- La causa real: enrichment falló con 402 → todos los perfiles tienen `followers=0` → todos filtrados en `worker.py:1054` (`if profile.followers < TIER_MIN_FOLLOWERS`)
+
+**Handles "de tiendas" mencionados en ARQUITECTURA_LENS.md v3.7:**
+Esos handles (`shopmarianazambrano.ve`, etc.) NUNCA fueron enriquecidos con follower count. El enrichment murió en la primera llamada con 402. Esos nombres aparecían en los logs de STEP1/STEP2 (perfiles REDUCIDOS, sin follower data).
+
+**Fix sugerido (para cuando haya candidatos):**
+POSTERGADO hasta que el pipeline produzca candidatos reales. Una vez que `total_candidates > 0`, si la mayoría son tiendas, tiene sentido abordar `exclude_stores`.
+
+---
+
+### Bug N2 — Mensaje engañoso al usuario (⚠️ MEDIA — CORREGIDO EN HITO 23)
+
+**Problema original:** El mensaje decía "filtro geográfico" fijo, pero la causa real podía ser otra (enrichment fallido, filtro tiendas, etc.).
+
+**Fix aplicado (Hito 23):** `_build_zero_candidates_message()` deriva el mensaje del contador que MÁS perfiles descarta:
+- Si enrichment falló → "no pude completar la búsqueda"
+- Si tiendas_excluded domina → "X cuentas son comerciales"
+- Si geo mismatches → "X no son del país"
+- Si sin seguidores → "X no tienen seguidores"
+
+---
+
+### Bug N3 — Geolocalización sin validación post-enrichment (⚠️ MEDIA — POSTERGADO)
+
+**Problema:** Los `geo_indicators` no se validan contra la bio del perfil después del enrichment.
+
+**Decisión:** POSTERGADO hasta que el pipeline produzca candidatos. No tiene sentido validar geo de una lista vacía.
+
+**Fix sugerido (para cuando haya candidatos):**
+Después del enrichment, verificar que el bio contiene al menos 2-3 `geo_indicators`. Si no, penalizar `geo_score`.
 
 ---
 
@@ -804,4 +813,4 @@ if tienda_excluded_count > 0 and total_candidates == 0:
 
 ---
 
-*Documento generado: 2026-08-18 — Arquitectura LENS v3.7 (22 hitos aplicados). Test run Hito 22 completado con 3 bugs nuevos (N1-exclude_stores, N2-mensaje engañoso, N3-geo sin validación). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5-7.*
+*Documento generado: 2026-08-19 — Arquitectura LENS v3.8 (23 hitos aplicados + Opus 5 audit7 refutations). Hito 23 aplicado: pre-flight balance, except SourceUnavailable raise, _build_zero_candidates_message, MAX_ENRICH 50→25. Bug N1 refutado por Opus 5 — causa real era enrichment 402. Test runs 0c44ea23 + 1a1d6128 condenado sin pre-flight ($3.26 desperdiciado). Auditorías completas en `LENS_REVIEW_ARQUITECTURA_2026-08-14.md`, `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5-7, `LENS_AUDIT7_2026-08-18.md`, `LENS_AUDIT8_2026-08-19.md`.*

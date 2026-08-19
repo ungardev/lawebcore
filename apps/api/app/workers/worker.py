@@ -45,7 +45,11 @@ logger = structlog.get_logger(__name__)
 
 _replay_miss_count_for_run: int = 0
 
-MAX_HANDLES_TO_ENRICH = 50
+# HITO 23: 50 → 25. El enrichment es el 61% del costo del run ($1.00 de $1.64).
+# Con 25 el run baja a ~$1.14 y, tras recortar el descubrimiento, a ~$0.74.
+MAX_HANDLES_TO_ENRICH = 25
+# Llamadas estimadas de la fase de descubrimiento, para el pre-flight de saldo.
+ESTIMATED_DISCOVERY_CALLS = 32
 MAX_POSTS_PER_HASHTAG = 20
 TIER_MIN_FOLLOWERS = 5_000
 TIER_MAX_FOLLOWERS = 50_000
@@ -130,6 +134,65 @@ def _rerank_diversified(scored: list[dict], target_n: int = 80) -> list[dict]:
         )
         final.extend(remaining[: target_n - len(final)])
     return final[:target_n]
+
+
+_ZERO_REASON_TEXT = {
+    "untracked_no_followers": (
+        "no pude obtener sus seguidores — el enriquecimiento de perfiles no se completó"
+    ),
+    "below_min_followers": "tienen menos seguidores del mínimo pedido",
+    "above_max_followers": "superan el máximo de seguidores del brief",
+    "bots_filtered": "muestran patrones de engagement artificial",
+    "geo_country_mismatch": "son de otro país",
+    "geo_no_signal": "no muestran señales del país objetivo en su perfil",
+    "political_filtered": "contienen términos excluidos del brief",
+}
+
+
+def _build_zero_candidates_message(
+    total_profiles: int,
+    scored_count: int,
+    reasons: dict[str, int],
+    stores_excluded: int,
+    step3_degraded: bool,
+    step3_error: str | None,
+) -> str:
+    """Explica por qué un run terminó con 0 candidatos, nombrando la causa real.
+
+    Antes el mensaje era fijo ("filtro geográfico") y confundía el diagnóstico:
+    en el run 0c44ea23 la causa fue que el enrichment falló con 402.
+    """
+    if step3_degraded and reasons.get("untracked_no_followers", 0) >= total_profiles * 0.8:
+        return (
+            f"⚠️ No pude completar la búsqueda. Encontré **{total_profiles} perfiles**, "
+            f"pero el enriquecimiento falló y sin ese paso no tengo seguidores ni "
+            f"engagement para evaluarlos.\n\n"
+            f"Detalle: {step3_error or 'enrichment no disponible'}\n\n"
+            f"Si es por saldo, recarga en hikerapi.com/billing y vuelve a intentarlo."
+        )
+
+    if stores_excluded > 0 and scored_count > 0 and stores_excluded >= scored_count * 0.8:
+        return (
+            f"Encontré {scored_count} perfiles con buen puntaje, pero **{stores_excluded} "
+            f"son cuentas comerciales** y el brief pedía excluir tiendas.\n\n"
+            f"En algunos mercados la mayoría de las cuentas del nicho son tiendas. "
+            f"Puedes desactivar «excluir tiendas» en el brief para incluirlas."
+        )
+
+    top_reason, top_count = max(reasons.items(), key=lambda kv: kv[1], default=("", 0))
+    if top_count > 0:
+        explanation = _ZERO_REASON_TEXT.get(top_reason, "no cumplen los criterios del brief")
+        return (
+            f"Escaneé **{total_profiles} perfiles** y ninguno califica.\n\n"
+            f"Motivo principal: **{top_count} perfiles** {explanation}.\n\n"
+            f"Prueba ajustando ese criterio en el brief, o usa hashtags más "
+            f"específicos de tu nicho."
+        )
+
+    return (
+        f"Escaneé {total_profiles} perfiles y ninguno califica para este brief. "
+        f"Prueba con hashtags más específicos o amplía los criterios."
+    )
 
 
 async def startup(ctx):
@@ -279,6 +342,38 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         instagram_source = HikerAPIClient()
         instagram_source.run_id = run_id
         instagram_source.budget_fuse = budget_fuse
+
+        # HITO 23 — PRE-FLIGHT DE SALDO.
+        # BudgetFuse valida el presupuesto INTERNO (contador en Redis), no el
+        # saldo REAL del proveedor. El run 0c44ea23 gastó $1.64 en descubrimiento
+        # y murió con 402 en la primera llamada de enrichment: sin ese paso
+        # ningún perfil tiene seguidores y el resultado es 0 candidatos.
+        # Comprobar antes cuesta 1 llamada; no comprobar cuesta el run entero.
+        if settings.RUN_MODE != "replay" and hasattr(instagram_source, "get_balance"):
+            estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+            estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD
+            balance = await instagram_source.get_balance()
+            if balance is not None and balance < estimated_cost:
+                logger.error(
+                    "preflight_insufficient_balance",
+                    run_id=run_id,
+                    balance_usd=balance,
+                    estimated_cost_usd=round(estimated_cost, 4),
+                    estimated_calls=estimated_calls,
+                )
+                raise SourceUnavailable(
+                    f"Saldo insuficiente: ${balance:.2f} disponibles y se necesitan "
+                    f"~${estimated_cost:.2f} para completar el run ({estimated_calls} llamadas). "
+                    f"Recarga en hikerapi.com/billing. No se gastó nada en este intento.",
+                    status_code=402,
+                    provider="hikerapi",
+                )
+            logger.info(
+                "preflight_balance_ok",
+                run_id=run_id,
+                balance_usd=balance,
+                estimated_cost_usd=round(estimated_cost, 4),
+            )
 
         location_items: list[dict] = []
         step0_handles: set[str] = set()
@@ -940,6 +1035,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     with_about_country=sum(1 for p in enriched_profiles if (p.get("about") or {}).get("country")),
                     ve_countries=sum(1 for p in enriched_profiles if (p.get("about") or {}).get("country", "").upper() == "VE"),
                 )
+            except SourceUnavailable:
+                # HITO 23: el `raise res` de la línea ~915 (hito 9) caía en el
+                # `except Exception` de abajo, que lo convertía en degradación
+                # silenciosa. Un 402/401/429 debe abortar el run: sin enrichment
+                # ningún perfil tiene seguidores y el resultado será 0 candidatos.
+                # Seguir adelante sólo gasta dinero en un run ya condenado.
+                raise
             except Exception as e:
                 step3_degraded = True
                 step3_error = str(e)
@@ -1336,6 +1438,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         passed_score = [c for c in scored if (c.get("match_score") or 0) >= min_match_score]
         passed_store = [c for c in passed_score if not c.get("is_tienda")]
         qualified = [c for c in passed_score if (not exclude_stores or not c.get("is_tienda"))]
+        # Capturado aquí porque `qualified` se reasigna tras el análisis IA.
+        stores_excluded_count = len(passed_score) - len(qualified)
 
         logger.info(
             "scoring_filter_breakdown",
@@ -1460,10 +1564,25 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 for c in top_candidates
             ]
             if total == 0:
-                content = (
-                    f"Escaneé {len(profiles)} perfiles y {len(scored)} pasaron el filtro geográfico, "
-                    f"pero ninguno califica en nicho o calidad (las tiendas y perfiles genéricos fueron filtrados). "
-                    f"Intenta con hashtags más específicos de tu nicho o ajusta el brief."
+                # HITO 23: el mensaje se deriva del contador que MÁS perfiles
+                # descartó, no de un texto fijo. Antes decía siempre "filtro
+                # geográfico" — en el run 0c44ea23 la causa real fue que el
+                # enrichment falló y ningún perfil tenía seguidores.
+                content = _build_zero_candidates_message(
+                    total_profiles=len(profiles),
+                    scored_count=len(scored),
+                    reasons={
+                        "untracked_no_followers": untracked_no_followers,
+                        "below_min_followers": low_followers_skipped,
+                        "above_max_followers": above_max_followers,
+                        "bots_filtered": bots_filtered,
+                        "geo_country_mismatch": geo_country_mismatch,
+                        "geo_no_signal": geo_no_signal,
+                        "political_filtered": political_filtered,
+                    },
+                    stores_excluded=stores_excluded_count,
+                    step3_degraded=step3_degraded,
+                    step3_error=step3_error,
                 )
             else:
                 content = (

@@ -67,6 +67,32 @@ class HikerAPIClient:
             self._redis = redis_async.from_url(settings.ARQ_REDIS_URL, decode_responses=False)
         return self._redis
 
+    async def get_balance(self) -> float | None:
+        """Saldo restante en USD, o None si no se puede determinar (hito 23).
+
+        Se usa como pre-flight: evita arrancar un run que no puede terminar.
+        Un run abortado antes de gastar cuesta $0; uno que muere a mitad del
+        enrichment cuesta el descubrimiento completo (~$0.64) y produce cero.
+
+        ⚠️ VERIFICAR LA RUTA contra https://api.hikerapi.com/docs — no está
+        confirmada. Ante cualquier fallo devuelve None y el worker continúa
+        sin pre-flight, que es el comportamiento actual (nunca bloquea).
+        """
+        for path in ("/v1/account", "/v1/user/balance", "/account"):
+            try:
+                client = await self._get_client()
+                resp = await client.get(path)
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                for key in ("balance", "balance_usd", "credits_usd", "amount"):
+                    if key in data:
+                        return float(data[key])
+            except Exception:
+                continue
+        logger.info("hikerapi_balance_unavailable", hint="pre-flight omitido")
+        return None
+
     async def close(self) -> None:
         if self._client:
             await self._client.aclose()
