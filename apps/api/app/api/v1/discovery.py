@@ -559,6 +559,7 @@ async def analyze_selected(body: AnalyzeSelectedRequest, user: CurrentUserDep):
 
     brief_parsed["discovery_mode"] = "analyze"
     brief_parsed["handles_to_analyze"] = body.handles_to_analyze
+    brief_parsed["parent_run_id"] = str(body.run_id)
 
     from discovery.schemas import DiscoverySearchRequest
     brief = DiscoverySearchRequest(**brief_parsed)

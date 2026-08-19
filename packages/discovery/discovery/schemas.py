@@ -91,6 +91,10 @@ class BriefStructured(BaseModel):
         default_factory=list,
         description="Handles selected by analyst in explore mode for enrichment in analyze mode",
     )
+    parent_run_id: str | None = Field(
+        default=None,
+        description="Parent run ID for analyze mode — used to load candidates from explore run",
+    )
 
 
 class DiscoveryPlan(BaseModel):

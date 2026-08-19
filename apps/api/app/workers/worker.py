@@ -325,12 +325,68 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         plan = await query_builder.build(brief)
         profile_data = plan.profile
 
-        # HITO 24 — MODO EXPLORAR
+        # HITO 24 — MODO EXPLORAR / ANALIZAR
         # En modo explorar, el pipeline hace solo discovery (sin enrichment).
         # El analista recibe la lista cruda y elige qué perfiles evaluar.
         # Costo: ~$0.24/run (solo discovery). Sin enrichment no hay 402 que corte.
         is_explore_mode = getattr(brief, "discovery_mode", "auto") == "explore"
         is_analyze_mode = getattr(brief, "discovery_mode", "auto") == "analyze"
+        parent_run_id = getattr(brief, "parent_run_id", None)
+
+        # G14 — MODO ANALIZAR: cargar candidatos del run padre (explore)
+        # y enriquecer SOLO los handles_to_analyze. Sin esto, el analyze run
+        # re-ejecutaría discovery y no encontraría los handles del padre.
+        profiles: dict[str, dict] = {}
+        step1_handles: set[str] = set()
+        step2_handles: set[str] = set()
+        step3_handles: set[str] = set()
+        step4_handles: set[str] = set()
+
+        if is_analyze_mode and parent_run_id:
+            parent_candidates = await railway_pg.select(
+                table="discovery_candidates",
+                select="*",
+                filters=[
+                    f"run_id=eq.{parent_run_id}",
+                    f"handle=in.({','.join(repr(h) for h in brief.handles_to_analyze)})",
+                ],
+            )
+            for c in parent_candidates:
+                handle = c.get("handle", "")
+                if not handle:
+                    continue
+                raw = c.get("raw_payload") or {}
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": c.get("full_name") or raw.get("full_name", ""),
+                    "fullName": c.get("full_name") or raw.get("fullName", ""),
+                    "bio": c.get("bio") or raw.get("bio", ""),
+                    "biography": c.get("bio") or raw.get("biography", ""),
+                    "avatar_url": c.get("avatar_url") or raw.get("avatar_url", ""),
+                    "profilePicUrl": c.get("avatar_url") or raw.get("profilePicUrl", ""),
+                    "follower_count": c.get("followers") or raw.get("followersCount", 0),
+                    "followersCount": c.get("followers") or raw.get("followersCount", 0),
+                    "following_count": c.get("following") or raw.get("followingCount", 0),
+                    "followsCount": c.get("following") or raw.get("followsCount", 0),
+                    "posts_count": c.get("posts_count") or raw.get("postsCount", 0),
+                    "postsCount": c.get("posts_count") or raw.get("postsCount", 0),
+                    "is_business": raw.get("isBusinessAccount", False) or raw.get("is_business", False),
+                    "isBusinessAccount": raw.get("isBusinessAccount", False),
+                    "is_verified": raw.get("is_verified", False) or raw.get("verified", False),
+                    "verified": raw.get("verified", False),
+                    "pk": raw.get("pk"),
+                    "is_private": raw.get("is_private", False),
+                }
+            logger.info(
+                "step_analyze_mode_loaded_parent_candidates",
+                parent_run_id=parent_run_id,
+                handles_loaded=len(profiles),
+                requested=len(brief.handles_to_analyze),
+            )
+            await _save_progress_message(
+                run_id,
+                f"🔍 Analizando {len(profiles)} perfiles seleccionados del run anterior...",
+            )
 
         await _run_update_metadata(run_id, {
             "current_step": "step1_hashtag_search",
@@ -341,11 +397,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "replay_miss_count": 0,
         })
 
-        profiles: dict[str, dict] = {}
-        step1_handles: set[str] = set()
-        step2_handles: set[str] = set()
-        step3_handles: set[str] = set()
-        step4_handles: set[str] = set()
         instagram_source = HikerAPIClient()
         instagram_source.run_id = run_id
         instagram_source.budget_fuse = budget_fuse
@@ -569,269 +620,282 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     logger.warning("source_reels_error", keyword=kw, error=str(e))
             logger.info("step2p5_reels_done", results=len(results))
             return results
+        _skip_discovery = is_analyze_mode and parent_run_id
 
-        print("[discovery_run_task] STEP 1+2+2.5+3+4: Running", flush=True)
-        step1_result, step2_result = await asyncio.gather(
-            _fetch_step1(),
-            _fetch_step2(),
-            return_exceptions=True,
-        )
-        for res in (step1_result, step2_result):
-            if isinstance(res, SourceUnavailable):
-                raise res
-            if isinstance(res, ReplayMiss):
-                _replay_miss_count_for_run += 1
-
-        step1_recent_result, step2p5_result = await asyncio.gather(
-            _fetch_step1_recent(),
-            _fetch_step2p5(),
-            return_exceptions=True,
-        )
-        for res in (step1_recent_result, step2p5_result):
-            if isinstance(res, SourceUnavailable):
-                raise res
-            if isinstance(res, ReplayMiss):
-                _replay_miss_count_for_run += 1
-
-        hashtag_items: list[dict] = []
-        keyword_items: list[dict] = []
-        hashtag_recent_items: list[dict] = []
-        reels_items: list[dict] = []
-        topsearch_items: list[dict] = []
-        suggested_items: list[dict] = []
-
-
-        if isinstance(step1_result, Exception):
-            logger.error("step1_hashtag_failed", error=str(step1_result))
-            print(f"[STEP1] FAILED: {step1_result}", flush=True)
+        if _skip_discovery:
+            print("[discovery_run_task] ANALYZE MODE — skipping STEP 1/2/2.5/3 discovery", flush=True)
+            hashtag_items: list[dict] = []
+            keyword_items: list[dict] = []
+            hashtag_recent_items: list[dict] = []
+            reels_items: list[dict] = []
+            topsearch_items: list[dict] = []
+            suggested_items: list[dict] = []
+            step1_handles: set[str] = set()
+            step2_handles: set[str] = set()
+            step3_handles: set[str] = set()
+            step4_handles: set[str] = set()
         else:
-            hashtag_items = step1_result
-            print(f"[STEP1] {len(hashtag_items)} posts from hashtags source=hikerapi", flush=True)
-            logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source="hikerapi")
+            print("[discovery_run_task] STEP 1+2+2.5+3+4: Running", flush=True)
+            step1_result, step2_result = await asyncio.gather(
+                _fetch_step1(),
+                _fetch_step2(),
+                return_exceptions=True,
+            )
+            for res in (step1_result, step2_result):
+                if isinstance(res, SourceUnavailable):
+                    raise res
+                if isinstance(res, ReplayMiss):
+                    _replay_miss_count_for_run += 1
 
-        if isinstance(step2_result, Exception):
-            logger.error("step2_keyword_failed", error=str(step2_result))
-            print(f"[STEP2] FAILED: {step2_result}", flush=True)
-        else:
-            keyword_items = step2_result
-            print(f"[STEP2] {len(keyword_items)} users from keywords source=hikerapi", flush=True)
-            logger.info("step2_keyword_done", keyword_users=len(keyword_items), source="hikerapi")
+            step1_recent_result, step2p5_result = await asyncio.gather(
+                _fetch_step1_recent(),
+                _fetch_step2p5(),
+                return_exceptions=True,
+            )
+            for res in (step1_recent_result, step2p5_result):
+                if isinstance(res, SourceUnavailable):
+                    raise res
+                if isinstance(res, ReplayMiss):
+                    _replay_miss_count_for_run += 1
 
-        if isinstance(step1_recent_result, Exception):
-            logger.error("step1_recent_failed", error=str(step1_recent_result))
-        else:
-            hashtag_recent_items = step1_recent_result
-            print(f"[STEP1_RECENT] {len(hashtag_recent_items)} posts from recent hashtag search", flush=True)
-            logger.info("step1_recent_done", hashtag_recent_posts=len(hashtag_recent_items))
+            hashtag_items = []
+            keyword_items = []
+            hashtag_recent_items = []
+            reels_items = []
+            topsearch_items = []
+            suggested_items = []
 
-        if isinstance(step2p5_result, Exception):
-            logger.error("step2p5_reels_failed", error=str(step2p5_result))
-        else:
-            reels_items = step2p5_result
-            print(f"[STEP2p5_REELS] {len(reels_items)} creators from reels search", flush=True)
-            logger.info("step2p5_reels_done", reels_creators=len(reels_items))
+            if isinstance(step1_result, Exception):
+                logger.error("step1_hashtag_failed", error=str(step1_result))
+                print(f"[STEP1] FAILED: {step1_result}", flush=True)
+            else:
+                hashtag_items = step1_result
+                print(f"[STEP1] {len(hashtag_items)} posts from hashtags source=hikerapi", flush=True)
+                logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source="hikerapi")
 
-        for item in hashtag_items:
-            handle = item.get("username") or item.get("ownerUsername", "")
-            if not handle:
-                continue
-            step1_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
-                "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
-                "bio": item.get("bio", "") or item.get("biography", ""),
-                "biography": item.get("biography", "") or item.get("bio", ""),
-                "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "locationName": item.get("locationName", "") or "",
-                "location": item.get("locationName", "") or "",
-                "pk": item.get("pk"),
-                "is_private": item.get("is_private", False),
-            }
+            if isinstance(step2_result, Exception):
+                logger.error("step2_keyword_failed", error=str(step2_result))
+                print(f"[STEP2] FAILED: {step2_result}", flush=True)
+            else:
+                keyword_items = step2_result
+                print(f"[STEP2] {len(keyword_items)} users from keywords source=hikerapi", flush=True)
+                logger.info("step2_keyword_done", keyword_users=len(keyword_items), source="hikerapi")
 
-        for item in keyword_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step2_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", ""),
-                "fullName": item.get("full_name", ""),
-                "bio": item.get("bio", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "pk": item.get("pk"),
-                "is_private": item.get("is_private", False),
-            }
+            if isinstance(step1_recent_result, Exception):
+                logger.error("step1_recent_failed", error=str(step1_recent_result))
+            else:
+                hashtag_recent_items = step1_recent_result
+                print(f"[STEP1_RECENT] {len(hashtag_recent_items)} posts from recent hashtag search", flush=True)
+                logger.info("step1_recent_done", hashtag_recent_posts=len(hashtag_recent_items))
 
-        step3_result, step4_result = await asyncio.gather(
-            _fetch_step3(),
-            _fetch_step4(),
-            return_exceptions=True,
-        )
-        for res in (step3_result, step4_result):
-            if isinstance(res, SourceUnavailable):
-                raise res
-            if isinstance(res, ReplayMiss):
-                _replay_miss_count_for_run += 1
+            if isinstance(step2p5_result, Exception):
+                logger.error("step2p5_reels_failed", error=str(step2p5_result))
+            else:
+                reels_items = step2p5_result
+                print(f"[STEP2p5_REELS] {len(reels_items)} creators from reels search", flush=True)
+                logger.info("step2p5_reels_done", reels_creators=len(reels_items))
 
-        if isinstance(step3_result, Exception):
-            logger.error("step3_topsearch_failed", error=str(step3_result))
-        else:
-            topsearch_items = step3_result
-            print(f"[STEP3] {len(topsearch_items)} accounts from topsearch", flush=True)
-            logger.info("step3_topsearch_done", topsearch_accounts=len(topsearch_items))
+            for item in hashtag_items:
+                handle = item.get("username") or item.get("ownerUsername", "")
+                if not handle:
+                    continue
+                step1_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "bio": item.get("bio", "") or item.get("biography", ""),
+                    "biography": item.get("biography", "") or item.get("bio", ""),
+                    "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "locationName": item.get("locationName", "") or "",
+                    "location": item.get("locationName", "") or "",
+                    "pk": item.get("pk"),
+                    "is_private": item.get("is_private", False),
+                }
 
-        if isinstance(step4_result, Exception):
-            logger.error("step4_suggested_failed", error=str(step4_result))
-        else:
-            suggested_items = step4_result
-            print(f"[STEP4] {len(suggested_items)} accounts from suggested", flush=True)
-            logger.info("step4_suggested_done", suggested_accounts=len(suggested_items))
+            for item in keyword_items:
+                handle = item.get("username", "")
+                if not handle:
+                    continue
+                step2_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", ""),
+                    "biography": item.get("biography", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "pk": item.get("pk"),
+                    "is_private": item.get("is_private", False),
+                }
 
-        for item in topsearch_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step3_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", ""),
-                "fullName": item.get("full_name", ""),
-                "bio": item.get("bio", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "pk": item.get("pk"),
-                "locationName": item.get("locationName", "") or "",
-            }
+            step3_result, step4_result = await asyncio.gather(
+                _fetch_step3(),
+                _fetch_step4(),
+                return_exceptions=True,
+            )
+            for res in (step3_result, step4_result):
+                if isinstance(res, SourceUnavailable):
+                    raise res
+                if isinstance(res, ReplayMiss):
+                    _replay_miss_count_for_run += 1
 
-        for item in suggested_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step4_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", ""),
-                "fullName": item.get("full_name", ""),
-                "bio": item.get("bio", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "pk": item.get("pk"),
-                "locationName": item.get("locationName", "") or "",
-            }
+            if isinstance(step3_result, Exception):
+                logger.error("step3_topsearch_failed", error=str(step3_result))
+            else:
+                topsearch_items = step3_result
+                print(f"[STEP3] {len(topsearch_items)} accounts from topsearch", flush=True)
+                logger.info("step3_topsearch_done", topsearch_accounts=len(topsearch_items))
 
-        for item in hashtag_recent_items:
-            handle = item.get("username", "") or item.get("ownerUsername", "")
-            if not handle:
-                continue
-            step1_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
-                "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
-                "bio": item.get("bio", "") or item.get("biography", ""),
-                "biography": item.get("biography", "") or item.get("bio", ""),
-                "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "locationName": item.get("locationName", "") or "",
-                "location": item.get("locationName", "") or "",
-                "pk": item.get("pk"),
-            }
+            if isinstance(step4_result, Exception):
+                logger.error("step4_suggested_failed", error=str(step4_result))
+            else:
+                suggested_items = step4_result
+                print(f"[STEP4] {len(suggested_items)} accounts from suggested", flush=True)
+                logger.info("step4_suggested_done", suggested_accounts=len(suggested_items))
 
-        for item in reels_items:
-            handle = item.get("username", "")
-            if not handle:
-                continue
-            step2_handles.add(handle)
-            if handle in profiles:
-                continue
-            profiles[handle] = {
-                "username": handle,
-                "full_name": item.get("full_name", ""),
-                "fullName": item.get("full_name", ""),
-                "bio": item.get("bio", ""),
-                "biography": item.get("biography", ""),
-                "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
-                "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
-                "follower_count": item.get("follower_count", 0),
-                "followersCount": item.get("followersCount", 0),
-                "following_count": item.get("following_count", 0),
-                "followsCount": item.get("followsCount", 0),
-                "posts_count": item.get("posts_count", 0),
-                "postsCount": item.get("postsCount", 0),
-                "is_business": item.get("is_business", False),
-                "isBusinessAccount": item.get("isBusinessAccount", False),
-                "is_verified": item.get("is_verified", False),
-                "verified": item.get("verified", False),
-                "pk": item.get("pk"),
-                "locationName": item.get("locationName", "") or "",
-            }
+            for item in topsearch_items:
+                handle = item.get("username", "")
+                if not handle:
+                    continue
+                step3_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", ""),
+                    "biography": item.get("biography", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "pk": item.get("pk"),
+                    "locationName": item.get("locationName", "") or "",
+                }
+
+            for item in suggested_items:
+                handle = item.get("username", "")
+                if not handle:
+                    continue
+                step4_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", ""),
+                    "biography": item.get("biography", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "pk": item.get("pk"),
+                    "locationName": item.get("locationName", "") or "",
+                }
+
+            for item in hashtag_recent_items:
+                handle = item.get("username", "") or item.get("ownerUsername", "")
+                if not handle:
+                    continue
+                step1_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "fullName": item.get("full_name", "") or item.get("ownerFullName", ""),
+                    "bio": item.get("bio", "") or item.get("biography", ""),
+                    "biography": item.get("biography", "") or item.get("bio", ""),
+                    "avatar_url": item.get("avatar_url") or item.get("profilePicUrl", "") or item.get("displayUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "locationName": item.get("locationName", "") or "",
+                    "location": item.get("locationName", "") or "",
+                    "pk": item.get("pk"),
+                }
+
+            for item in reels_items:
+                handle = item.get("username", "")
+                if not handle:
+                    continue
+                step2_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", ""),
+                    "biography": item.get("biography", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "pk": item.get("pk"),
+                    "locationName": item.get("locationName", "") or "",
+                }
 
         unique_handles = list(profiles.keys())
         print(f"[DIAG] steps 1-5 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
@@ -1595,6 +1659,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     f"✅ Encontré {len(scored)} perfiles con señales de nicho. "
                     f"Seleccioná los que quieras que analice en profundidad.",
                 )
+            elif is_analyze_mode:
+                top = qualified[0].get("match_score", 0) if qualified else 0
+                await _save_progress_message(
+                    run_id,
+                    f"✅ Análisis completado. {len(qualified)} perfiles enriquecidos y guardados. "
+                    f"Mejor score: {top:.0f}/100. "
+                    f"Descargá la propuesta en CSV desde el historial de runs.",
+                )
             else:
                 await _save_progress_message(
                     run_id,
@@ -1602,6 +1674,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     f"El mejor candidato tiene {qualified[0].get('match_score', 0):.0f}/100 de match.",
                 )
 
+        if is_analyze_mode:
+            for c in qualified:
+                c["status"] = "saved"
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
         total = inserted_count
 
@@ -1626,6 +1701,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "step3_error": step3_error,
             "replay_miss_count": _replay_miss_count_for_run,
             "is_explore_mode": is_explore_mode,
+            "is_analyze_mode": is_analyze_mode,
+            "parent_run_id": parent_run_id,
         })
 
         conv = await railway_pg.select_one(
