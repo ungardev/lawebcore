@@ -59,7 +59,7 @@ export function useRunPolling(runId: string | null) {
       }
     }
 
-    if (status === 'completed' || status === 'partial') {
+    if (status === 'completed' || status === 'partial' || status === 'explored') {
       lensApi.search.getCandidates(runId!, { limit: 20 })
         .then((cands) => {
           if (gen === generationRef.current) {
