@@ -1412,4 +1412,78 @@ curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
 
 ---
 
-*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Hito 28 aplicado (commit `a21dd97`): Fix A pre-flight mode-aware + Fix B DeepSeek skip explorar + extra='forbid'. HikerAPI balance: $43.00 USD. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md` v5.3.*
+## 15. Pipeline Coverage Analysis — Brechas Identificadas (v5.4)
+
+> **Nuevo en v5.4 — 2026-08-20**
+
+### 15.1 Resumen
+
+El pipeline actual de LENS captura el **~80%** de lo que HikerAPI puede ofrecer. Las 8 brechas identificadas representan el 20% restante — principalmente datos de enrichment que no se usan para scoring.
+
+| # | Brecha | Severidad | Esfuerzo | Costo Extra | Hito |
+|---|--------|-----------|----------|-------------|------|
+| 1 | Quality Score (engagement real) | 🟡 MEDIA | 1h | +$0.10-0.20 | H31 |
+| 2 | Nicho real (captions) | 🟡 MEDIA | 30min | +$0.05 | H32 |
+| 3 | Geo post-enrichment | 🟢 BAJA | 30min | $0 | H29 |
+| 4 | Tier enforcement (5K-50K) | 🟢 BAJA | 15min | $0 | H29 |
+| 5 | Cross-reference boost | 🟡 MEDIA | 1h | $0 | H32 |
+| 6 | Verified boost | 🟢 BAJA | 15min | $0 | H29 |
+| 7 | Time-decay | 🟡 MEDIA | 1h | $0 | H33 |
+| 8 | Bot detection avanzada | 🟡 MEDIA | 2h | $0 | H35 |
+
+### 15.2 Brechas Detalladas
+
+**Brecha 1 — Quality Score (Engagement):** El `rough_score` no incluye engagement rate. Un influencer con 50K followers y 50 likes (90% bots) rankea igual que uno con 5K likes. Fix: post-enrichment, calcular `er = (avg_likes + avg_comments) / followers` y aplicar boost/penalty.
+
+**Brecha 2 — Nicho Real (Captions):** El nicho se calcula solo con bio. Perfiles sin keywords en bio pero con contenido relevante en captions quedan sub-rankeados. Fix: extraer captions de `latest_posts` y pasarlos a DeepSeek para niche classification (permiso especial para Explorar).
+
+**Brecha 3 — Geo Post-Enrichment:** El geo_score se calcula en prefilter sin `country`/`city` (disponibles solo post-enrichment). Fix: recalcular geo_score post-enrichment con datos reales.
+
+**Brecha 4 — Tier Enforcement:** `TIER_MIN_FOLLOWERS=5_000` y `TIER_MAX_FOLLOWERS=50_000` no se aplican en prefilter. Perfiles fuera de tier compiten y gastan calls. Fix: skip en prefilter si followers fuera de rango.
+
+**Brecha 5 — Cross-Reference Boost:** Si un perfil aparece en múltiples steps (hashtag + keyword), no se bonusifica. Fix: tracking de `_source_count` y boost si aparece en 2+ sources.
+
+**Brecha 6 — Verified Boost:** `is_verified` se extrae pero no se usa en scoring. Fix: `rough *= 1.15` si verificado.
+
+**Brecha 7 — Time-Decay:** Cuentas inactivas >90 días rankean igual que activas. Fix: penalizar por `days_since_last_post`.
+
+**Brecha 8 — Bot Detection Avanzada:** Solo se usa `ff_ratio`. Faltan engagement rate, ratio followers/likes, posts count. Fix: bot_score compuesto post-enrichment.
+
+### 15.3 H29 — Fixes Inmediatos (15 min, $0)
+
+Los 3 fixes triviales siguientes se implementan en un solo commit:
+
+```python
+# worker.py — prefilter_profiles:
+# 1. Tier enforcement:
+if followers < TIER_MIN_FOLLOWERS or followers > TIER_MAX_FOLLOWERS:
+    bot_flags[handle] = 10  # Effectively skip
+
+# 2. Verified boost:
+if is_verified:
+    rough *= 1.15
+
+# 3. Geo post-enrichment (post-enrichment, recalcular):
+if profile.get("country"):
+    geo = geo_score({"biography": bio, "country": profile["country"],
+                     "city": profile.get("city", "")}, geo_indicators, target_country)
+```
+
+### 15.4 Roadmap H29-H35
+
+| Hito | Brechas | Esfuerzo | Costo Extra |
+|------|---------|----------|-------------|
+| H29 | Brecha 3 + 4 + 6 | 1h | $0 |
+| H31 | Brecha 1 (engagement) | 1h | +$0.10-0.20 |
+| H32 | Brecha 2 (niche captions) + 5 (cross-ref) | 1.5h | +$0.05 |
+| H33 | Brecha 7 (time-decay) | 1h | $0 |
+| H35 | Brecha 8 (bot detection) | 2h | $0 |
+| **TOTAL** | **8 brechas** | **~6.5h** | **+$0.15-0.25** |
+
+### 15.5 Request para Opus 5
+
+> Opus 5: Analiza las 8 brechas en `docs/ARQUITECTURA_LENS.md` Sección 20. Para cada una, proporciona: (1) confirmación del fix o alternativa, (2) código del patch, (3) orden de aplicación, (4) conflictos con Hito 28 Fix B.
+
+---
+
+*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Hito 28 aplicado (commit `a21dd97`): Fix A pre-flight mode-aware + Fix B DeepSeek skip explorar + extra='forbid'. HikerAPI balance: $43.00 USD. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md` v5.4 (Pipeline Coverage Analysis con 8 brechas).*

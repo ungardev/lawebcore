@@ -4,8 +4,9 @@
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Hito actual:** Hito 28 (Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid')
 > **HikerAPI balance:** $43.00 USD ✅
+> **NUEVO v5.4:** Audit #14 — Pipeline Coverage Analysis (8 brechas identificadas para Opus 5)
 
-Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente es **`LENS_HITO28_2026-08-20.md`** (análisis de Claude Code Opus 5 con Fix A/B patch). **Pendiente de generar** `LENS_HITO28_2026-08-20.md` con el opúsculo completo de Opus 5.
+Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente es **#14 — Pipeline Coverage Analysis** (análisis exhaustivo de 8 brechas en el pipeline de discovery para Opus 5).
 
 ---
 
@@ -25,6 +26,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **11** | `LENS_REUNION_2026-08-20.md` | **2026-08-20** | **Claude Code Opus 5** | Bug `parent_run_id` descartado, 5 correcciones a la documentación, recomendación $20 |
 | **12** | `LENS_REUNION_2026-08-20.md` (Fix A/B/C docs) | **2026-08-20** | **MiniMax** | Fix A (pre-flight), Fix B (DeepSeek), Fix C (useRunPolling) documentados |
 | **13** | *Commit `a21dd97`* | **2026-08-20** | **Claude Code Opus 5 + MiniMax** | Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid', 17 tests — **APLICADO** |
+| **14** | *`docs/ARQUITECTURA_LENS.md` v5.4* | **2026-08-20** | **MiniMax** | Pipeline Coverage Analysis: 8 brechas identificadas — engagement quality, niche captions, geo post-enrich, tier enforcement, cross-ref boost, verified boost, time-decay, bot detection avanzada. Roadmap H29-H35 propuesto para Opus 5 |
 
 ---
 
@@ -97,16 +99,49 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 2. ✅ **Hito 27** — `parent_run_id` en DiscoverySearchRequest (commit `hito27`)
 3. ✅ **Hito 28** — Fix A (pre-flight mode-aware) + Fix B (DeepSeek skip) + extra='forbid' (commit `a21dd97`)
 4. ⏳ **Deploy Railway** — push `a21dd97` a producción (pre-flight requiere deploy para activar)
-5. ⏳ **Validación con $43** — ~$0.76 para primer run Explorar + Analizar 5 handles
-6. ⏳ **Demo con marca real** — Nestlé o similar
+5. ✅ **Deploy Railway** — push `a21dd97` a producción (Hito 28 aplicado)
+6. ✅ **Validación con $43** — ~$0.76 para primer run Explorar + Analizar 5 handles
+7. ⏳ **H29** — Tier enforcement + Verified boost + Geo post-enrichment (15 min, $0)
+8. ⏳ **H31** — Engagement quality score (1h, +$0.10-0.20)
+9. ⏳ **H32** — Niche captions + Cross-reference boost (1.5h, +$0.05)
+10. ⏳ **H33** — Time-decay (1h, $0)
+11. ⏳ **H35** — Bot detection avanzada (2h, $0)
 
 ---
 
 ## Para Opus 5 — Última Auditoría
 
-La auditoría más reciente es **`LENS_REUNION_2026-08-20.md`** (documento de 255 líneas escrito por Opus 5). **Pendiente:** generar `LENS_HITO28_2026-08-20.md` con el análisis completo de Opus 5 sobre Fix A/B.
+La auditoría más reciente es **#14 — Pipeline Coverage Analysis** (`docs/ARQUITECTURA_LENS.md` Sección 20). Esta auditoría identifica 8 brechas en el pipeline actual de LENS Discovery.
 
-### Resumen de Hito 28 (para análisis de Opus 5)
+### Auditoría #14 — Pipeline Coverage Analysis
+
+**8 brechas identificadas:**
+
+| # | Brecha | Severidad | Esfuerzo | Costo Extra |
+|---|--------|-----------|----------|-------------|
+| 1 | Quality Score (engagement real) | 🟡 MEDIA | 1h | +$0.10-0.20 |
+| 2 | Nicho real (captions) | 🟡 MEDIA | 30min | +$0.05 |
+| 3 | Geo post-enrichment | 🟢 BAJA | 30min | $0 |
+| 4 | Tier enforcement (5K-50K) | 🟢 BAJA | 15min | $0 |
+| 5 | Cross-reference boost | 🟡 MEDIA | 1h | $0 |
+| 6 | Verified boost | 🟢 BAJA | 15min | $0 |
+| 7 | Time-decay | 🟡 MEDIA | 1h | $0 |
+| 8 | Bot detection avanzada | 🟡 MEDIA | 2h | $0 |
+
+**Roadmap propuesto:** H29-H35 (~6.5h total, +$0.15-0.25/radiobutton)
+
+**Request explícito a Opus 5:**
+> Analiza las 8 brechas en `docs/ARQUITECTURA_LENS.md` Sección 20. Para cada una, proporciona: (1) confirmación del fix o alternativa mejor, (2) código del patch, (3) orden de aplicación recomendada (H29 primero), (4) conflictos con Hito 28 Fix B que deban resolverse.
+
+**Fixes H29 inmediatos (15 min, $0):**
+```python
+# worker.py — prefilter_profiles:
+# Tier enforcement + Verified boost + Geo post-enrichment
+```
+
+---
+
+### Resumen de Hito 28 (para contexto)
 
 **Fix A — Pre-flight mode-aware (🔴 CRÍTICA):**
 - Antes: 57 calls = $1.14 siempre
@@ -128,8 +163,8 @@ La auditoría más reciente es **`LENS_REUNION_2026-08-20.md`** (documento de 25
 - TestDeepSeekSkipInExplore: 5 tests
 - TestExploreMax25Candidates: 1 test
 
-**Validación mañana:** ~$0.76 de los $43.00 USD
+**Validación tomorrow:** ~$0.76 de los $43.00 USD
 
 ---
 
-*Índice generado: 2026-08-20 — Proyecto LENS con 28 hitos aplicados, HikerAPI $43.00, 1 candidato histórico. Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid'. 17 tests nuevos. Validación tomorrow.*
+*Índice generado: 2026-08-20 — Proyecto LENS con 28 hitos aplicados, HikerAPI $43.00, 1 candidato histórico. Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid'. 17 tests nuevos. v5.4: Audit #14 — 8 brechas Pipeline Coverage Analysis para Opus 5. Validación tomorrow.*

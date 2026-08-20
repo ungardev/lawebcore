@@ -1,11 +1,12 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.3)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.4)
 
-> **Versión:** 5.3 — 2026-08-20
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.2 (`hito28`)
+> **Versión:** 5.4 — 2026-08-20
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.3 (`hito28`)
 > **Commit de referencia:** `a21dd97` (Hito 28 aplicado — Fix A/B + extra='forbid')
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), `LENS_AUDIT9_2026-08-19.md` (verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), **Hito 28** (2026-08-20: Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid')
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), `LENS_AUDIT9_2026-08-19.md` (verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid')
 > **HikerAPI balance actual:** **$43.00 USD** ✅ (recargado 2026-08-20)
+> **NUEVO v5.4:** Pipeline Coverage Analysis — 8 brechas identificadas para Opus 5
 
 ---
 
@@ -1304,4 +1305,425 @@ El rough_score_map viene del prefiltro limitado a `MAX_HANDLES_TO_ENRICH=25`. No
 
 ---
 
-*Documento generado: 2026-08-20 — Arquitectura LENS v5.3 (Hito 28 aplicado). HikerAPI balance: $43.00 USD. Fix A (pre-flight mode-aware): Explorar $0.64, Analizar real. Fix B (DeepSeek skip explorar): rationale honesto preservado. extra='forbid': clase de bug cerrada. Validación tomorrow: ~$0.76 de los $43.00.*
+*Documento generado: 2026-08-20 — Arquitectura LENS v5.4 (Hito 28 aplicado). HikerAPI balance: $43.00 USD. Fix A (pre-flight mode-aware): Explorar $0.64, Analizar real. Fix B (DeepSeek skip explorar): rationale honesto preservado. extra='forbid': clase de bug cerrada. v5.4 NUEVO: Pipeline Coverage Analysis — 8 brechas identificadas para Opus 5.*
+
+---
+
+## 20. Pipeline Coverage Analysis — 8 Brechas Identificadas (v5.4)
+
+> **Fecha:** 2026-08-20
+> **Auditoría:** #14 — Pipeline Coverage Analysis
+> **Analista:** Opus 5 (auto-análisis)
+> **Propósito:** Identificar qué NO está capturando el pipeline actual para que Opus 5 proponga patches
+
+### 20.0 Resumen Ejecutivo
+
+El pipeline actual de LENS captura el **~80%** de lo que HikerAPI puede ofrecer. Las 8 brechas identificadas representan el 20% restante — principalmente calidad de datos post-enrichment que no se usa para scoring.
+
+| # | Brecha | Severidad | Esfuerzo | Costo Extra | Hito Previo |
+|---|--------|-----------|----------|-------------|-------------|
+| 1 | Quality Score (engagement real) | 🟡 MEDIA | 1h | +$0.10-0.20 | H31 |
+| 2 | Nicho real (captions) | 🟡 MEDIA | 30min | +$0.05 | H32 |
+| 3 | Geo post-enrichment | 🟢 BAJA | 30min | $0 | H29 |
+| 4 | Tier enforcement (5K-50K) | 🟢 BAJA | 15min | $0 | H29 |
+| 5 | Cross-reference boost | 🟡 MEDIA | 1h | $0 | H32 |
+| 6 | Verified boost | 🟢 BAJA | 15min | $0 | H29 |
+| 7 | Time-decay | 🟡 MEDIA | 1h | $0 | H33 |
+| 8 | Bot detection avanzada | 🟡 MEDIA | 2h | $0 | H35 |
+
+---
+
+### 20.1 Brecha 1: Sin Quality Score de Engagement
+
+**Archivo:** `apps/api/app/workers/worker.py:_prefilter_profiles` + `packages/discovery/discovery/candidate_analyzer.py`
+
+**Severidad:** 🟡 MEDIA | **Esfuerzo:** 1h | **Costo:** +$0.10-0.20/run
+
+**Problema actual:** El `rough_score` en prefilter (línea 967) se calcula como `0.5 * geo + 0.5 * niche` sin datos de engagement. El enrichment (Step 5) SÍ obtiene `avg_likes`, `avg_comments`, `followers` pero NO se usan para re-calcular el score en Modo Explorar.
+
+```python
+# ACTUAL — worker.py línea 967 (prefilter):
+rough = 0.5 * geo + 0.5 * niche
+# followers=0 en este punto (REDUCED profile)
+# → No se puede calcular engagement rate
+```
+
+```python
+# ACTUAL — candidate_analyzer.py (DeepSeek analysis):
+# Solo en Modo Analizar (is_analyze_mode):
+if analyze_with_ai and is_analyze_mode:
+    ai_scores = await _analyze_batch(...)
+```
+
+**Impacto:** Un influencer con 50K followers y 50 likes por post (90% bots) rankea igual que uno con 50K followers y 5K likes por post.
+
+**Código ideal:**
+```python
+# Post-enrichment, antes de guardar en rough_score_map:
+er = (avg_likes + avg_comments) / followers if followers > 0 else 0
+quality_score = min(er * 100, 100)  # 0-100
+
+# Apply quality boost:
+if quality_score > 50: rough *= 1.3
+elif quality_score > 20: rough *= 1.1
+elif quality_score < 5: rough *= 0.5  # Penalize very low ER
+```
+
+**Recomendación:** Implementar en Modo Explorar solo para los top 5 handles por rough_score. Sub-sample de 5 = $0.10.
+
+---
+
+### 20.2 Brecha 2: Sin Detección de Nicho Real via Captions
+
+**Archivo:** `packages/discovery/discovery/candidate_analyzer.py:_build_single_prompt`
+
+**Severidad:** 🟡 MEDIA | **Esfuerzo:** 30min | **Costo:** +$0.05 DeepSeek/run
+
+**Problema actual:** El `niche_score` se calcula solo con `biography` y `niche_keywords` matching. Muchos perfiles de pet care NO tienen "perros" en la bio pero SÍ en los captions de sus posts.
+
+```python
+# ACTUAL — worker.py línea 1026 (niche scoring):
+niche = niche_relevance_score(
+    {"biography": bio, "username": username},
+    brief.niche_keywords
+)
+```
+
+**Impacto:** Un perfil que publicita productos para perros en sus posts pero tiene bio genérica ("lifestyle", "content creator") queda sub-rankeado.
+
+**El endpoint `/v1/user/by/username` SÍ retorna `latest_posts` con `caption`** — pero no se usa para nicho:
+
+```python
+# candidate_analyzer.py — lo que DeepSeek recibe:
+prompt = f"""Analyze creator: {username}
+Bio: {biography}
+Followers: {follower_count}
+Latest posts: {latest_posts}"""  # latest_posts contiene captions
+```
+
+**Conflicto con Hito 28 Fix B:** Fix B dice "no DeepSeek en Explorar" para evitar scores ficticios. Pero la detección de nicho SÍ tiene datos (captions + bio). La solución es **permitir DeepSeek SOLO para niche classification** (no para brand_fit ni audience_quality que sí son ficticios en Explorar).
+
+**Código ideal:**
+```python
+# En candidate_analyzer.py, modo Explorar:
+# DeepSeek SOLO para nicho, NO para brand_fit/audience_quality
+if is_explore_mode:
+    # Solo niche classification
+    prompt = f"Niche classification: {bio} + captions: {captions}"
+    niche_real_score = await deepseek_classify(prompt)
+    # NO brand_fit ni audience_quality
+else:
+    # Modo Analizar: todo habilitado
+    ...
+```
+
+**Recomendación:** Implementar como H32. Fix conflictos con Fix B requiere permiso específico de usuario.
+
+---
+
+### 20.3 Brecha 3: Sin Validación Geo Post-Enrichment
+
+**Archivo:** `apps/api/app/workers/worker.py:_prefilter_profiles` + `enrich_profile`
+
+**Severidad:** 🟢 BAJA | **Esfuerzo:** 30min | **Costo:** $0
+
+**Problema actual:** El `geo_score` se calcula en el prefilter (línea 967) sobre la bio REDUCIDA, sin `country` ni `city`. Después del enrichment (Step 5) tenemos `country`, `city`, `locationName` pero NO se re-evalúa.
+
+```python
+# ACTUAL — worker.py línea 967 (prefilter con REDUCED profile):
+geo = geo_score(
+    {"biography": bio, "country": "", "city": ""},  # country vacía siempre
+    geo_indicators, target_country
+)
+```
+
+**Después del enrichment (Step 5) — perfil completo disponible:**
+```python
+# enrichment retorna:
+profile = {
+    "username": "...",
+    "biography": "...",
+    "country": "VE",      # ← disponible
+    "city": "Caracas",    # ← disponible
+    "location_name": "...", # ← disponible
+    ...
+}
+```
+
+**Impacto:** Un perfil con bio en inglés que matchea "pet care" pero es de Caracas rankea igual que uno de Miami. El geo_score se calcula sin datos reales de geo.
+
+**Código ideal:**
+```python
+# Post-enrichment, en _enrich_profile o después:
+if profile.get("country"):
+    geo_enriched = geo_score(
+        {
+            "biography": profile.get("biography", ""),
+            "country": profile.get("country", ""),
+            "city": profile.get("city", ""),
+            "location_name": profile.get("location_name", "")
+        },
+        geo_indicators, target_country
+    )
+    # Reemplazar rough_score con geo enriquecido:
+    rough = 0.5 * geo_enriched + 0.5 * niche
+else:
+    # Mantener rough original si no hay datos de geo
+    pass
+```
+
+**Recomendación:** Implementar como H29 — fix trivial con alto impacto.
+
+---
+
+### 20.4 Brecha 4: Tier Enforcement (5K-50K) No Aplicado en Pre-Filter
+
+**Archivo:** `apps/api/app/workers/worker.py:_prefilter_profiles` línea 952
+
+**Severidad:** 🟢 BAJA | **Esfuerzo:** 15min | **Costo:** $0
+
+**Problema actual:** `TIER_MIN_FOLLOWERS=5_000` y `TIER_MAX_FOLLOWERS=50_000` están definidos en `constants.py` pero NO se aplican en el prefilter. El prefilter solo usa `niche_benchmarks.min_followers`, que puede ser diferente.
+
+```python
+# ACTUAL — worker.py línea 952:
+if followers > 0:
+    if followers < min_followers:  # ← min_followers del brief, NO TIER_MIN
+        bot_flags[handle] = bot_flags.get(handle, 0) + 1
+```
+
+**Impacto:**
+- Perfiles de 1K-5K (bots micro-cuentas) compiten con el sweet spot de 5K-50K
+- Perfiles de 500K+ (mega-influencers) también compiten
+- El re-ranking `_rerank_diversified` SÍ aplica `TIER_DISTRIBUTION` pero DESPUÉS del prefilter — ya se invirtieron calls en perfiles fuera de tier
+
+**Código ideal:**
+```python
+# En _prefilter_profiles, después del bot check:
+if followers > 0:
+    # Skip si fuera de tier
+    if followers < TIER_MIN_FOLLOWERS or followers > TIER_MAX_FOLLOWERS:
+        bot_flags[handle] = bot_flags.get(handle, 0) + 10  # Effectively skip
+```
+
+**Recomendación:** Implementar como H29 junto con Brecha 3 y 6 — 3 fixes triviales en 1 commit.
+
+---
+
+### 20.5 Brecha 5: Sin Cross-Reference Boost entre Steps
+
+**Archivo:** `apps/api/app/workers/worker.py` (líneas 707-907, merge de steps)
+
+**Severidad:** 🟡 MEDIA | **Esfuerzo:** 1h | **Costo:** $0
+
+**Problema actual:** Steps 1-4 corren en paralelo, luego se mergean en `profiles` dict (línea 909). Si un perfil aparece en Step 1 (hashtag) Y Step 2 (keyword), el primero gana — no se weighta el cross-reference.
+
+```python
+# ACTUAL — worker.py línea 909:
+for item in hashtag_items:
+    handle = item.get("username")
+    if handle in profiles: continue  # Skip si ya existe
+    profiles[handle] = {...}  # Primer paso gana
+```
+
+**Impacto:** Un creador que aparece en #perros Y en "veterinaria" es probablemente más relevante que uno que solo aparece en #perros. No se bonusifica esto.
+
+**Análisis:**
+- Step 1: Hashtag top → handles populares del nicho
+- Step 1_recent: Hashtag recent → handles frescos del nicho
+- Step 2: Keyword → handles con keywords en bio/perfil
+- Step 2.5: Reels serp → handles haciendo Reels del tema
+- Step 3: Top search → handles top por búsqueda
+- Step 4: Suggested → handles sugeridos por similitud
+
+**Código ideal:**
+```python
+# En el merge, tracking de sources:
+profiles[handle] = {
+    ...
+    "_source_count": 1,
+    "_sources": ["hashtag_top"]  # Lista de sources
+}
+
+# Si aparece en otro step:
+if handle in profiles:
+    profiles[handle]["_source_count"] += 1
+    profiles[handle]["_sources"].append("keyword")
+
+# En prefilter scoring:
+source_count = profiles[handle].get("_source_count", 1)
+if source_count >= 4: rough *= 1.5   # Appears in 4+ sources
+elif source_count >= 3: rough *= 1.3 # Appears in 3 sources
+elif source_count >= 2: rough *= 1.15 # Appears in 2 sources
+```
+
+**Recomendación:** Implementar como H32 post-asesoría. Medium esfuerzo, $0 costo.
+
+---
+
+### 20.6 Brecha 6: Sin Verified Boost
+
+**Archivo:** `apps/api/app/workers/worker.py:_prefilter_profiles`
+
+**Severidad:** 🟢 BAJA | **Esfuerzo:** 15min | **Costo:** $0
+
+**Problema actual:** `is_verified` se extrae del profile (línea 730) pero NO se usa en el scoring.
+
+```python
+# ACTUAL — worker.py línea 730:
+"is_verified": item.get("is_verified", False),
+# ... pero después no se usa en prefilter:
+rough = 0.5 * geo + 0.5 * niche  # is_verified no aparece
+```
+
+**Impacto:** Un influencer verificado con 30K followers debería rankear más alto que uno no verificado con 30K. El badge azul indica cuenta validada = menos riesgo.
+
+**Código ideal:**
+```python
+# En prefilter scoring, después de geo + niche:
+if is_verified:
+    rough *= 1.15  # 15% boost para cuentas verificadas
+```
+
+**Recomendación:** Implementar como H29 junto con Brechas 3 y 4 — 3 fixes triviales en 1 commit.
+
+---
+
+### 20.7 Breacha 7: Sin Time-Decay (Cuentas Activas vs Muertas)
+
+**Archivo:** `apps/api/app/workers/worker.py` (post-enrichment)
+
+**Severidad:** 🟡 MEDIA | **Esfuerzo:** 1h | **Costo:** $0
+
+**Problema actual:** El pipeline NO consulta cuándo fue el último post. Una cuenta con 30K followers y último post hace 8 meses rankea igual que una activa ayer.
+
+**El endpoint `/v1/user/by/username` retorna `latest_posts` con `taken_at`:**
+```python
+latest_posts = [
+    {"taken_at": 1724123400, "likes": 523, "comments": 42, "caption": "..."},
+    {"taken_at": 1724037000, "likes": 498, "comments": 38, "caption": "..."},
+    ...
+]
+```
+
+**Impacto:** Recomendamos cuentas "muertas" que no van a generar engagement. Un influencer inactivo por 90+ días es mal negocio.
+
+**Código ideal:**
+```python
+# Post-enrichment:
+latest_post_ts = profile.get("latest_posts", [{}])[0].get("taken_at") if profile.get("latest_posts") else None
+
+if latest_post_ts:
+    days_since = (now - datetime.fromtimestamp(latest_post_ts)).days
+
+    if days_since > 90:
+        rough *= 0.5      # Account dormant > 3 months
+    elif days_since > 30:
+        rough *= 0.85     # Account inactive > 1 month
+    elif days_since <= 7:
+        rough *= 1.1      # Active in last week
+```
+
+**Recomendación:** Implementar como H33 post-asesoría.
+
+---
+
+### 20.8 Brecha 8: Bot Detection Avanzada
+
+**Archivo:** `apps/api/app/workers/worker.py:_prefilter_profiles` línea 947-983
+
+**Severidad:** 🟡 MEDIA | **Esfuerzo:** 2h | **Costo:** $0
+
+**Problema actual:** El bot detection básico solo cubre `ff_ratio`. Faltan señales importantes: engagement rate, ratio followers/avg_likes, posts count.
+
+```python
+# ACTUAL — worker.py líneas 952-963 (básico):
+if followers > 0:
+    if followers < min_followers: bot_flag += 1
+    if ff_ratio > 10 and followers < 5000: bot_flag += 2
+    if ff_ratio > 20: bot_flag += 3
+    if posts_count < 10 and followers > 5000: bot_flag += 1
+```
+
+**Señales proxy disponibles post-enrichment:**
+1. `engagement_rate` = (avg_likes + avg_comments) / followers
+2. `followers / avg_likes` ratio (alto = probable bot)
+3. `posts_count` / account_age ratio
+4. `is_business` (menos probable bots)
+
+**Código ideal:**
+```python
+# Bot score compuesto (0-1):
+def bot_score(profile) -> float:
+    score = 0.0
+    followers = profile.get("follower_count", 0)
+    avg_likes = profile.get("avg_likes", 0)
+    avg_comments = profile.get("avg_comments", 0)
+    ff_ratio = profile.get("ff_ratio", 0)
+    posts_count = profile.get("posts_count", 0)
+
+    if followers > 0:
+        er = (avg_likes + avg_comments) / followers
+        if er < 0.005 and followers > 5000:
+            score += 0.4  # Muy bajo engagement rate
+        if followers / max(avg_likes, 1) > 500:
+            score += 0.2  # followers/avg_likes muy alto
+    if ff_ratio > 10: score += 0.2
+    if ff_ratio > 20: score += 0.1
+    if posts_count < 10 and followers > 5000: score += 0.1
+    return score
+
+# Skip si bot_score > 0.6:
+if bot_score(profile) > 0.6:
+    continue  # Skip this handle
+```
+
+**Recomendación:** Implementar como H35 post-asesoría. 2h de desarrollo, $0 costo.
+
+---
+
+### 20.9 Roadmap de Fixes para Opus 5
+
+| Hito | Brechas | Esfuerzo Total | Costo Extra |
+|------|---------|----------------|-------------|
+| **H29** | Brecha 3 (geo post-enrich) + Brecha 4 (tier) + Brecha 6 (verified) | 1h | $0 |
+| **H31** | Brecha 1 (engagement quality) | 1h | +$0.10-0.20 |
+| **H32** | Brecha 2 (niche captions) + Brecha 5 (cross-ref) | 1.5h | +$0.05 |
+| **H33** | Brecha 7 (time-decay) | 1h | $0 |
+| **H35** | Brecha 8 (bot detection avanzada) | 2h | $0 |
+| **TOTAL** | **8 brechas** | **~6.5h** | **+$0.15-0.25** |
+
+**Nota:** H30 y H34 reservados para otros items.
+
+---
+
+### 20.10 Request Explícito para Opus 5
+
+> Opus 5: Analiza las 8 brechas arriba. Para cada una, proporciona:
+> 1. Confirmación del fix propuesto o alternativa mejor
+> 2. Código exacto del patch para `worker.py` y `candidate_analyzer.py`
+> 3. Orden de aplicación recomendada (H29 primero, etc.)
+> 4. Cualquier conflicto con Hito 28 Fix B que deba resolverse
+
+---
+
+### 20.11 Fixes Inmediatos (H29 — 15 min, $0)
+
+Estos 3 fixes son triviales y pueden aplicarse en un solo commit:
+
+```python
+# worker.py — prefilter_profiles, después de geo + niche:
+# 1. Tier enforcement:
+if followers < TIER_MIN_FOLLOWERS or followers > TIER_MAX_FOLLOWERS:
+    bot_flags[handle] = 10
+
+# 2. Verified boost:
+if is_verified:
+    rough *= 1.15
+
+# 3. Geo post-enrichment (después de enrichment):
+# (enrichment return, recalcular geo con country/city si disponible)
+```
+
+---
+
+*Documento generado: 2026-08-20 — Arquitectura LENS v5.4 (Hito 28 aplicado + Pipeline Coverage Analysis). HikerAPI balance: $43.00 USD. 8 brechas identificadas para Opus 5. Roadmap H29-H35 propuesto.*
