@@ -407,8 +407,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         # y murió con 402 en la primera llamada de enrichment: sin ese paso
         # ningún perfil tiene seguidores y el resultado es 0 candidatos.
         # Comprobar antes cuesta 1 llamada; no comprobar cuesta el run entero.
+        # HITO 28 — FIX A: Estimación modo-aware.
+        # Explorar: solo discovery (~32 calls = $0.64).
+        # Analizar: solo enrichment de handles seleccionados (1 call/handle).
+        # Auto: discovery + enrichment completo (57 calls = $1.14).
         if settings.RUN_MODE != "replay" and hasattr(instagram_source, "get_balance"):
-            estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+            if is_explore_mode:
+                estimated_calls = ESTIMATED_DISCOVERY_CALLS
+            elif is_analyze_mode:
+                estimated_calls = max(1, len(brief.handles_to_analyze)) if brief.handles_to_analyze else 1
+            else:
+                estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
             estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD
             balance = await instagram_source.get_balance()
             if balance is not None and balance < estimated_cost:
@@ -1625,8 +1634,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         target_n = 80
         to_analyze = _rerank_diversified(qualified, target_n)
 
+        # HITO 28 — FIX B: No DeepSeek en modo Explorar.
+        # En Explorar no hay enrichment → followers=0, bio vacía.
+        # DeepSeek sobrescribiría el rationale honesto (followers=0 derived) con
+        # scores ficticios y poblaría columnas visibles (brand_fit, content_quality,
+        # audience_quality) con valores derivados de NADA. El analista decidiría
+        # "a quién enriquecer" basándose en datos falsos.
+        # Solo correr DeepSeek en modo Auto (enrichment completo) y Analizar
+        # (handles enriquecidos por el run padre).
         analyze_with_ai = getattr(brief, "analyze_with_ai", True)
-        if analyze_with_ai:
+        if analyze_with_ai and not is_explore_mode:
             print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
             tracker = get_discovery_cost_tracker()
 
@@ -1650,7 +1667,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 if candidate.get("ai_rationale"):
                     candidate["rationale"] = candidate["ai_rationale"]
         else:
-            print("[discovery_run_task] STEP 5: Skipping AI analysis (analyze_with_ai=False), using rule-based scores", flush=True)
+            reason = "explore_mode" if is_explore_mode else "analyze_with_ai=False"
+            print(f"[discovery_run_task] STEP 5: Skipping AI analysis ({reason}), using rule-based scores", flush=True)
             analyzed = to_analyze
 
         await _run_update_metadata(run_id, {

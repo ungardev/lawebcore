@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class DiscoveryRunStatus(str, Enum):
@@ -54,6 +54,8 @@ class AudienceGender(str, Enum):
 
 
 class BriefStructured(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     product_name: str | None = None
     brand_id: UUID | None = None
     brand_name: str | None = None
@@ -193,6 +195,8 @@ class ConversationResponse(BaseModel):
 
 
 class DiscoverySearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     product_name: str | None = None
     brand_id: UUID | None = None
     industry: str | None = None
