@@ -1,12 +1,13 @@
 # La Web Core — LENS Discovery Module
 ## Documentación de Ingeniería para Advisor
 
-> **Fecha:** 2026-08-20 (sesión completa — fixes aplicados)
+> **Fecha:** 2026-08-20 (sesión completa — Hitos 26-28 aplicados)
 > **Audiencia:** Ingeniero advisor técnico
 > **Proyecto:** La Web Core — LENS Discovery Module
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Ingeniero que documenta:** Sistema (contexto completo del repositorio)
-> **Estado de deploy:** ✅ Railway deploy completado 18:26 UTC | ✅ Vercel frontend deployado 11:30 UTC
+> **Estado de deploy:** ✅ Railway deploy `7796dc9` 18:26 UTC | ✅ Vercel frontend `df41d9e` 11:30 UTC | ⏳ Railway deploy `a21dd97` pendiente (Hito 28)
+> **HikerAPI balance:** ✅ **$43.00 USD** (recargado 2026-08-20)
 
 ---
 
@@ -68,13 +69,15 @@ El pipeline automático ejecutaba discovery + enrichment en un solo paso. El enr
 ### Estado actual del proyecto (post-sesión 2026-08-20)
 
 - **48 runs ejecutados históricamente**, $28.33 gastados, **1 candidato encontrado**
-- HikerAPI balance: **$0** (InsufficientFunds — requiere recarga de $50 mínimo)
+- HikerAPI balance: ✅ **$43.00 USD** (recargado 2026-08-20)
 - Modo Explorar/Analizar: **implementado y corregido** en código
 - Railway deploy: ✅ **completado** (18:26 UTC, commit `7796dc9`)
 - Vercel frontend: ✅ **deployado** (11:30 UTC, commit `df41d9e`)
 - Migration `00106`: ✅ **APLICADA** (enum `explored` confirmado en Railway)
 - Migration `00107`: ⏳ **opcional** (ledger protegido por try/except en worker)
-- **4 bugs críticos encontrados y corregidos en esta sesión** (ver Sección 14)
+- **Hito 28 aplicado** (commit `a21dd97`): Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid' — deploy pendiente
+- **4 bugs críticos encontrados y corregidos en Hito 26** (ver Sección 14)
+- **17 tests nuevos** en `test_hito28_e2e.py` (17 passed)
 
 ---
 
@@ -496,25 +499,34 @@ CLOSED (normal) ──[5 errores consecutivos 5xx]──► OPEN
 - `failure_threshold = 5` — abre tras 5 fallos consecutivos
 - `breaker_ttl_s = 300` — espera 5 min antes de probar otra vez
 
-### 5.5 Pre-flight de Saldo (Hito 23)
+### 5.5 Pre-flight de Saldo — Mode-Aware (Hito 23 + Hito 28 Fix A)
 
-Antes de iniciar enrichment, el worker llama a `instagram_source.get_balance()` para comparar contra el costo estimado del run:
+Antes de iniciar enrichment, el worker llama a `instagram_source.get_balance()` para comparar contra el costo estimado del run.
 
+**Hito 28 corrige el caso grave:** Antes, siempre estimaba 57 calls = $1.14, incluso en Analizar donde solo se necesitan 3-5 calls = $0.06-0.10. Con saldo=$0.80, rechazaba un Analizar que SÍ alcanza.
+
+**Estimación modo-aware (Hito 28):**
 ```python
-estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH  # 32 + 25 = 57
-estimated_cost = estimated_calls * HIKERAPI_COST_PER_CALL_USD  # 57 × $0.02 = $1.14
+if is_explore_mode:
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS  # 32 = $0.64
+elif is_analyze_mode:
+    estimated_calls = max(1, len(brief.handles_to_analyze)) if brief.handles_to_analyze else 1
+    # ~$0.02-0.10 para 1-5 handles
+else:
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH  # 57 = $1.14
 
 balance = await instagram_source.get_balance()
 if balance < estimated_cost:
-    raise SourceUnavailable(
-        f"Saldo insuficiente: ${balance:.2f} disponibles, "
-        f"se necesitan ~${estimated_cost:.2f}. "
-        f"Recarga en hikerapi.com/billing.",
-        status_code=402,
-    )
+    raise SourceUnavailable(...)
 ```
 
-Esto evita el escenario histórico: run que gasta $1.64 en discovery y muere con 402 en la primera llamada de enrichment, produciendo 0 candidatos.
+| Modo | Antes (Hito 23) | Después (Hito 28) |
+|------|-----------------|-------------------|
+| Explorar | $1.14 (sobreestimado 78%) | **$0.64** |
+| Analizar (5 handles) | $1.14 (sobreestimado **11×**) | **$0.10** |
+| Auto | $1.14 | $1.14 (sin cambio) |
+
+El "último dólar inutilizable" de cada recarga ahora se recupera.
 
 ### 5.6 Budget Transactions — G12 (Ledger Inmutable)
 
@@ -1067,12 +1079,18 @@ Métricas relevantes:
 3. ✅ **Hito 27:** Fix `parent_run_id` en `DiscoverySearchRequest` — modo Analizar ahora no repite discovery (~$0.64 ahorrados por run)
 4. ✅ **Hito 27:** Fix `platforms` — `default_factory=` en vez de `default=` (bug latente Pydantic v2)
 
-### H28 🔴 (REQUERIDO AHORA — antes de producción)
-1. ⏳ **Recargar HikerAPI** — con $0 todo falla en pre-flight (recomendado: **$20 USD**, ~58 campañas completas)
-2. ⏳ Verificación end-to-end del flujo Explorar→Analizar en producción
-3. ⏳ Validar que candidatos aparecen en la UI tras `status='explored'`
-4. ⏳ Validar que enrichment selectivo funciona en `analyze` mode
-5. ⏳ Criterio de éxito: **≥15 handles con bio no vacía**,分析师 seleccionaría ≥5
+### H28 ✅ (2026-08-20 — COMPLETADO — commit `a21dd97`)
+1. ✅ **Fix A: Pre-flight mode-aware** — Explorar $0.64, Analizar real, Auto $1.14
+2. ✅ **Fix B: DeepSeek skip en Explorar** — rationale honesto preservado, decisión corrupta evitada
+3. ✅ **extra='forbid' en schemas** — BriefStructured + DiscoverySearchRequest
+4. ✅ **17 tests nuevos** en `test_hito28_e2e.py` (17 passed)
+5. ⏳ **Deploy Railway pendiente** — `a21dd97` debe ser pushneado a producción
+
+### H28 Post-Deploy 🔴 (PRÓXIMO — validación mañana)
+1. ⏳ Validar que candidatos aparecen en la UI tras `status='explored'`
+2. ⏳ Validar que enrichment selectivo funciona en `analyze` mode
+3. ⏳ Criterio de éxito: **≥15 handles con bio no vacía**, ≥5 seleccionables
+4. ⏳ Validar `get_balance()` con saldo=$43 (curl post-recarga para verificar formato)
 
 ### H29 ⏳ (próximo sprint)
 - Persistencia del carrito de selección (Zustand store → DB)
@@ -1100,6 +1118,7 @@ Métricas relevantes:
 | `92d6faa` | Frontend: `discovery_mode='explore'` enviado + polling `explored` | 2026-08-20 |
 | `df41d9e` | TypeScript: `discovery_mode: 'explore' as const` (fix type error) | 2026-08-20 |
 | `hito27` | **Hito 27** — `parent_run_id` en DiscoverySearchRequest (modo Analizar no repite discovery) + `platforms` default_factory | 2026-08-20 |
+| `a21dd97` | **Hito 28** — Fix A pre-flight mode-aware ($0.64/$0.10/$1.14) + Fix B DeepSeek skip explorar + extra='forbid' + 17 tests | 2026-08-20 |
 
 ---
 
@@ -1272,101 +1291,55 @@ Resultado: modo Analizar **repetía ~32 llamadas de discovery** (~$0.64) en vez 
 
 ### Bugs Nuevos Identificados — Fix A, Fix B, Fix C (2026-08-20)
 
-> **Estado:** Identificados por auditoría de código, NO corregidos aún. Pendientes de revisión por Claude Code Opus 5 para la reunión del 2026-08-21 9:00 AM.
+> **Estado:** Fix A y Fix B ✅ RESUELTOS en Hito 28 (commit `a21dd97`). Fix C ⚠️ BAJA tech debt, sin acción requerida.
 
 ---
 
-### Fix A — Pre-flight sobreestima costo en modo Explorar 🔴 CRÍTICA
+### Fix A — Pre-flight mode-aware ✅ RESUELTO HITO 28
 
-**Archivo:** `apps/api/app/workers/worker.py:411-412`
+**Archivo:** `apps/api/app/workers/worker.py:411-421`
 
-**Problema:** El pre-flight de saldo (Hito 23) siempre calcula:
-```python
-estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
-# = 32 + 25 = 57 calls
-estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD
-# = 57 × $0.02 = $1.14
-```
+**Problema original (Opus 5):** Pre-flight siempre estimaba 57 calls = $1.14. En Analizar (solo 3-5 calls = $0.06-0.10), sobreestimaba **11×**. Con saldo=$0.80, rechazaba runs que SÍ alcanzan.
 
-En modo **Explorar**, el enrichment se salta completamente (`worker.py:577-584`). El costo real de un run Explorar es ~32 calls = **$0.64**, no $1.14.
-
-**Impacto:** Con saldo=$0.80, el pre-flight rechazaría el run con "saldo insuficiente" aunque $0.80 ALCANZA para un Explorar completo ($0.64).
-
-**Evidencia:**
-```python
-# worker.py:50
-MAX_HANDLES_TO_ENRICH = 25
-# worker.py:52
-ESTIMATED_DISCOVERY_CALLS = 32
-# worker.py:411-412 — pre-flight siempre incluye enrichment (57 calls = $1.14)
-estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
-# worker.py:577-584 — en Explorar, enrichment se skippea
-if handles_to_enrich and is_explore_mode:
-    logger.info("step3_explore_mode_skip_enrichment", ...)
-```
-
-**Fix sugerido:** Estimation modo-aware:
-```python
-is_explore = getattr(brief, "discovery_mode", "auto") == "explore"
-estimated_calls = ESTIMATED_DISCOVERY_CALLS if is_explore else ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
-```
-
----
-
-### Fix B — DeepSeek corre en modo Explorar sin datos suficientes ⚠️ MEDIA
-
-**Archivos:** `apps/api/app/workers/worker.py:1628-1654`, `packages/discovery/discovery/candidate_analyzer.py`
-
-**Problema:** En modo Explorar, el enrichment se salta → `followers=0` para todos los candidatos. Sin embargo, DeepSeek (`candidate_analyzer.analyze_candidates_batch`) se ejecuta si `analyze_with_ai=true` (default), generando scores de `audience_quality` y `brand_fit` basados en datos vacíos. Esos campos **no se muestran en la UI** de Explorar.
-
-**Costo:** ~$0.01-0.02 USD por run de Explorar — innecesario ya que los scores se pierden.
-
-**Evidencia:**
-```python
-# worker.py:577-584 — enrichment saltado → followers=0
-if handles_to_enrich and is_explore_mode:
-    logger.info("step3_explore_mode_skip_enrichment", ...)
-
-# worker.py:1628-1654 — DeepSeek SI corre si analyze_with_ai=True
-analyze_with_ai = getattr(brief, "analyze_with_ai", True)
-if analyze_with_ai:
-    analyzed = await candidate_analyzer.analyze_candidates_batch(...)  # Se ejecuta
-
-# candidate_analyzer.py:193-249 — _fallback_scores con followers=0
-def _fallback_scores(candidate, elite_data=None):
-    followers = candidate.get("followers", 0) or 0  # → 0 en Explorar
-    # scores basados en followers=0 → valores mínimos
-```
-
-**Fix sugerido:** Skip DeepSeek en modo Explorar:
+**Fix aplicado:**
 ```python
 if is_explore_mode:
-    pass  # Solo rough score, sin enrichment ni DeepSeek
-elif analyze_with_ai:
-    analyzed = await candidate_analyzer.analyze_candidates_batch(...)
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS  # 32 = $0.64
+elif is_analyze_mode:
+    estimated_calls = max(1, len(brief.handles_to_analyze)) if brief.handles_to_analyze else 1
+else:
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH  # 57 = $1.14
+```
+
+**Impacto:**
+| Modo | Antes | Después |
+|------|-------|---------|
+| Explorar | $1.14 (78% sobre) | **$0.64** |
+| Analizar (5 handles) | $1.14 (11× sobre) | **$0.10** |
+
+---
+
+### Fix B — DeepSeek skip en Explorar ✅ RESUELTO HITO 28
+
+**Archivo:** `apps/api/app/workers/worker.py:1646`
+
+**Problema original (Opus 5):** NO era el costo (~$0.10/run). Era la **corrupción de la decisión humana**. DeepSeek sobrescribía el rationale honesto con scores ficticios de `followers=0` y poblaba columnas visibles (`brand_fit`, `content_quality`, `audience_quality`) derivadas de NADA.
+
+**Fix aplicado:**
+```python
+if analyze_with_ai and not is_explore_mode:
+    # DeepSeek corre normalmente (Auto o Analizar)
+else:
+    reason = "explore_mode" if is_explore_mode else "analyze_with_ai=False"
+    print(f"[...] STEP 5: Skipping AI analysis ({reason}), using rule-based scores")
+    analyzed = to_analyze  # Rationale honesto preservado
 ```
 
 ---
 
-### Fix C — `useRunPolling.ts` no usado por `LensSearchPage.tsx` ⚠️ BAJA (tech debt)
+### Fix C — `useRunPolling.ts` no usado por `LensSearchPage.tsx` ⚠️ BAJA
 
-**Archivos:**
-- `apps/web/src/features/lens/hooks/useRunPolling.ts` — hook existente
-- `apps/web/src/features/lens/pages/LensSearchPage.tsx` — USA `useDiscoveryRun.pollRun()`
-- `apps/web/src/features/lens/pages/LensChatPage.tsx` — SÍ usa `useRunPolling`
-
-**Problema:** `useRunPolling.ts` NO es importado ni usado por `LensSearchPage.tsx`. `LensSearchPage` usa `useDiscoveryRun.pollRun()` (definido en `useDiscoveryRun.ts:47-65`) que funciona correctamente. `useRunPolling` SÍ es usado por `LensChatPage.tsx`, así que **no se puede eliminar**.
-
-**Evidencia:**
-```typescript
-// LensSearchPage.tsx:26 — USA useDiscoveryRun.pollRun() (no useRunPolling)
-const { ..., pollRun, ... } = useDiscoveryRun();
-
-// useRunPolling.ts:6 — hook existe pero NO importado en LensSearchPage
-export function useRunPolling(runId: string | null) { ... }
-```
-
-**No action required** antes de la reunión. Tech debt para sprint futuro.
+**Confirmado como tech debt, NO action needed.** `useRunPolling` es usado por `LensChatPage.tsx`. `LensSearchPage` usa `useDiscoveryRun.pollRun()` correctamente.
 
 ---
 
@@ -1413,10 +1386,20 @@ Resultado: `explored` presente en el enum.
 |----------|--------|--------|----------|
 | Railway API + Worker | `7796dc9` | ✅ Success | 18:26 UTC |
 | Vercel Frontend | `df41d9e` | ✅ Success | 11:30 UTC |
+| Railway API + Worker | `a21dd97` | ⏳ Pendiente (Hito 28) | — |
 
 ---
 
-###get_balance() — Parser verification pendiente
+###get_balance() — Verificación pendiente con saldo=$43
+
+El parser de `get_balance()` busca campos `balance`, `balance_usd`, `credits_usd`, `amount`. Cuando el saldo es `$0`, HikerAPI retorna `{"state": false, ...}`. El fix de Hito 25 detecta `state: false` y retorna `0.0`.
+
+**AHORA CON SALDO=$43:** hacer curl para verificar el formato de respuesta con saldo positivo:
+```bash
+curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
+```
+
+Esto confirmará que el parser sigue funcionando correctamente con saldo>0 o si HikerAPI usa un nombre de campo diferente.
 
 El parser de `get_balance()` busca campos `balance`, `balance_usd`, `credits_usd`, `amount`. Cuando el saldo es `$0`, HikerAPI retorna `{"state": false, ...}` — sin esos campos. El fix de Hito 25 detecta `state: false` y retorna `0.0`.
 
@@ -1429,4 +1412,4 @@ curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
 
 ---
 
-*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md`.*
+*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Hito 28 aplicado (commit `a21dd97`): Fix A pre-flight mode-aware + Fix B DeepSeek skip explorar + extra='forbid'. HikerAPI balance: $43.00 USD. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md` v5.3.*
