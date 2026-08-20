@@ -1,10 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 4.0)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.0)
 
-> **Versión:** 4.0 — 2026-08-19
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v3.9 (`1c472a0`)
-> **Commit de referencia:** `hito25` (Hitos 1-25 aplicados)
+> **Versión:** 5.0 — 2026-08-20
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v4.0 (`hito25`)
+> **Commit de referencia:** `hito26` (Hitos 1-26 aplicados)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos corregidos)
 
 ---
 
@@ -639,7 +639,7 @@ lens:profile:{fingerprint}
 | 25 | `hito25` | get_balance() parser bug — InsufficientFunds sin campo balance | Detecta `state: false` → retorna 0.0 → pre-flight aborta correctamente |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### 9.2 Abiertos (Post-Hito 25)
+### 9.2 Abiertos (Post-Hito 26)
 
 | Issue | Prioridad | Detalle | Estado |
 |-------|-----------|---------|--------|
@@ -653,7 +653,12 @@ lens:profile:{fingerprint}
 | `exclude_stores` filtra 100% handles VE | ❌ REFUTADO | Opus 5 probó que la causa fue enrichment 402, no tiendas | — |
 | Mensaje engañoso al usuario | ✅ RESUELTO HITO 23 | `_build_zero_candidates_message` naming counter real | — |
 | MAX_HANDLES_TO_ENRICH 50→25 | ✅ RESUELTO HITO 23 | Enrichment cost $1.00→~$0.50 | — |
-| Migration 00106 no aplicada | ✅ RESUELTO | ALTER TYPE... ADD VALUE 'explored' — manual execution needed | — |
+| Migration 00106 no aplicada | ✅ RESUELTO HITO 26 | Enum `explored` confirmado en Railway DB | — |
+| Modo Explorar insertaba 0 candidatos | ✅ RESUELTO HITO 26 | Dict usaba claves incorrectas → columnas DB correctas (commit `2fe9816`) | — |
+| Frontend no enviaba `discovery_mode` | ✅ RESUELTO HITO 26 | `'explore' as const` añadido en LensSearchPage (commit `92d6faa`) | — |
+| Polling no cargaba candidatos `explored` | ✅ RESUELTO HITO 26 | useRunPolling.ts ahora reconoce status `explored` (commit `df41d9e`) | — |
+| TypeScript error `discovery_mode` | ✅ RESUELTO HITO 26 | `as const` corrige tipo literal (commit `df41d9e`) | — |
+| Ledger crash sin migration 00107 | ✅ RESUELTO HITO 26 | try/except protege worker; 00107 ahora opcional | — |
 | `accepted` nunca se actualiza | 🔴 CRÍTICA | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
 | Desfase Redis↔DB ($25.13) | 🔴 CRÍTICA | Budget tracking no refleja gasto real en runs pre-Hito-21 | **PENDIENTE** |
 | Geolocalización sin validación post-enrichment | ⚠️ MEDIA | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
@@ -661,7 +666,7 @@ lens:profile:{fingerprint}
 | geo_no_signal filter rechaza hashtag profiles | ⚠️ MEDIA | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | **PENDIENTE** |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; discovery aún no filtra | **PENDIENTE** |
 | discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse | **PENDIENTE** |
-| HikerAPI balance | ✅ RESUELTO | $50 recargados post-verificación empírica | — |
+| HikerAPI balance | 🔴 ACTUAL | Balance=$0 — requiere recarga $50 mínimo | **PENDIENTE** |
 
 ---
 
@@ -957,11 +962,14 @@ curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
 ### 15.5下一步 — Después de esta verificación
 
 1. ✅ Hito 25 fix aplicado (get_balance parser)
-2. ⏳ Migration 00106 (enum `explored`) — necesita ejecución manual
-3. ⏳ Recargar $50 HikerAPI
-4. ⏳ Test Modo Explorar
-5. ⏳ Test Modo Analizar
-6. ⏳ Demo con marca real
+2. ✅ Migration 00106 (enum `explored`) — ejecutada y confirmada por usuario
+3. ✅ Railway deploy exitoso (commit `7796dc9`, 18:26 UTC)
+4. ✅ Vercel frontend deployado (commit `df41d9e`, 11:30 UTC)
+5. ✅ Hito 26: 4 bugs críticos corregidos (dict columnas, frontend mode, polling, TS)
+6. ⏳ Recargar $50 HikerAPI
+7. ⏳ Test Modo Explorar — validar `status='explored'` y candidatos en UI
+8. ⏳ Test Modo Analizar — validar enrichment selectivo
+9. ⏳ Demo con marca real
 
 ---
 
@@ -1040,7 +1048,109 @@ async def get_balance(self) -> float | None:
 
 ---
 
-## 17. Recursos
+## 17. Hito 26 — Bugs Críticos de la Sesión 2026-08-20
+
+> **Fecha:** 2026-08-20
+> **Commits:** `2fe9816`, `92d6faa`, `df41d9e`
+> **Deploy:** Railway ✅ `7796dc9` (18:26 UTC) | Vercel ✅ `df41d9e` (11:30 UTC)
+
+### 17.1 Bug 1 — Dict de candidato con claves incorrectas (🔴 CRÍTICA)
+
+**Commit:** `2fe9816`
+**Archivo:** `apps/api/app/workers/worker.py`
+
+El dict de candidato en modo explorar usaba claves que NO correspondían a columnas de la tabla `discovery_candidates`:
+
+```python
+# ❌ ANTES (claves incorrectas):
+candidate_dict = {
+    "username": raw.get("username"),           # ← no existe columna 'username'
+    "profile_pic_url": raw.get("profile_pic_url"),  # ← no existe 'profile_pic_url'
+    "follower_count": raw.get("followers"),    # ← no existe 'follower_count'
+    # ...
+}
+
+# ✅ DESPUÉS (claves correctas):
+candidate_dict = {
+    "handle": raw.get("username") or raw.get("handle") or handle,
+    "avatar_url": raw.get("profile_pic_url") or raw.get("avatar_url") or "",
+    "followers": raw.get("follower_count") or raw.get("followers") or 0,
+    # ... todas las columnas existentes en discovery_candidates
+}
+```
+
+**Impacto:** INSERT fallaba silenciosamente → 0 candidatos aunque pipeline dijera "encontré X handles".
+
+---
+
+### 17.2 Bug 2 — Frontend no enviaba `discovery_mode` (🔴 CRÍTICA)
+
+**Commit:** `92d6faa`
+**Archivo:** `apps/web/src/features/lens/pages/LensSearchPage.tsx`
+
+La UI no tenía selector de modo visible y no enviaba `discovery_mode` al backend. Brief se creaba con `discovery_mode="auto"` por default → pipeline completo con enrichment.
+
+**Fix:** `discovery_mode: 'explore' as const` añadido en el brief.
+
+---
+
+### 17.3 Bug 3 — Polling no cargaba candidatos en status='explored' (🔴 CRÍTICA)
+
+**Commit:** `92d6faa` / `df41d9e`
+**Archivo:** `apps/web/src/features/lens/hooks/useRunPolling.ts`
+
+```typescript
+// ❌ ANTES:
+if (runStatus === 'completed' && data?.total_candidates != null) {
+  setCandidates(data.candidates ?? []);
+}
+
+// ✅ DESPUÉS:
+if ((runStatus === 'completed' || runStatus === 'explored') && data?.total_candidates != null) {
+  setCandidates(data.candidates ?? []);
+}
+```
+
+---
+
+### 17.4 Bug 4 — TypeScript error en `discovery_mode` (⚠️ MEDIA)
+
+**Commit:** `df41d9e`
+**Archivo:** `apps/web/src/features/lens/pages/LensSearchPage.tsx`
+
+`'explore'` no asignable a la unión literal `DiscoveryMode`. Fix: `as const` fuerza el tipo literal.
+
+---
+
+### 17.5 Bug 5 — Ledger crash sin migration 00107 (⚠️ MEDIA)
+
+**Commit:** `2fe9816`
+**Archivo:** `apps/api/app/workers/worker.py`
+
+Worker hacía INSERT en `budget_transactions` sin verificar que la tabla existía. Si migration 00107 no estaba aplicada → worker crashaba.
+
+**Fix:** Wrapped en try/except. Migration 00107 ahora es **OPCIONAL**.
+
+---
+
+### 17.6 Verificación de Redis
+
+```
+db_keys = 5
+clients_connected = 4
+redis_version = 8.2.1
+```
+
+Worker con 5 funciones registradas:
+- `discovery_run_task`
+- `sync_hypeauditor_task`
+- `sync_metricool_task`
+- `cron:scheduled_reports_cron`
+- `cron:sync_metricool_task`
+
+---
+
+## 18. Recursos
 
 | Recurso | URL |
 |---------|-----|
@@ -1053,4 +1163,4 @@ async def get_balance(self) -> float | None:
 
 ---
 
-*Documento generado: 2026-08-19 — Arquitectura LENS v4.0 (25 hitos aplicados). Hito 25: Fix get_balance() parser — detecta `state:false` → retorna 0.0 → pre-flight aborta correctamente. Verificación empírica en Railway: 48 runs históricos, $28.33 gastados, 1 candidato en toda la historia. Bugs N1 refutado por Opus 5 — causa real era enrichment 402.*
+*Documento generado: 2026-08-20 — Arquitectura LENS v5.0 (26 hitos aplicados). Hito 26: 4 bugs críticos corregidos — dict columnas DB, frontend discovery_mode, polling explored, TS type. Railway deploy exitoso (18:26 UTC). Vercel deploy exitoso (11:30 UTC). HikerAPI balance=$0 — requiere recarga $50 mínimo para validación.*

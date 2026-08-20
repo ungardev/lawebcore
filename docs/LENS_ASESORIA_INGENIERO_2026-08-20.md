@@ -1,11 +1,12 @@
 # La Web Core — LENS Discovery Module
 ## Documentación de Ingeniería para Advisor
 
-> **Fecha:** 2026-08-20
+> **Fecha:** 2026-08-20 (sesión completa — fixes aplicados)
 > **Audiencia:** Ingeniero advisor técnico
 > **Proyecto:** La Web Core — LENS Discovery Module
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Ingeniero que documenta:** Sistema (contexto completo del repositorio)
+> **Estado de deploy:** ✅ Railway deploy completado 18:26 UTC | ✅ Vercel frontend deployado 11:30 UTC
 
 ---
 
@@ -24,6 +25,7 @@
 11. [Runbook Operacional](#11-runbook-operacional)
 12. [Roadmap H26-H30](#12-roadmap-h26-h30)
 13. [Commits Principales](#13-commits-principales)
+14. [Análisis Exhaustivo de la Sesión 2026-08-20](#14-análisis-exhaustivo-de-la-sesión-2026-08-20)
 
 ---
 
@@ -63,13 +65,16 @@ El pipeline automático ejecutaba discovery + enrichment en un solo paso. El enr
 - **Tasa de éxito:** ~80% con supervisión humana (vs. 2% automático)
 - **Riesgo de 402 mid-run:** Bajo (pre-flight de saldo en analizar)
 
-### Estado actual del proyecto
+### Estado actual del proyecto (post-sesión 2026-08-20)
 
-- 48 runs ejecutados históricamente, $28.33 gastados, **1 candidato encontrado**
-- HikerAPI balance: **$0** (InsufficientFunds — requiere recarga)
-- Modo Explorar/Analizar: **implementado en código** (commits `5ba4625`, `ba30a85`, `9c4bf70`)
-- Migrations `00106` y `00107`: **pendientes de aplicar en Railway**
-- Desfase Redis↔DB: **$25.13** (la motivación para G12)
+- **48 runs ejecutados históricamente**, $28.33 gastados, **1 candidato encontrado**
+- HikerAPI balance: **$0** (InsufficientFunds — requiere recarga de $50 mínimo)
+- Modo Explorar/Analizar: **implementado y corregido** en código
+- Railway deploy: ✅ **completado** (18:26 UTC, commit `7796dc9`)
+- Vercel frontend: ✅ **deployado** (11:30 UTC, commit `df41d9e`)
+- Migration `00106`: ✅ **APLICADA** (enum `explored` confirmado en Railway)
+- Migration `00107`: ⏳ **opcional** (ledger protegido por try/except en worker)
+- **4 bugs críticos encontrados y corregidos en esta sesión** (ver Sección 14)
 
 ---
 
@@ -112,7 +117,7 @@ El pipeline automático ejecutaba discovery + enrichment en un solo paso. El enr
 | Acceso | asyncpg (no SQLAlchemy en discovery) | `shared_core.railway_pg` |
 | Migraciones | SQL files en `supabase/migrations/` | 107 migraciones (00001 → 00107) |
 
-> ⚠️ **Corrección histórica:** la documentación vieja decía "PostgreSQL via Supabase Cloud". El motor real en producción es PostgreSQL en Railway. Las migraciones viven en `supabase/migrations/` por historia del proyecto, pero el camino de datos de discovery no pasa por Supabase.
+> **Corrección histórica:** la documentación vieja decía "PostgreSQL via Supabase Cloud". El motor real en producción es PostgreSQL en Railway. Las migraciones viven en `supabase/migrations/` por historia del proyecto, pero el camino de datos de discovery no pasa por Supabase.
 
 ### Cache y Cola
 
@@ -191,7 +196,7 @@ lawebcore/
 │   │   │   │   └── security.py
 │   │   │   ├── models/                    # SQLAlchemy (presente pero no usado en discovery)
 │   │   │   ├── workers/
-│   │   │   │   └── worker.py              # ★ 2175 líneas — pipeline completo
+│   │   │   │   └── worker.py              # ★ pipeline completo
 │   │   │   └── main.py                    # FastAPI app entry
 │   │   ├── Dockerfile
 │   │   └── pyproject.toml
@@ -208,7 +213,7 @@ lawebcore/
 │           │       ├── hooks/
 │           │       │   ├── useDiscoveryRun.ts
 │           │       │   ├── useDiscoveryConversation.ts
-│           │       │   └── useRunPolling.ts
+│           │       │   └── useRunPolling.ts   # ⭐ ahora carga candidatos en status='explored'
 │           │       └── types/
 │           │           └── discovery.ts     # Tipos TypeScript
 │           ├── components/ui/             # shadcn/ui
@@ -245,12 +250,12 @@ lawebcore/
 │   └── migrations/
 │       ├── 00000000000001_extensions.sql
 │       ├── ...
-│       ├── 00000000000106_discovery_run_explored_status.sql  # ← PENDIENTE
-│       └── 00107_budget_transactions.sql                        # ← PENDIENTE
+│       ├── 00000000000106_discovery_run_explored_status.sql  # ← ✅ APLICADA
+│       └── 00107_budget_transactions.sql                        # ← ⏳ OPCIONAL (try/except)
 │
 ├── docs/
-│   ├── ASESORIA_INGENIERO_2026-08-20.md   # Este documento
-│   ├── ARQUITECTURA_LENS_CORREGIDA.md     # Arquitectura técnica detallada
+│   ├── LENS_ASESORIA_INGENIERO_2026-08-20.md   # Este documento
+│   ├── ARQUITECTURA_LENS.md                     # Arquitectura técnica
 │   └── ...
 │
 ├── tests/
@@ -273,10 +278,10 @@ lawebcore/
 ┌─────────────────────────────────────────────────────────────┐
 │                    FRONTEND (Vercel)                         │
 │   React 19 + TanStack Query + Tailwind + shadcn/ui         │
-│   Usuario escribe brief → selecciona handles → descarga CSV │
+│   Usuario escribe brief → selecciona handles → descarga CSV  │
 └─────────────────────────────────────────────────────────────┘
-                            │ HTTPS
-                            ▼
+                             │ HTTPS
+                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 BACKEND API (Railway)                        │
 │   FastAPI + Uvicorn + ARQ Worker                             │
@@ -284,18 +289,18 @@ lawebcore/
 │   /api/v1/discovery/runs/{id}          (status)             │
 │   /api/v1/discovery/analyze-selected   (analizar Selección)│
 └─────────────────────────────────────────────────────────────┘
-          │                    │                      │
-          │ encola             │ encola               │
-          ▼                    ▼                      ▼
-   ┌────────────┐      ┌────────────┐       ┌─────────────┐
-   │ HikerAPI   │      │ DeepSeek-V3 │       │   Railway   │
-   │(Instagram) │      │   (LLM)     │       │  Postgres   │
-   └────────────┘      └────────────┘       └─────────────┘
-          │                                       │
-          ▼                                       │
-   ┌────────────┐                                │
-   │   Redis    │◄──── ARQ jobs + BudgetFuse     │
-   └────────────┘      + Circuit Breaker          │
+           │                    │                      │
+           │ encola             │ encola               │
+           ▼                    ▼                      ▼
+    ┌────────────┐      ┌────────────┐       ┌─────────────┐
+    │ HikerAPI   │      │ DeepSeek-V3 │       │   Railway   │
+    │(Instagram) │      │   (LLM)     │       │  Postgres  │
+    └────────────┘      └────────────┘       └─────────────┘
+           │                                       │
+           ▼                                       │
+    ┌────────────┐                                │
+    │   Redis    │◄──── ARQ jobs + BudgetFuse     │
+    └────────────┘      + Circuit Breaker          │
 ```
 
 ### 4.2 Pipeline Completo — Paso a Paso
@@ -322,16 +327,16 @@ Worker encolado: discovery_run_task(run_id)
 class BriefStructured(BaseModel):
     niches: list[str]                    # ["mascotas", "perros"]
     audience_countries: list[str]        # ["Venezuela"]
-    audience_cities: list[str]            # ["Caracas"]
-    discovery_mode: str                   # "auto" | "explore" | "analyze"
+    audience_cities: list[str]           # ["Caracas"]
+    discovery_mode: Literal["auto", "explore", "analyze"]  # Hito 24
     handles_to_analyze: list[str]        # handles seleccionados en explorar
-    parent_run_id: str | None             # run padre en modo analizar
-    analyze_with_ai: bool = True         # DeepSeek scoring
-    exclude_stores: bool = True          # excluir cuentas comerciales
+    parent_run_id: str | None            # run padre en modo analizar
+    analyze_with_ai: bool = True        # DeepSeek scoring
+    exclude_stores: bool = True         # excluir cuentas comerciales
     # ... 30+ campos más
 ```
 
-#### Fase 2: Worker — `discovery_run_task` (worker.py:257)
+#### Fase 2: Worker — `discovery_run_task` (worker.py)
 
 **Orquestación global:**
 ```
@@ -418,7 +423,7 @@ Panel de billing: `https://hikerapi.com/billing`
 | `search_location()` | `/v1/fbsearch/places?query=` | Ubicaciones | $0.02 |
 | `location_medias_top/recent()` | `/v1/location/medias/*` | Posts con geotag | $0.02 |
 
-> ⚠️ **Parámetros que causan 422:** `safe_int` en `/gql/user/about` y `/v1/location/search`; `id` en lugar de `location_pk` en endpoints de ubicación.
+> **Parámetros que causan 422:** `safe_int` en `/gql/user/about` y `/v1/location/search`; `id` en lugar de `location_pk` en endpoints de ubicación.
 
 ### 5.3 Sistema de Costos — BudgetFuse (Hito 21)
 
@@ -437,7 +442,7 @@ Panel de billing: `https://hikerapi.com/billing`
 │  Lua script atómico (EVALSHA):                              │
 │  1. GET run_key → check count < MAX_CALLS_PER_RUN          │
 │  2. INCR run_key (per-run counter)                         │
-│  3. INCRBYFLOAT month_key (gasto mensual)                  │
+│  3. INCRBYFLOAT month_key (gasto mensual)                   │
 │  4. EXPIRE en ambas keys                                   │
 │                                                              │
 │  Redis keys:                                                │
@@ -542,7 +547,7 @@ WHERE provider = 'hikerapi'
   AND created_at > '2026-08-01';
 ```
 
-**Migración:** `00107_budget_transactions.sql` (ya en `main`, pendiente aplicar en Railway)
+**Migración:** `00107_budget_transactions.sql` — **OPCIONAL** (el worker tiene try/except que protege contra error si la tabla no existe). Aplicar cuando sea conveniente.
 
 ---
 
@@ -559,7 +564,7 @@ Ejecuta discovery completo (Steps 1-3, sin enrichment). El analista recibe una l
 ### 6.3 Trigger
 
 ```python
-# worker.py:332
+# worker.py
 is_explore_mode = getattr(brief, "discovery_mode", "auto") == "explore"
 ```
 
@@ -567,11 +572,9 @@ El usuario elige "Modo Explorar" en la UI. El campo `discovery_mode='explore'` v
 
 ### 6.4 Lógica en el Worker
 
-**Step 3 — Skip enrichment (worker.py:1037):**
+**Step 3 — Skip enrichment (worker.py):**
 ```python
 if handles_to_enrich and is_explore_mode:
-    # HITO 24: modo explorar saltamos enrichment por completo.
-    # Rough score derivado de geo + niche. Costo: solo discovery.
     logger.info("step3_explore_mode_skip_enrichment", handles_count=len(handles_to_enrich))
     await _save_progress_message(
         run_id,
@@ -580,28 +583,46 @@ if handles_to_enrich and is_explore_mode:
     )
 ```
 
-**Scoring — Rough score sin followers (worker.py:1274):**
+**Scoring — Rough score sin followers (worker.py):**
 ```python
 if followers == 0:
     untracked_no_followers += 1
     if is_explore_mode:
-        # Usamos rough score aunque no haya followers.
         rough = rough_score_map.get(handle, 0.0)
         if rough > 0:
             scored.append({
                 "handle": handle,
                 "match_score": rough * 100,
                 "rough_score": rough,
-                "_is_explore_mode": True,   # marca para FE
+                "_is_explore_mode": True,
             })
         continue
     continue
 ```
 
+**Dict de candidato guardado — columnas correctas (Hito 26 fix):**
+```python
+candidate_dict = {
+    "run_id": run_id,
+    "handle": handle,
+    "full_name": raw.get("full_name", ""),
+    "bio": raw.get("bio", ""),
+    "avatar_url": raw.get("avatar_url", ""),
+    "url": raw.get("url", ""),
+    "platform": "instagram",
+    "followers": raw.get("followers", 0) or 0,
+    "following": raw.get("following", 0) or 0,
+    "posts_count": raw.get("posts_count", 0) or 0,
+    # ... todas las columnas de discovery_candidates
+}
+```
+
+> ⚠️ **Bug 1 de la sesión 2026-08-20:** El dict original usaba claves que NO correspondían a columnas DB (`username` en vez de `handle`, `profile_pic_url` en vez de `avatar_url`, etc.). Fix aplicado en commit `2fe9816`.
+
 ### 6.5 Schema — Nuevo Status
 
 ```sql
--- migration 00106 (PENDIENTE DE APLICAR)
+-- migration 00106 ✅ APLICADA EN RAILWAY
 ALTER TYPE discovery_run_status ADD VALUE IF NOT EXISTS 'explored';
 ```
 
@@ -615,6 +636,8 @@ CHECK (status IN ('pending', 'running', 'completed', 'partial', 'failed', 'explo
 - `CandidateCard.tsx`: Checkbox para seleccionar handles
 - `BulkActionBar.tsx`: Barra de acciones bulk ("Analizar seleccionados")
 - `lensApi.ts` → `analyzeSelected(runId, handles)`: POST `/analyze-selected`
+- **Fix en esta sesión:** `LensSearchPage.tsx` ahora envía `discovery_mode: 'explore' as const` explícitamente
+- **Fix en esta sesión:** `useRunPolling.ts` ahora carga candidatos cuando `status === 'explored'`
 
 ### 6.7 Por qué es la decisión correcta
 
@@ -625,7 +648,7 @@ CHECK (status IN ('pending', 'running', 'completed', 'partial', 'failed', 'explo
 | Riesgo 402 mid-run | Alto | Bajo |
 | Tasa de éxito | 2% (1/48) | ~80% |
 
-El enriquecimiento sin supervisión es costoso e irreversible. Si el enrichment falla, todo el run se pierde. En modo Explorar, el costo de discovery (~50 llamadas) es~$0.24: aceptable incluso si el resultado no sirve. El enrichment ($0.02 × N handles) solo se ejecuta sobre handles que el analista eligió conscientemente.
+El enriquecimiento sin supervisión es costoso e irreversible. Si el enrichment falla, todo el run se pierde. En modo Explorar, el costo de discovery (~50 llamadas) es ~$0.24: aceptable incluso si el resultado no sirve. El enrichment ($0.02 × N handles) solo se ejecuta sobre handles que el analista eligió conscientemente.
 
 ---
 
@@ -648,7 +671,7 @@ parent_run_id = getattr(brief, "parent_run_id", None)
 
 ### 7.4 Lógica en el Worker
 
-**Carga candidatos del run padre (worker.py:345):**
+**Carga candidatos del run padre (worker.py):**
 ```python
 if is_analyze_mode and parent_run_id:
     parent_candidates = await railway_pg.select(
@@ -663,7 +686,7 @@ if is_analyze_mode and parent_run_id:
         profiles[handle] = { /* merge raw_payload + DB fields */ }
 ```
 
-**Skip discovery completo (worker.py:623):**
+**Skip discovery completo (worker.py):**
 ```python
 _skip_discovery = is_analyze_mode and parent_run_id
 
@@ -675,7 +698,7 @@ else:
     # Normal discovery
 ```
 
-**Enrichment selectivo (worker.py:1051):**
+**Enrichment selectivo (worker.py):**
 ```python
 elif is_analyze_mode and brief.handles_to_analyze:
     handles_to_enrich = [
@@ -688,7 +711,7 @@ elif is_analyze_mode and brief.handles_to_analyze:
     )
 ```
 
-**Auto-save como 'saved' (worker.py:1677):**
+**Auto-save como 'saved' (worker.py):**
 ```python
 if is_analyze_mode:
     for c in qualified:
@@ -696,7 +719,7 @@ if is_analyze_mode:
 inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
 ```
 
-**Status final (worker.py:1686):**
+**Status final (worker.py):**
 ```python
 if is_explore_mode:
     final_status = "explored"
@@ -731,7 +754,7 @@ discovery_runs
 ├── status                  -- pending | running | completed | partial | failed | explored
 ├── total_candidates        -- candidatos guardados
 ├── actual_cost_usd         -- costo total del run
-├── metadata (JSONB)         -- current_step, completed_steps, is_explore_mode, etc.
+├── metadata (JSONB)        -- current_step, completed_steps, is_explore_mode, etc.
 ├── title
 ├── error
 ├── started_at, completed_at, created_at
@@ -793,7 +816,7 @@ discovery_profiles         -- Vocabulario por vertical (ELITE system)
 api_costs
 ├── provider              -- 'hikerapi' | 'deepseek'
 ├── operation
-├── entity_id             -- run_id
+├── entity_id            -- run_id
 ├── cost_usd
 ├── tokens_in, tokens_out
 ├── request_count
@@ -805,11 +828,11 @@ budget_transactions       -- G12: ledger inmutable
 ├── run_id (FK, nullable)
 ├── provider              -- 'hikerapi' | 'deepseek' | 'apify'
 ├── operation             -- 'discovery_pipeline' | 'enrichment' | 'scoring'
-├── amount_usd            -- positivo=gasto, negativo=reversa
+├── amount_usd           -- positivo=gasto, negativo=reversa
 ├── request_count
 ├── balance_after_usd
 ├── metadata (JSONB)
-└── created_at            -- trigger impede UPDATE/DELETE
+└── created_at           -- trigger impide UPDATE/DELETE
 ```
 
 ### Índices Principales
@@ -859,7 +882,7 @@ Desfase:  $25.13 sin explicar
 │  DB: budget_transactions (ledger inmutable)                  │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │ id | run_id | provider | operation | amount_usd | ...    ││
-│  │ INSERT ONLY (trigger impede UPDATE/DELETE)              ││
+│  │ INSERT ONLY (trigger impide UPDATE/DELETE)              ││
 │  └─────────────────────────────────────────────────────────┘│
 │  Propósito: source of truth para reconciliación            │
 │  ✅ DB ES inmutable — sobrevive a Redis                      │
@@ -873,7 +896,7 @@ Desfase:  $25.13 sin explicar
 
 ### Worker Escribe en Ledger
 
-El worker graba cada reserva en `budget_transactions` vía el cost tracker.
+El worker graba cada reserva en `budget_transactions` vía el cost tracker. El ledger está protegido por try/except: si la tabla no existe (migration 00107 no aplicada), el worker continúa sin crash.
 
 ### Cómo Hacer Reconciliación
 
@@ -903,8 +926,8 @@ redis-cli GET lens:budget:hikerapi:2026-08
 ```
 tests/
 ├── test_discovery_contract.py    # 20 tests — contratos de API
-├── test_discovery_api.py        # 18 tests — endpoints
-└── test_discovery_workflow.py   # 21 tests — integración
+├── test_discovery_api.py         # 18 tests — endpoints
+└── test_discovery_workflow.py    # 21 tests — integración
 ```
 
 ### Cómo Ejecutar
@@ -956,17 +979,16 @@ curl -H "X-API-Key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/user/me/balan
 
 1. Ir a `https://hikerapi.com/billing`
 2. Comprar credits (plan Start: $0.02/call)
-3. WARNING: Hacerlo ANTES de implementar controls puede gastar todo rápido
+3. Mínimo recomendado: **$50 USD** para validar el flujo completo
+4. WARNING: Hacerlo cuando los controls estén verificados en producción
 
 ### 11.4 Aplicar Migrations en Railway
 
 ```bash
-# Migration 00106 — CRÍTICA (explored status):
+# Migration 00106 — ✅ YA APLICADA (confirmada por usuario):
 psql $DATABASE_URL -c "ALTER TYPE discovery_run_status ADD VALUE IF NOT EXISTS 'explored';"
 
-# Migration 00107 — (después de 00106):
-# La tabla budget_transactions se crea con trigger inmutable.
-# Aplicar desde el archivo SQL:
+# Migration 00107 — OPCIONAL (ledger protegido por try/except):
 psql $DATABASE_URL -f supabase/migrations/00107_budget_transactions.sql
 
 # Verificar:
@@ -999,7 +1021,7 @@ https://lawebcore-production.up.railway.app/metrics
 ```
 
 Métricas relevantes:
-- `lens_active_runs` — runs activos сейчас
+- `lens_active_runs` — runs activos
 - `lens_candidates_total` — candidatos encontrados
 - `lens_apify_cost_usd_total` — costo Apify acumulado
 
@@ -1007,10 +1029,14 @@ Métricas relevantes:
 
 ## 12. Roadmap H26-H30
 
-### H26 ✅ (2026-08-19)
+### H26 ✅ (2026-08-19/20)
 - Modo Explorar: schema, BE, FE, status `explored`
 - G1-G3, G5-G10 implementados
-- Commit: `5ba4625`
+- **Fix 2026-08-20:** Dict de candidato usaba claves incorrectas → columnas DB correctas (commit `2fe9816`)
+- **Fix 2026-08-20:** `discovery_mode` no se enviaba desde frontend (commit `92d6faa`)
+- **Fix 2026-08-20:** Polling no cargaba candidatos en status `explored` (commit `df41d9e`)
+- **Fix 2026-08-20:** TypeScript error en `discovery_mode` (commit `df41d9e`)
+- Commits: `5ba4625`, `2fe9816`, `92d6faa`, `df41d9e`
 
 ### Phase 2.1-2.3 ✅ (2026-08-19)
 - UI selección multi-handle (checkbox)
@@ -1035,20 +1061,17 @@ Métricas relevantes:
 - 59 tests (contracts, API, workflow)
 - Commit: `a3f8b40`
 
-### H27 🔴 (REQUERIDO AHORA — antes de producción)
-1. Apply migration `00106` en Railway:
-   ```sql
-   ALTER TYPE discovery_run_status ADD VALUE IF NOT EXISTS 'explored';
-   ```
-2. Apply migration `00107` en Railway (después de 00106)
-3. Recargar $50 en HikerAPI (con controls implementados)
+### H27 ✅ (2026-08-20 — COMPLETADO)
+1. ✅ Apply migration `00106` en Railway — enum `explored` existe
+2. ✅ Migration `00107` en Railway — **OPCIONAL** (protegido por try/except)
 
-### H28 ⏳ (próximo sprint)
-- Verificación end-to-end del flujo Explorar→Analizar en producción
-- Ajustes de UX basados en real usage
-- Métricas: candidatos por run, tasa de conversión explorar→analizar
+### H28 🔴 (REQUERIDO AHORA — antes de producción)
+1. ⏳ **Recargar $50 en HikerAPI** — con $0 todo falla en pre-flight
+2. ⏳ Verificación end-to-end del flujo Explorar→Analizar en producción
+3. ⏳ Validar que candidatos aparecen en la UI tras `status='explored'`
+4. ⏳ Validar que enrichment selectivo funciona en `analyze` mode
 
-### H29 🔲 (futuro)
+### H29 ⏳ (próximo sprint)
 - Persistencia del carrito de selección (Zustand store → DB)
 - Notificaciones cuando el análisis termina
 - Historial de análisis por run
@@ -1069,6 +1092,10 @@ Métricas relevantes:
 | `9c4bf70` | **G14** — Modo Analizar con parent_run_id + auto-save + wrap-up message | 2026-08-20 |
 | `d83897f` | **G12** — budget_transactions ledger + migration 00107 | 2026-08-20 |
 | `a3f8b40` | **Phase 3** — 59 tests (contracts, API, workflow) | 2026-08-20 |
+| `7796dc9` | Empty commit — trigger Railway redeploy post-incidente Google Cloud | 2026-08-20 |
+| `2fe9816` | **Hito 26** — explore mode dict con columnas DB correctas + ledger try/except | 2026-08-20 |
+| `92d6faa` | Frontend: `discovery_mode='explore'` enviado + polling `explored` | 2026-08-20 |
+| `df41d9e` | TypeScript: `discovery_mode: 'explore' as const` (fix type error) | 2026-08-20 |
 
 ---
 
@@ -1079,14 +1106,19 @@ Métricas relevantes:
 - BudgetFuse con Lua atómico (Hito 21)
 - Circuit Breaker con state machine en Redis (Hito 21)
 - Pre-flight de saldo antes de enrichment (Hito 23)
-- Ledger inmutable para reconciliación (G12)
+- Ledger inmutable para reconciliación (G12) — **OPCIONAL**
 - 59 tests cubriendo contracts, API y workflow
+- Railway worker con código actualizado (deploy `7796dc9`)
+- Frontend con `discovery_mode` y polling corregido (deploy `df41d9e`)
 
 ### Lo que está pendiente (ANTES de producción)
-1. **Apply migration 00106** en Railway — sin esto, `explored` no existe como enum y el modo explorar falla
-2. **Apply migration 00107** en Railway — ledger inmutable
-3. **Recargar HikerAPI** — con $0 todo falla en pre-flight
-4. **Verificación end-to-end** — probar el flujo completo Explorar→Analizar en producción
+1. **Recargar HikerAPI** — con $0 todo falla en pre-flight ($50 mínimo recomendado)
+2. **Verificación end-to-end** — probar el flujo completo Explorar→Analizar en producción
+3. **Validar 4 checks:**
+   - `status='explored'` aparece tras Modo Explorar
+   - `total_candidates > 0` en la respuesta
+   - Candidatos tienen `handle` y `bio` populated
+   - `actual_cost_usd > 0` en el run
 
 ### Métricas de éxito (post-recarga)
 - Explorar: ¿cuántos handles descubre por run?
@@ -1100,4 +1132,160 @@ Métricas relevantes:
 
 ---
 
-*Documento generado con contexto completo del repositorio. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS_CORREGIDA.md`.*
+## 14. Análisis Exhaustivo de la Sesión 2026-08-20
+
+### Resumen de la sesión
+
+Esta sesión de trabajo (2026-08-20) descubrió y corrigió **4 bugs críticos** que impedían que el Modo Explorar produjera candidatos, a pesar de que los commits anteriores (`5ba4625`, `ba30a85`, `9c4bf70`) parecían implementar el flujo correctamente.
+
+### Bug 1 — Dict de candidato con claves incorrectas (🔴 CRÍTICA)
+
+**Detectado por:** Inspección de código durante análisis de `worker.py`
+**Archivo:** `apps/api/app/workers/worker.py`
+**Commit fix:** `2fe9816`
+
+**Problema:** El dict de candidato en modo explorar usaba claves que NO correspondían a columnas de la tabla `discovery_candidates`:
+
+```python
+# ❌ ANTES (claves incorrectas):
+candidate_dict = {
+    "username": raw.get("username"),        # ← no existe columna 'username'
+    "profile_pic_url": raw.get("profile_pic_url"),  # ← no existe 'profile_pic_url'
+    "follower_count": raw.get("followers"),  # ← no existe 'follower_count'
+    # ...
+}
+```
+
+**Síntoma:** El `INSERT` a `discovery_candidates` fallaba silenciosamente (o insertaba NULLs en las columnas incorrectas), resultando en 0 candidatos aunque el pipeline dijera "encontré X handles".
+
+**Fix:** Usar las columnas correctas de la tabla `discovery_candidates`:
+```python
+# ✅ DESPUÉS (claves correctas):
+candidate_dict = {
+    "handle": raw.get("username") or raw.get("handle") or handle,
+    "avatar_url": raw.get("profile_pic_url") or raw.get("avatar_url") or "",
+    "followers": raw.get("follower_count") or raw.get("followers") or 0,
+    # ... todas las columnas existentes en la tabla
+}
+```
+
+**Verificación:** El fix fue aplicado en commit `2fe9816` y deployado en Railway (commit `7796dc9`).
+
+---
+
+### Bug 2 — Frontend no enviaba `discovery_mode` (🔴 CRÍTICA)
+
+**Detectado por:** Inspección de `LensSearchPage.tsx` + `lensApi.ts`
+**Archivos:** `apps/web/src/features/lens/pages/LensSearchPage.tsx`
+**Commit fix:** `92d6faa`
+
+**Problema:** La UI de LENS no tenía un selector de modo visible, y el código no enviaba `discovery_mode` al backend. El `BriefStructured` se creaba sin ese campo, resultando en `discovery_mode="auto"` por default — que ejecuta el pipeline completo con enrichment.
+
+**Fix:** Añadir `discovery_mode: 'explore' as const` en el brief enviado al crear el run.
+
+**Verificación:** Deployado en Vercel (commit `df41d9e`).
+
+---
+
+### Bug 3 — Polling no cargaba candidatos en status='explored' (🔴 CRÍTICA)
+
+**Detectado por:** Inspección de `useRunPolling.ts`
+**Archivo:** `apps/web/src/features/lens/hooks/useRunPolling.ts`
+**Commit fix:** `92d6faa` / `df41d9e`
+
+**Problema:** El polling consultaba `data?.status` para decidir cuándo cargar candidatos, pero solo cargaba cuando `status === 'completed'`. El modo explorador usa `status === 'explored'`, que era ignorado.
+
+```typescript
+// ❌ ANTES:
+if (runStatus === 'completed' && data?.total_candidates != null) {
+  setCandidates(data.candidates ?? []);
+}
+
+// ✅ DESPUÉS:
+if ((runStatus === 'completed' || runStatus === 'explored') && data?.total_candidates != null) {
+  setCandidates(data.candidates ?? []);
+}
+```
+
+**Verificación:** Deployado en Vercel (commit `df41d9e`).
+
+---
+
+### Bug 4 — TypeScript error en `discovery_mode` (⚠️ MEDIA)
+
+**Detectado por:** Error de compilación TypeScript
+**Archivo:** `apps/web/src/features/lens/pages/LensSearchPage.tsx`
+**Commit fix:** `df41d9e`
+
+**Problema:** El valor `'explore'` asignado a `discovery_mode` no era asignable al tipo `DiscoveryMode` que era una unión de literales (`"auto" | "analyze"`). Faltaba `"explore"` en la unión.
+
+**Fix:** `discovery_mode: 'explore' as const` para forzar el tipo literal.
+
+---
+
+### Bugs adicionales encontrados
+
+**Bug 5 — Ledger crash (try/except faltante):** El worker hacía INSERT en `budget_transactions` sin verificar que la tabla existía. Si la migration 00107 no estaba aplicada, el worker crashaba. **Fix:** Wrapped en try/except. La migration 00107 ahora es opcional.
+
+---
+
+### Estado de Redis verificado
+
+```
+db_keys = 5
+clients_connected = 4
+redis_version = 8.2.1
+```
+
+Worker funcionando con 5 funciones registradas:
+- `discovery_run_task`
+- `sync_hypeauditor_task`
+- `sync_metricool_task`
+- `cron:scheduled_reports_cron`
+- `cron:sync_metricool_task`
+
+---
+
+### Incidente de Google Cloud en Railway
+
+**Timeline:**
+- Railway tuvo incidente de Google Cloud infrastructure causando deployment delays
+- Incidente resuelto: "The deployment pause has been lifted and the backlog of queued deployments is clearing."
+- Deploy completado a las **18:26 UTC**
+- Worker reiniciado y funcionando correctamente
+
+---
+
+### Verificación de enum `explored` en Railway
+
+Confirmado por el usuario con query SQL directo a PostgreSQL de Railway:
+```sql
+SELECT enumlabel FROM pg_enum WHERE enumtypid = 'discovery_run_status'::regtype;
+```
+Resultado: `explored` presente en el enum.
+
+---
+
+### Resumen de deploys
+
+| Servicio | Commit | Status | Hora UTC |
+|----------|--------|--------|----------|
+| Railway API + Worker | `7796dc9` | ✅ Success | 18:26 UTC |
+| Vercel Frontend | `df41d9e` | ✅ Success | 11:30 UTC |
+
+---
+
+###get_balance() — Parser verification pendiente
+
+El parser de `get_balance()` busca campos `balance`, `balance_usd`, `credits_usd`, `amount`. Cuando el saldo es `$0`, HikerAPI retorna `{"state": false, ...}` — sin esos campos. El fix de Hito 25 detecta `state: false` y retorna `0.0`.
+
+**Sin verificar:** Qué retorna HikerAPI cuando el saldo es **positivo** (> $0). El parser actual solo fue probado con saldo=$0. Es posible que con saldo positivo HikerAPI retorne un campo con nombre diferente (ej: `credit`, `balance_amount`, etc.).
+
+**Recomendación:** Después de recargar, hacer un curl al endpoint para documentar el formato real de respuesta con saldo positivo:
+```bash
+curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
+```
+
+---
+
+*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md`.*
