@@ -48,7 +48,7 @@ export function LensSearchPage() {
         audience_age_max: form.audience_age_max,
         audience_countries: form.audience_countries ? form.audience_countries.split(',').map((item) => item.trim()).filter(Boolean) : [],
         platforms: form.platforms.length > 0 ? form.platforms : undefined,
-        discovery_mode: 'explore',
+        discovery_mode: 'explore' as const,
       };
       const newRun = await createRun(brief);
       toast.success('Búsqueda iniciada');
