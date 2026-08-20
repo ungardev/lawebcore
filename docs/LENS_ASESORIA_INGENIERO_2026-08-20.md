@@ -1270,6 +1270,106 @@ Resultado: modo Analizar **repetía ~32 llamadas de discovery** (~$0.64) en vez 
 
 ---
 
+### Bugs Nuevos Identificados — Fix A, Fix B, Fix C (2026-08-20)
+
+> **Estado:** Identificados por auditoría de código, NO corregidos aún. Pendientes de revisión por Claude Code Opus 5 para la reunión del 2026-08-21 9:00 AM.
+
+---
+
+### Fix A — Pre-flight sobreestima costo en modo Explorar 🔴 CRÍTICA
+
+**Archivo:** `apps/api/app/workers/worker.py:411-412`
+
+**Problema:** El pre-flight de saldo (Hito 23) siempre calcula:
+```python
+estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+# = 32 + 25 = 57 calls
+estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD
+# = 57 × $0.02 = $1.14
+```
+
+En modo **Explorar**, el enrichment se salta completamente (`worker.py:577-584`). El costo real de un run Explorar es ~32 calls = **$0.64**, no $1.14.
+
+**Impacto:** Con saldo=$0.80, el pre-flight rechazaría el run con "saldo insuficiente" aunque $0.80 ALCANZA para un Explorar completo ($0.64).
+
+**Evidencia:**
+```python
+# worker.py:50
+MAX_HANDLES_TO_ENRICH = 25
+# worker.py:52
+ESTIMATED_DISCOVERY_CALLS = 32
+# worker.py:411-412 — pre-flight siempre incluye enrichment (57 calls = $1.14)
+estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+# worker.py:577-584 — en Explorar, enrichment se skippea
+if handles_to_enrich and is_explore_mode:
+    logger.info("step3_explore_mode_skip_enrichment", ...)
+```
+
+**Fix sugerido:** Estimation modo-aware:
+```python
+is_explore = getattr(brief, "discovery_mode", "auto") == "explore"
+estimated_calls = ESTIMATED_DISCOVERY_CALLS if is_explore else ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+```
+
+---
+
+### Fix B — DeepSeek corre en modo Explorar sin datos suficientes ⚠️ MEDIA
+
+**Archivos:** `apps/api/app/workers/worker.py:1628-1654`, `packages/discovery/discovery/candidate_analyzer.py`
+
+**Problema:** En modo Explorar, el enrichment se salta → `followers=0` para todos los candidatos. Sin embargo, DeepSeek (`candidate_analyzer.analyze_candidates_batch`) se ejecuta si `analyze_with_ai=true` (default), generando scores de `audience_quality` y `brand_fit` basados en datos vacíos. Esos campos **no se muestran en la UI** de Explorar.
+
+**Costo:** ~$0.01-0.02 USD por run de Explorar — innecesario ya que los scores se pierden.
+
+**Evidencia:**
+```python
+# worker.py:577-584 — enrichment saltado → followers=0
+if handles_to_enrich and is_explore_mode:
+    logger.info("step3_explore_mode_skip_enrichment", ...)
+
+# worker.py:1628-1654 — DeepSeek SI corre si analyze_with_ai=True
+analyze_with_ai = getattr(brief, "analyze_with_ai", True)
+if analyze_with_ai:
+    analyzed = await candidate_analyzer.analyze_candidates_batch(...)  # Se ejecuta
+
+# candidate_analyzer.py:193-249 — _fallback_scores con followers=0
+def _fallback_scores(candidate, elite_data=None):
+    followers = candidate.get("followers", 0) or 0  # → 0 en Explorar
+    # scores basados en followers=0 → valores mínimos
+```
+
+**Fix sugerido:** Skip DeepSeek en modo Explorar:
+```python
+if is_explore_mode:
+    pass  # Solo rough score, sin enrichment ni DeepSeek
+elif analyze_with_ai:
+    analyzed = await candidate_analyzer.analyze_candidates_batch(...)
+```
+
+---
+
+### Fix C — `useRunPolling.ts` no usado por `LensSearchPage.tsx` ⚠️ BAJA (tech debt)
+
+**Archivos:**
+- `apps/web/src/features/lens/hooks/useRunPolling.ts` — hook existente
+- `apps/web/src/features/lens/pages/LensSearchPage.tsx` — USA `useDiscoveryRun.pollRun()`
+- `apps/web/src/features/lens/pages/LensChatPage.tsx` — SÍ usa `useRunPolling`
+
+**Problema:** `useRunPolling.ts` NO es importado ni usado por `LensSearchPage.tsx`. `LensSearchPage` usa `useDiscoveryRun.pollRun()` (definido en `useDiscoveryRun.ts:47-65`) que funciona correctamente. `useRunPolling` SÍ es usado por `LensChatPage.tsx`, así que **no se puede eliminar**.
+
+**Evidencia:**
+```typescript
+// LensSearchPage.tsx:26 — USA useDiscoveryRun.pollRun() (no useRunPolling)
+const { ..., pollRun, ... } = useDiscoveryRun();
+
+// useRunPolling.ts:6 — hook existe pero NO importado en LensSearchPage
+export function useRunPolling(runId: string | null) { ... }
+```
+
+**No action required** antes de la reunión. Tech debt para sprint futuro.
+
+---
+
 ### Estado de Redis verificado
 
 ```

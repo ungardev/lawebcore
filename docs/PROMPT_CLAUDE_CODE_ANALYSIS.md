@@ -21,6 +21,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **9** | `LENS_AUDIT9_2026-08-19.md` | **2026-08-19** | **MiniMax + datos Railway** | Verificación empírica — 48 runs, $28.33, 1 candidato |
 | **10** | `LENS_ASESORIA_INGENIERO_2026-08-20.md` | **2026-08-20** | **MiniMax + usuario** | 4 bugs críticos corregidos — dict columnas, frontend mode, polling, ledger try/except |
 | **11** | **`LENS_REUNION_2026-08-20.md`** | **2026-08-20** | **Claude Code Opus 5** | Bug `parent_run_id` descartado, 5 correcciones a la documentación, recomendación $20 |
+| **12** | *Este commit* | **2026-08-20** | **MiniMax** | 3 fixes nuevos documentados: Fix A (pre-flight sobreestimación), Fix B (DeepSeek en Explorar), Fix C (useRunPolling no usado) |
 
 ---
 
@@ -73,6 +74,9 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 
 | Bug | Prioridad | Notes |
 |-----|-----------|-------|
+| Fix A: Pre-flight sobreestima costo Explorar | 🔴 CRÍTICA | 57 calls $1.14 estimadas; Explorar solo necesita 32 calls $0.64 — impide runs con saldo $0.65-1.14 |
+| Fix B: DeepSeek corre en Explorar sin datos suficientes | ⚠️ MEDIA | followers=0, scores de IA no se muestran en UI — costo ~$0.01-0.02/run innecesario |
+| Fix C: useRunPolling.ts no usado por LensSearchPage | ⚠️ BAJA | Tech debt — hook usado por LensChatPage, NO por LensSearchPage — NO action needed |
 | Budget tracking desfase | 🔴 CRÍTICA | $25.13 Redis↔DB mismatch |
 | `accepted` siempre 0 | 🔴 CRÍTICA | No se actualiza post-seleccion |
 | 1 candidato en 48 runs | 🔴 CRÍTICA | Producto no entrega valor |

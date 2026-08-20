@@ -1,8 +1,8 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.1)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.2)
 
-> **Versión:** 5.1 — 2026-08-20
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.0 (`hito26`)
-> **Commit de referencia:** `hito27` (Hitos 1-27 aplicados)
+> **Versión:** 5.2 — 2026-08-20
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.1 (`hito27`)
+> **Commit de referencia:** `hito27` (Hitos 1-27 aplicados) + Fix A/B/C documentados
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos corregidos), Hito 27 (2026-08-20: `parent_run_id` descartado + `platforms` default_factory)
 
@@ -639,7 +639,7 @@ lens:profile:{fingerprint}
 | 25 | `hito25` | get_balance() parser bug — InsufficientFunds sin campo balance | Detecta `state: false` → retorna 0.0 → pre-flight aborta correctamente |
 | Bonus | `880da7d` | ReplayMiss invisible | Contador en metadata |
 
-### 9.2 Abiertos (Post-Hito 26)
+### 9.2 Abiertos (Post-Hito 27)
 
 | Issue | Prioridad | Detalle | Estado |
 |-------|-----------|---------|--------|
@@ -661,6 +661,9 @@ lens:profile:{fingerprint}
 | Ledger crash sin migration 00107 | ✅ RESUELTO HITO 26 | try/except protege worker; 00107 ahora opcional | — |
 | `parent_run_id` descartado en schema | ✅ RESUELTO HITO 27 | DiscoverySearchRequest ahora tiene el campo; Analizar no repite discovery | — |
 | `platforms` default= en vez de default_factory= | ✅ RESUELTO HITO 27 | Pydantic v2 ahora recibe lista, no lambda | — |
+| **Fix A: Pre-flight sobreestima costo en modo Explorar** | 🔴 CRÍTICA | `estimated_calls = 32 + 25 = 57` siempre ($1.14); Explorar solo necesita ~32 calls ($0.64) | **PENDIENTE** |
+| **Fix B: DeepSeek corre en Explorar sin datos suficientes** | ⚠️ MEDIA | Enrichment saltado → `followers=0`, sin posts; campos de salida `audience_quality`, `brand_fit` no se muestran en UI | **PENDIENTE** |
+| **Fix C: `useRunPolling.ts` no usado por LensSearchPage** | ⚠️ BAJA | Hook existe pero LensSearchPage usa `useDiscoveryRun.pollRun()` directamente; hook sí usado por LensChatPage | **PENDIENTE — tech debt** |
 | `accepted` nunca se actualiza | 🔴 CRÍTICA | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
 | Desfase Redis↔DB ($25.13) | 🔴 CRÍTICA | Budget tracking no refleja gasto real en runs pre-Hito-21 | **PENDIENTE** |
 | Geolocalización sin validación post-enrichment | ⚠️ MEDIA | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
@@ -1204,4 +1207,128 @@ Worker con 5 funciones registradas:
 
 ---
 
-*Documento generado: 2026-08-20 — Arquitectura LENS v5.1 (27 hitos aplicados). Hito 27: `parent_run_id` en DiscoverySearchRequest — modo Analizar ahora no repite discovery. Bug 1 de Hito 26 corregido en docs (código `username/profile_pic_url` nunca existió). Recomendación: recargar $20 USD (~58 campañas completas). Costo real campaña: ~$0.34.*
+## 19. Fixes Nuevos Identificados — Fix A, Fix B, Fix C (2026-08-20)
+
+> **Estado:** Identificados por auditoría de código, NO corregidos aún. Pendientes de revisión por Claude Code Opus 5.
+> **Archivos objetivo:** `apps/api/app/workers/worker.py`, `apps/web/src/features/lens/hooks/useRunPolling.ts`
+
+### Fix A — Pre-flight sobreestima costo en modo Explorar 🔴 CRÍTICA
+
+**Archivo:** `apps/api/app/workers/worker.py:411-412`
+
+**Problema:** El pre-flight de saldo (Hito 23) siempre calcula el costo estimado como:
+```python
+estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH
+# = 32 + 25 = 57 calls
+estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD
+# = 57 × $0.02 = $1.14
+```
+
+En modo **Explorar**, el enrichment se salta completamente (`worker.py:577-584`). El costo real de un run Explorar es ~32 calls = **$0.64**, no $1.14.
+
+**Impacto:** Con saldo=$0.80, el pre-flight rechazaría el run con "saldo insuficiente" ($0.80 < $1.14), aunque $0.80 ALCANZA para un Explorar completo ($0.64). Esto impide que el analista ejecute Explorar cuando el saldo es bajo.
+
+**Costo del bug:** Run completo de Explorar **bloqueado** cuando $0.64 < saldo < $1.14.
+
+**Evidencia:**
+```python
+# worker.py:50
+MAX_HANDLES_TO_ENRICH = 25
+
+# worker.py:52
+ESTIMATED_DISCOVERY_CALLS = 32
+
+# worker.py:411-412 (pre-flight siempre incluye enrichment)
+estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH  # 57
+estimated_cost = estimated_calls * settings.HIKERAPI_COST_PER_CALL_USD  # $1.14
+
+# worker.py:577-584 (en Explorar, enrichment se跳过)
+if handles_to_enrich and is_explore_mode:
+    logger.info("step3_explore_mode_skip_enrichment", ...)
+    # NO se llama a enrichment
+```
+
+**Fix sugerido:** El pre-flight debe usar modo-aware estimation:
+```python
+is_explore = getattr(brief, "discovery_mode", "auto") == "explore"
+if is_explore:
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS  # 32, sin enrichment
+else:
+    estimated_calls = ESTIMATED_DISCOVERY_CALLS + MAX_HANDLES_TO_ENRICH  # 57
+```
+
+---
+
+### Fix B — DeepSeek corre en modo Explorar sin datos suficientes ⚠️ MEDIA
+
+**Archivos:** `apps/api/app/workers/worker.py:1628-1654`, `packages/discovery/discovery/candidate_analyzer.py`
+
+**Problema:** En modo Explorar, el paso de enrichment se salta (`worker.py:577-584`), lo que significa:
+- `followers = 0` para todos los candidatos (sin enrichment)
+- Sin posts recientes (`latest_posts = []`)
+- Sin bio enriquecida
+
+Sin embargo, el paso de DeepSeek (`candidate_analyzer.analyze_candidates_batch`) se ejecuta si `analyze_with_ai=true` (default). El analyzer recibe candidatos con `followers=0` y genera scores de `audience_quality` y `brand_fit` basados en datos vacíos.
+
+**Costo:** ~$0.0011 USD por candidato × N candidatos (DeepSeek billing). Pequeño pero innecesario.
+
+**Campos no usados en UI:** Los campos `audience_quality` y `brand_fit` calculados por DeepSeek **no se muestran en la UI** de Modo Explorar (`CandidateCard.tsx` solo muestra `handle`, `full_name`, `bio`, `avatar_url`, `match_score`). Los scores de IA se pierden.
+
+**Evidencia:**
+```python
+# worker.py:577-584 — enrichment saltado en Explorar
+if handles_to_enrich and is_explore_mode:
+    logger.info("step3_explore_mode_skip_enrichment", ...)
+    # NO enrichment → followers=0 para todos
+
+# worker.py:1628-1654 — DeepSeek SI corre si analyze_with_ai=True
+analyze_with_ai = getattr(brief, "analyze_with_ai", True)
+if analyze_with_ai:
+    analyzed = await candidate_analyzer.analyze_candidates_batch(...)  # Se ejecuta
+
+# candidate_analyzer.py:193-249 — _fallback_scores usa followers=0
+def _fallback_scores(candidate, elite_data=None):
+    followers = candidate.get("followers", 0) or 0  # → 0 en Explorar
+    # scores basados en followers=0 → valores mínimos
+```
+
+**Fix sugerido:** En modo Explorar, skip DeepSeek entirely:
+```python
+if is_explore_mode:
+    # No enrichment, no DeepSeek — solo rough score
+    pass  # Ya guardado con rough_score_map en worker.py:591
+elif analyze_with_ai:
+    analyzed = await candidate_analyzer.analyze_candidates_batch(...)
+```
+
+Ahorro estimado: ~$0.01-0.02 USD por run de Explorar.
+
+---
+
+### Fix C — `useRunPolling.ts` no es usado por `LensSearchPage.tsx` ⚠️ BAJA (tech debt)
+
+**Archivos:**
+- `apps/web/src/features/lens/hooks/useRunPolling.ts` — hook existente
+- `apps/web/src/features/lens/pages/LensSearchPage.tsx` — USA `useDiscoveryRun.pollRun()` (no useRunPolling)
+- `apps/web/src/features/lens/pages/LensChatPage.tsx` — SÍ usa `useRunPolling`
+
+**Problema:** El hook `useRunPolling.ts` fue diseñado para polling de runs pero **no es importado ni usado** por `LensSearchPage.tsx`. En su lugar, `LensSearchPage` usa `useDiscoveryRun.pollRun()` que está definido en `useDiscoveryRun.ts:47-65`.
+
+`useRunPolling` SÍ es usado por `LensChatPage.tsx` para el polling de conversaciones, así que **NO se puede eliminar**.
+
+**Evidencia:**
+```typescript
+// LensSearchPage.tsx:26 — USA useDiscoveryRun.pollRun()
+const { run, candidates, isLoading, error, createRun, pollRun, loadRun, cancelPoll, saveCandidate, dismissCandidate } = useDiscoveryRun();
+
+// useRunPolling.ts:6 — hook existe
+export function useRunPolling(runId: string | null) {
+  // ... pero NO se importa en LensSearchPage
+}
+```
+
+**No action required** antes de la reunión del 2026-08-21. Tech debt para sprint futuro. `useDiscoveryRun.pollRun()` funciona correctamente para el caso de uso de `LensSearchPage`.
+
+---
+
+*Documento generado: 2026-08-20 — Arquitectura LENS v5.1 (27 hitos aplicados). Hito 27: `parent_run_id` en DiscoverySearchRequest — modo Analizar ahora no repite discovery. Bug 1 de Hito 26 corregido en docs (código `username/profile_pic_url` nunca existió). Recomendación: recargar $20 USD (~58 campañas completas). Costo real campaña: ~$0.34. Fix A (pre-flight sobreestimación), Fix B (DeepSeek en Explorar), Fix C (useRunPolling no usado) identificados y documentados para análisis de Opus 5.*
