@@ -17,7 +17,7 @@
 3. [Infraestructura de Carpetas](#3-infraestructura-de-carpetas)
 4. [LENS — Flujo Completo End-to-End](#4-lens--flujo-completo-end-to-end)
 5. [HikerAPI — Sistema de Costos y Control](#5-hikerapi--sistema-de-costos-y-control)
-6. [Modo Explorar — Descubrimiento Sin Costo](#6-modo-explorar--descubrimiento-sin-costo)
+6. [Modo Explorar — Descubrimiento Barato](#6-modo-explorar--descubrimiento-barato)
 7. [Modo Analizar — Enrichment Selectivo](#7-modo-analizar--enrichment-selectivo)
 8. [Modelo de Datos](#8-modelo-de-datos)
 9. [Budget Tracking — G12](#9-budget-tracking--g12)
@@ -49,7 +49,7 @@ El pipeline automático ejecutaba discovery + enrichment en un solo paso. El enr
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  MODO EXPLORAR ($0.24/run)              MODO ANALIZAR ($0.43/handle) │
+│  MODO EXPLORAR (~$0.24)              MODO ANALIZAR (~$0.02/handle) │
 │                                                                      │
 │  1. Discovery only (HikerAPI)          1. Carga candidatos          │
 │     Sin enrichment                          del run padre             │
@@ -61,8 +61,8 @@ El pipeline automático ejecutaba discovery + enrichment en un solo paso. El enr
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Costo mínimo para 1 candidato:** $0.24 + $0.43 = **$0.67** (vs. $1.28 anterior)
-- **Tasa de éxito:** ~80% con supervisión humana (vs. 2% automático)
+- **Costo campaña completa (Explorar + Analizar 5 handles):** ~**$0.34** (vs. $1.28 anterior del pipeline automático)
+- **Tasa de éxito:** pendiente de medir en primer run real (vs. 2% automático histórico)
 - **Riesgo de 402 mid-run:** Bajo (pre-flight de saldo en analizar)
 
 ### Estado actual del proyecto (post-sesión 2026-08-20)
@@ -551,7 +551,7 @@ WHERE provider = 'hikerapi'
 
 ---
 
-## 6. Modo Explorar — Descubrimiento Sin Costo
+## 6. Modo Explorar — Descubrimiento Barato
 
 ### 6.1 Qué hace
 
@@ -568,7 +568,7 @@ Ejecuta discovery completo (Steps 1-3, sin enrichment). El analista recibe una l
 is_explore_mode = getattr(brief, "discovery_mode", "auto") == "explore"
 ```
 
-El usuario elige "Modo Explorar" en la UI. El campo `discovery_mode='explore'` va en `BriefStructured` y se persiste en `discovery_runs.brief_parsed`.
+El modo `explore` está **hardcodeado** en `LensSearchPage.tsx:51` como `discovery_mode: 'explore' as const`. No hay selector en la UI — el modo `auto` es inalcanzable desde esa página. El campo `discovery_mode='explore'` va en `BriefStructured` y se persiste en `discovery_runs.brief_parsed`.
 
 ### 6.4 Lógica en el Worker
 
@@ -617,7 +617,7 @@ candidate_dict = {
 }
 ```
 
-> ⚠️ **Bug 1 de la sesión 2026-08-20:** El dict original usaba claves que NO correspondían a columnas DB (`username` en vez de `handle`, `profile_pic_url` en vez de `avatar_url`, etc.). Fix aplicado en commit `2fe9816`.
+> ⚠️ **Bug 1 de la sesión 2026-08-20:** El dict original usaba claves que NO correspondían a columnas DB (`profile`, `rough_score`, `_is_explore_mode`) y faltaban `run_id` y `platform` (parte del ON CONFLICT). Fix aplicado en commit `2fe9816`.
 
 ### 6.5 Schema — Nuevo Status
 
@@ -646,7 +646,7 @@ CHECK (status IN ('pending', 'running', 'completed', 'partial', 'failed', 'explo
 | Costo/run | ~$0.98 | ~$0.24 |
 | Control de calidad | Bajo (sin supervisión) | Alto (analista selecciona) |
 | Riesgo 402 mid-run | Alto | Bajo |
-| Tasa de éxito | 2% (1/48) | ~80% |
+| Tasa de éxito | 2% (1/48) | Pendiente de medir |
 
 El enriquecimiento sin supervisión es costoso e irreversible. Si el enrichment falla, todo el run se pierde. En modo Explorar, el costo de discovery (~50 llamadas) es ~$0.24: aceptable incluso si el resultado no sirve. El enrichment ($0.02 × N handles) solo se ejecuta sobre handles que el analista eligió conscientemente.
 
@@ -1064,12 +1064,15 @@ Métricas relevantes:
 ### H27 ✅ (2026-08-20 — COMPLETADO)
 1. ✅ Apply migration `00106` en Railway — enum `explored` existe
 2. ✅ Migration `00107` en Railway — **OPCIONAL** (protegido por try/except)
+3. ✅ **Hito 27:** Fix `parent_run_id` en `DiscoverySearchRequest` — modo Analizar ahora no repite discovery (~$0.64 ahorrados por run)
+4. ✅ **Hito 27:** Fix `platforms` — `default_factory=` en vez de `default=` (bug latente Pydantic v2)
 
 ### H28 🔴 (REQUERIDO AHORA — antes de producción)
-1. ⏳ **Recargar $50 en HikerAPI** — con $0 todo falla en pre-flight
+1. ⏳ **Recargar HikerAPI** — con $0 todo falla en pre-flight (recomendado: **$20 USD**, ~58 campañas completas)
 2. ⏳ Verificación end-to-end del flujo Explorar→Analizar en producción
 3. ⏳ Validar que candidatos aparecen en la UI tras `status='explored'`
 4. ⏳ Validar que enrichment selectivo funciona en `analyze` mode
+5. ⏳ Criterio de éxito: **≥15 handles con bio no vacía**,分析师 seleccionaría ≥5
 
 ### H29 ⏳ (próximo sprint)
 - Persistencia del carrito de selección (Zustand store → DB)
@@ -1096,6 +1099,7 @@ Métricas relevantes:
 | `2fe9816` | **Hito 26** — explore mode dict con columnas DB correctas + ledger try/except | 2026-08-20 |
 | `92d6faa` | Frontend: `discovery_mode='explore'` enviado + polling `explored` | 2026-08-20 |
 | `df41d9e` | TypeScript: `discovery_mode: 'explore' as const` (fix type error) | 2026-08-20 |
+| `hito27` | **Hito 27** — `parent_run_id` en DiscoverySearchRequest (modo Analizar no repite discovery) + `platforms` default_factory | 2026-08-20 |
 
 ---
 
@@ -1110,9 +1114,10 @@ Métricas relevantes:
 - 59 tests cubriendo contracts, API y workflow
 - Railway worker con código actualizado (deploy `7796dc9`)
 - Frontend con `discovery_mode` y polling corregido (deploy `df41d9e`)
+- **Hito 27:** `parent_run_id` en `DiscoverySearchRequest` — modo Analizar ahora salta discovery correctamente
 
 ### Lo que está pendiente (ANTES de producción)
-1. **Recargar HikerAPI** — con $0 todo falla en pre-flight ($50 mínimo recomendado)
+1. **Recargar HikerAPI** — con $0 todo falla en pre-flight (**$20 USD recomendado**, ~58 campañas completas)
 2. **Verificación end-to-end** — probar el flujo completo Explorar→Analizar en producción
 3. **Validar 4 checks:**
    - `status='explored'` aparece tras Modo Explorar
@@ -1121,6 +1126,7 @@ Métricas relevantes:
    - `actual_cost_usd > 0` en el run
 
 ### Métricas de éxito (post-recarga)
+- Criterio mínimo: **≥15 handles con bio no vacía**, ≥5 seleccionables por el analista
 - Explorar: ¿cuántos handles descubre por run?
 - Analizar: de los handles seleccionados, ¿cuántos enriquecen correctamente?
 - Propuesta: de los candidatos guardados, ¿cuántos aparecen en proposal.csv?
@@ -1147,14 +1153,17 @@ Esta sesión de trabajo (2026-08-20) descubrió y corrigió **4 bugs críticos**
 **Problema:** El dict de candidato en modo explorar usaba claves que NO correspondían a columnas de la tabla `discovery_candidates`:
 
 ```python
-# ❌ ANTES (claves incorrectas):
+# ❌ ANTES (código real — NUNCA usó 'username' ni 'profile_pic_url'):
 candidate_dict = {
-    "username": raw.get("username"),        # ← no existe columna 'username'
-    "profile_pic_url": raw.get("profile_pic_url"),  # ← no existe 'profile_pic_url'
-    "follower_count": raw.get("followers"),  # ← no existe 'follower_count'
-    # ...
+    "handle": handle,
+    "profile": p,                # ← no es columna de discovery_candidates
+    "rough_score": rough,        # ← no es columna
+    "_is_explore_mode": True,    # ← no es columna
+    # FALTABAN: run_id y platform (parte del ON CONFLICT)
 }
 ```
+
+> ⚠️ **Corrección sobre documentación anterior:** La versión anterior de este documento describía el bug como uso de `username` y `profile_pic_url`. Ese código **nunca existió**. El bug real era `profile`, `rough_score`, `_is_explore_mode` y la ausencia de `run_id` y `platform` en el dict.
 
 **Síntoma:** El `INSERT` a `discovery_candidates` fallaba silenciosamente (o insertaba NULLs en las columnas incorrectas), resultando en 0 candidatos aunque el pipeline dijera "encontré X handles".
 
@@ -1162,9 +1171,12 @@ candidate_dict = {
 ```python
 # ✅ DESPUÉS (claves correctas):
 candidate_dict = {
-    "handle": raw.get("username") or raw.get("handle") or handle,
+    "run_id": run_id,
+    "handle": handle,
+    "platform": "instagram",
+    "full_name": raw.get("full_name", ""),
+    "bio": raw.get("bio", ""),
     "avatar_url": raw.get("profile_pic_url") or raw.get("avatar_url") or "",
-    "followers": raw.get("follower_count") or raw.get("followers") or 0,
     # ... todas las columnas existentes en la tabla
 }
 ```
@@ -1226,6 +1238,35 @@ if ((runStatus === 'completed' || runStatus === 'explored') && data?.total_candi
 ### Bugs adicionales encontrados
 
 **Bug 5 — Ledger crash (try/except faltante):** El worker hacía INSERT en `budget_transactions` sin verificar que la tabla existía. Si la migration 00107 no estaba aplicada, el worker crashaba. **Fix:** Wrapped en try/except. La migration 00107 ahora es opcional.
+
+---
+
+### Bug 6 — `parent_run_id` descartado en `DiscoverySearchRequest` (🔴 CRÍTICA — Hito 27)
+
+**Detectado por:** Auditoría de Claude Code Opus 5
+**Archivos:** `packages/discovery/discovery/schemas.py`, `apps/api/app/api/v1/endpoints/discovery.py`
+**Commit fix:** `hito27` (pendiente de commit en este push)
+
+**Problema:** `analyze_selected` asignaba `brief_parsed["parent_run_id"] = str(body.run_id)` pero luego construía `DiscoverySearchRequest(**brief_parsed)`. Ese schema **no tenía el campo `parent_run_id`**, así que Pydantic v2 lo descartaba silenciosamente (`extra='ignore'` por defecto).
+
+**Cadena de consecuencias:**
+```python
+# En discovery.py:
+brief_parsed["parent_run_id"] = str(body.run_id)  # ← se asigna
+brief = DiscoverySearchRequest(**brief_parsed)        # ← Pydantic descarta el campo
+
+# En worker.py:
+parent_run_id = getattr(brief, "parent_run_id", None)  # → None
+_skip_discovery = is_analyze_mode and parent_run_id     # → False
+```
+
+Resultado: modo Analizar **repetía ~32 llamadas de discovery** (~$0.64) en vez de enriquecer solo los handles seleccionados.
+
+**Fix:** Añadir `parent_run_id: str | None = Field(default=None, ...)` a `DiscoverySearchRequest`.
+
+**Bug secundario en el mismo commit:** `platforms: list[Platform] = Field(default=lambda: [Platform.INSTAGRAM])` usaba `default=` en vez de `default_factory=`. En Pydantic v2, `default` se usa tal cual sin validar — `brief.platforms` era el objeto lambda, no una lista. Latente hoy porque nadie lee ese campo; rompe el día que se añada TikTok.
+
+**Costo del bug:** ~$0.64 por cada run de Analizar si no se hubiera corregido.
 
 ---
 

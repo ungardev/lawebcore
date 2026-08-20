@@ -1,10 +1,10 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.0)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.1)
 
-> **Versión:** 5.0 — 2026-08-20
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v4.0 (`hito25`)
-> **Commit de referencia:** `hito26` (Hitos 1-26 aplicados)
+> **Versión:** 5.1 — 2026-08-20
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.0 (`hito26`)
+> **Commit de referencia:** `hito27` (Hitos 1-27 aplicados)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos corregidos)
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md` (segunda), `LENS_AUDIT3_2026-08-14.md` (tercera), auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 post-Hito-22 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), Hito 24 (Modo Explorar + Analizar), `LENS_AUDIT9_2026-08-19.md` (Octava Auditoría post-verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos corregidos), Hito 27 (2026-08-20: `parent_run_id` descartado + `platforms` default_factory)
 
 ---
 
@@ -659,6 +659,8 @@ lens:profile:{fingerprint}
 | Polling no cargaba candidatos `explored` | ✅ RESUELTO HITO 26 | useRunPolling.ts ahora reconoce status `explored` (commit `df41d9e`) | — |
 | TypeScript error `discovery_mode` | ✅ RESUELTO HITO 26 | `as const` corrige tipo literal (commit `df41d9e`) | — |
 | Ledger crash sin migration 00107 | ✅ RESUELTO HITO 26 | try/except protege worker; 00107 ahora opcional | — |
+| `parent_run_id` descartado en schema | ✅ RESUELTO HITO 27 | DiscoverySearchRequest ahora tiene el campo; Analizar no repite discovery | — |
+| `platforms` default= en vez de default_factory= | ✅ RESUELTO HITO 27 | Pydantic v2 ahora recibe lista, no lambda | — |
 | `accepted` nunca se actualiza | 🔴 CRÍTICA | `discovery_runs.accepted` siempre 0 | **PENDIENTE** |
 | Desfase Redis↔DB ($25.13) | 🔴 CRÍTICA | Budget tracking no refleja gasto real en runs pre-Hito-21 | **PENDIENTE** |
 | Geolocalización sin validación post-enrichment | ⚠️ MEDIA | POSTERGADO — no hay candidatos aún para validar | **PENDIENTE** |
@@ -666,7 +668,7 @@ lens:profile:{fingerprint}
 | geo_no_signal filter rechaza hashtag profiles | ⚠️ MEDIA | Perfiles de hashtag sin bio → geo_score=0.0 → filtrados | **PENDIENTE** |
 | Filtrado business_unit_id en endpoints discovery | **Media** | Hito 17 arregló campaigns; discovery aún no filtra | **PENDIENTE** |
 | discovery_profiles sin 3 columnas nuevas | **Media** | Migration 105 creada, debe ejecutarse | **PENDIENTE** |
-| HikerAPI balance | 🔴 ACTUAL | Balance=$0 — requiere recarga $50 mínimo | **PENDIENTE** |
+| HikerAPI balance | 🔴 ACTUAL | Balance=$0 — requiere recarga $20 mínimo (~58 campañas) | **PENDIENTE** |
 
 ---
 
@@ -966,10 +968,11 @@ curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account
 3. ✅ Railway deploy exitoso (commit `7796dc9`, 18:26 UTC)
 4. ✅ Vercel frontend deployado (commit `df41d9e`, 11:30 UTC)
 5. ✅ Hito 26: 4 bugs críticos corregidos (dict columnas, frontend mode, polling, TS)
-6. ⏳ Recargar $50 HikerAPI
-7. ⏳ Test Modo Explorar — validar `status='explored'` y candidatos en UI
-8. ⏳ Test Modo Analizar — validar enrichment selectivo
-9. ⏳ Demo con marca real
+6. ✅ Hito 27: `parent_run_id` en DiscoverySearchRequest (modo Analizar no repite discovery)
+7. ⏳ Recargar $20 HikerAPI (~58 campañas completas, recomendación Opus 5)
+8. ⏳ Test Modo Explorar — validar `status='explored'` y candidatos en UI
+9. ⏳ Test Modo Analizar — validar enrichment selectivo
+10. ⏳ Demo con marca real
 
 ---
 
@@ -1062,22 +1065,28 @@ async def get_balance(self) -> float | None:
 El dict de candidato en modo explorar usaba claves que NO correspondían a columnas de la tabla `discovery_candidates`:
 
 ```python
-# ❌ ANTES (claves incorrectas):
+# ❌ ANTES (código real — NUNCA usó 'username' ni 'profile_pic_url'):
 candidate_dict = {
-    "username": raw.get("username"),           # ← no existe columna 'username'
-    "profile_pic_url": raw.get("profile_pic_url"),  # ← no existe 'profile_pic_url'
-    "follower_count": raw.get("followers"),    # ← no existe 'follower_count'
-    # ...
+    "handle": handle,
+    "profile": p,                # ← no es columna de discovery_candidates
+    "rough_score": rough,        # ← no es columna
+    "_is_explore_mode": True,    # ← no es columna
+    # FALTABAN: run_id y platform (parte del ON CONFLICT)
 }
 
 # ✅ DESPUÉS (claves correctas):
 candidate_dict = {
-    "handle": raw.get("username") or raw.get("handle") or handle,
+    "run_id": run_id,
+    "handle": handle,
+    "platform": "instagram",
+    "full_name": raw.get("full_name", ""),
+    "bio": raw.get("bio", ""),
     "avatar_url": raw.get("profile_pic_url") or raw.get("avatar_url") or "",
-    "followers": raw.get("follower_count") or raw.get("followers") or 0,
     # ... todas las columnas existentes en discovery_candidates
 }
 ```
+
+> ⚠️ **Corrección:** La versión anterior de este documento describía el bug como uso de `username` y `profile_pic_url`. Ese código **nunca existió**. El bug real era `profile`, `rough_score`, `_is_explore_mode` y la ausencia de `run_id` y `platform`.
 
 **Impacto:** INSERT fallaba silenciosamente → 0 candidatos aunque pipeline dijera "encontré X handles".
 
@@ -1133,6 +1142,38 @@ Worker hacía INSERT en `budget_transactions` sin verificar que la tabla existí
 
 ---
 
+### 17.6 Bug 6 — `parent_run_id` descartado en `DiscoverySearchRequest` (🔴 CRÍTICA — Hito 27)
+
+**Detectado por:** Auditoría de Claude Code Opus 5
+**Archivos:** `packages/discovery/discovery/schemas.py`, `apps/api/app/api/v1/endpoints/discovery.py`
+
+**Problema:** `analyze_selected` asignaba `brief_parsed["parent_run_id"]` pero `DiscoverySearchRequest` **no tenía ese campo**. Pydantic v2 descartaba el campo silenciosamente (`extra='ignore'`).
+
+```python
+# En discovery.py:
+brief_parsed["parent_run_id"] = str(body.run_id)  # ← se asigna
+brief = DiscoverySearchRequest(**brief_parsed)        # ← Pydantic descarta
+
+# En worker.py:
+parent_run_id = getattr(brief, "parent_run_id", None)  # → None
+_skip_discovery = is_analyze_mode and parent_run_id     # → False
+```
+
+Resultado: modo Analizar **repetía ~32 llamadas de discovery** (~$0.64) en vez de enriquecer solo los handles seleccionados. Costo real: **$0.70** en vez de **$0.06**.
+
+**Fix (commit `hito27`):**
+```python
+# En schemas.py — DiscoverySearchRequest:
+parent_run_id: str | None = Field(
+    default=None,
+    description="Parent run ID for analyze mode.",
+)
+```
+
+**Bug secundario en el mismo commit:** `platforms` usaba `default=` en vez de `default_factory=` — en Pydantic v2 el objeto lambda se guardaba sin validar.
+
+---
+
 ### 17.6 Verificación de Redis
 
 ```
@@ -1163,4 +1204,4 @@ Worker con 5 funciones registradas:
 
 ---
 
-*Documento generado: 2026-08-20 — Arquitectura LENS v5.0 (26 hitos aplicados). Hito 26: 4 bugs críticos corregidos — dict columnas DB, frontend discovery_mode, polling explored, TS type. Railway deploy exitoso (18:26 UTC). Vercel deploy exitoso (11:30 UTC). HikerAPI balance=$0 — requiere recarga $50 mínimo para validación.*
+*Documento generado: 2026-08-20 — Arquitectura LENS v5.1 (27 hitos aplicados). Hito 27: `parent_run_id` en DiscoverySearchRequest — modo Analizar ahora no repite discovery. Bug 1 de Hito 26 corregido en docs (código `username/profile_pic_url` nunca existió). Recomendación: recargar $20 USD (~58 campañas completas). Costo real campaña: ~$0.34.*

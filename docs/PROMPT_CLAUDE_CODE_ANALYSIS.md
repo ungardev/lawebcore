@@ -3,7 +3,7 @@
 > **Última actualización:** 2026-08-20
 > **Repositorio:** https://github.com/ungardev/lawebcore
 
-Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente y completa es **`LENS_ASESORIA_INGENIERO_2026-08-20.md`** (documento de ingeniería para advisor — sesión 2026-08-20 con 4 bugs críticos corregidos).
+Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente es **`LENS_REUNION_2026-08-20.md`** (análisis de Claude Code Opus 5 posterior a `LENS_ASESORIA_INGENIERO_2026-08-20.md`).
 
 ---
 
@@ -19,13 +19,14 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **7** | `LENS_AUDIT7_2026-08-18.md` | **2026-08-18** | **Claude Code Opus 5** | Bug N1 refutado, causa real era enrichment 402 |
 | **8** | `LENS_AUDIT8_2026-08-19.md` | **2026-08-19** | **Claude Code Opus 5** | Hito 23 patch analysis |
 | **9** | `LENS_AUDIT9_2026-08-19.md` | **2026-08-19** | **MiniMax + datos Railway** | Verificación empírica — 48 runs, $28.33, 1 candidato |
-| **10** | **`LENS_ASESORIA_INGENIERO_2026-08-20.md`** | **2026-08-20** | **MiniMax + usuario** | **4 bugs críticos corregidos — dict columnas, frontend mode, polling, ledger try/except** |
+| **10** | `LENS_ASESORIA_INGENIERO_2026-08-20.md` | **2026-08-20** | **MiniMax + usuario** | 4 bugs críticos corregidos — dict columnas, frontend mode, polling, ledger try/except |
+| **11** | **`LENS_REUNION_2026-08-20.md`** | **2026-08-20** | **Claude Code Opus 5** | Bug `parent_run_id` descartado, 5 correcciones a la documentación, recomendación $20 |
 
 ---
 
 ## Estado Actual del Proyecto
 
-### Hitos Aplicados (1-26)
+### Hitos Aplicados (1-27)
 
 ```
 1-20: Features y fixes varios
@@ -35,6 +36,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 24:   Modo Explorar + Modo Analizar
 25:   Fix get_balance() parser — detecta state:false → retorna 0.0
 26:   4 bugs críticos corregidos — dict columnas DB, frontend discovery_mode, polling explored, ledger try/except
+27:   parent_run_id en DiscoverySearchRequest (modo Analizar no repite discovery) + platforms default_factory
 ```
 
 ### Verificación Empírica (2026-08-20)
@@ -49,7 +51,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | Vercel deploy | ✅ 11:30 UTC (`df41d9e`) |
 | Migration 00106 | ✅ Aplicada y confirmada |
 | Modo Explorar en código | ✅ 4 bugs corregidos |
-| HikerAPI balance | 🔴 $0 — requiere recarga $50 |
+| HikerAPI balance | 🔴 $0 — requiere recarga $20 (~58 campañas completas) |
 
 ### Bugs Resueltos
 
@@ -64,6 +66,8 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **Polling no cargaba candidatos explored** | **Hito 26** | `useRunPolling.ts` reconoce status `explored` |
 | **TypeScript error discovery_mode literal** | **Hito 26** | `as const` corrige tipo |
 | **Ledger crash sin migration 00107** | **Hito 26** | try/except protege; 00107 ahora opcional |
+| **`parent_run_id` descartado en schema** | **Hito 27** | Pydantic descartaba el campo; Analizar repetía ~$0.64 de discovery |
+| **`platforms` default= en vez de default_factory=** | **Hito 27** | Bug latente Pydantic v2; rompe con TikTok |
 
 ### Bugs Abiertos
 
@@ -80,31 +84,32 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 ## Próximos Pasos
 
 1. ✅ **Migration 00106** — ejecutada y confirmada
-2. ⏳ **Recargar $50 HikerAPI** — mínimo según billing
-3. ⏳ **Test Modo Explorar** — validar status=`explored`, candidatos con handle+bio populated
-4. ⏳ **Test Modo Analizar** — validar enrichment selectivo sobre handles seleccionados
-5. ⏳ **Demo con marca real** — Nestlé o similar
+2. ✅ **Hito 27** — `parent_run_id` en DiscoverySearchRequest (aplicado en este commit)
+3. ⏳ **Recargar $20 HikerAPI** — (~58 campañas completas, recomendación Opus 5)
+4. ⏳ **Test Modo Explorar** — validar status=`explored`, candidatos con handle+bio populated
+5. ⏳ **Test Modo Analizar** — validar enrichment selectivo sobre handles seleccionados
+6. ⏳ **Demo con marca real** — Nestlé o similar
 
 ---
 
 ## Para Opus 5 — Última Auditoría
 
-La auditoría más reciente con datos empíricos completos y sesión de debugging detallada es **`LENS_ASESORIA_INGENIERO_2026-08-20.md`**.
+La auditoría más reciente con análisis técnico completo es **`LENS_REUNION_2026-08-20.md`** (documento de 255 líneas escrito por Opus 5 tras auditar `LENS_ASESORIA_INGENIERO_2026-08-20.md`).
 
 Contiene:
-- 48 runs históricos con costos reales
-- Bug del parser `get_balance()` identificado y arreglado (Hito 25)
-- Desfase Redis↔DB de $25.13 documentado
-- **4 bugs críticos descubiertos y corregidos en la sesión 2026-08-20:**
-  1. Dict candidato con claves incorrectas (columnas DB)
-  2. Frontend no enviaba `discovery_mode`
-  3. Polling no cargaba candidatos en status `explored`
-  4. Ledger crash sin migration 00107
-- Railway deploy exitoso (18:26 UTC) + Vercel deploy exitoso (11:30 UTC)
-- Migration 00106 confirmada aplicada
+- Bug crítico: modo Analizar repetía ~$0.64 de discovery por `parent_run_id` descartado en schema
+- Fix: 1 línea en `DiscoverySearchRequest` + 1 línea de `default_factory=`
+- 4 bugs del Hito 26 verificados como correctamente corregidos
+- **5 correcciones a la documentación** identificadas por Opus 5:
+  1. Bug 1 del Hito 26 documentado con código incorrecto
+  2. "Tasa de éxito 80%" — dato inventado, pendiente de medir
+  3. "Modo Explorar — Sin Costo" — debería decir "Barato"
+  4. `discovery_mode` hardcodeado en LensSearchPage.tsx, no hay selector
+  5. Costo campaña completa: ~$0.34 (no $0.67 como decía antes)
+- Recomendación de recarga: **$20** (no $50)
 
-**Recomendación:** Leer `LENS_ASESORIA_INGENIERO_2026-08-20.md` completo antes de dar nuevas recomendaciones sobre recarga de HikerAPI.
+**Recomendación:** Leer `LENS_REUNION_2026-08-20.md` y `LENS_ASESORIA_INGENIERO_2026-08-20.md` para contexto completo.
 
 ---
 
-*Índice generado: 2026-08-20 — Proyecto LENS con 26 hitos aplicados, 1 candidato histórico, $28.33 gastados, 4 bugs críticos corregidos en sesión 2026-08-20.*
+*Índice generado: 2026-08-20 — Proyecto LENS con 27 hitos aplicados, 1 candidato histórico, $28.33 gastados. Hito 27: fix modo Analizar + 5 correcciones a la documentación.*

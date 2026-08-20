@@ -205,7 +205,7 @@ class DiscoverySearchRequest(BaseModel):
     audience_cities: list[str] = Field(default_factory=list)
     audience_states: list[str] = Field(default_factory=list)
     tone: list[str] = Field(default_factory=list)
-    platforms: list[Platform] = Field(default=lambda: [Platform.INSTAGRAM])
+    platforms: list[Platform] = Field(default_factory=lambda: [Platform.INSTAGRAM])
     max_candidates: int = Field(default=20, ge=1, le=100)
     exclude_handles: list[str] = Field(default_factory=list)
     exclude_stores: bool = Field(default=True)
@@ -217,6 +217,16 @@ class DiscoverySearchRequest(BaseModel):
     handles_to_analyze: list[str] = Field(
         default_factory=list,
         description="Handles selected in explore mode to enrich in analyze mode",
+    )
+    parent_run_id: str | None = Field(
+        default=None,
+        description=(
+            "Parent run ID for analyze mode. HITO 27 FIX: sin este campo, "
+            "`analyze_selected` lo asignaba al dict pero Pydantic lo descartaba "
+            "silenciosamente (extra='ignore'), el worker recibia None, "
+            "`_skip_discovery` quedaba en False y el modo Analizar repetia todo "
+            "el discovery (~$0.64) en vez de enriquecer solo lo seleccionado."
+        ),
     )
 
 
