@@ -22,16 +22,21 @@ class TestExtraForbidSchemas:
     """
 
     @pytest.mark.asyncio
-    def test_briefstructured_forbids_extra_fields(self):
-        """BriefStructured rechaza campos unknown con ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            BriefStructured(
-                discovery_mode="explore",
-                product_name="Test",
-                unknown_field="should fail",  # noqa: F841
-            )
-        errors = exc_info.value.errors()
-        assert any("extra_forbidden" in str(e.get("type", "")) for e in errors)
+    def test_briefstructured_ignores_extra_fields(self):
+        """HITO 29 REGRESIÓN CORREGIDA: BriefStructured IGNORA campos unknown.
+
+        Con extra="ignore", campos unknown no generan ValidationError.
+        Esto es correcto porque BriefStructured deserializa JSON persistido
+        (discovery_runs.brief_parsed), donde campos antiguos son normales.
+        La frontera de entrada (DiscoverySearchRequest) SÍ rechaza typos.
+        """
+        brief = BriefStructured(
+            discovery_mode="explore",
+            product_name="Test",
+            unknown_field="should be ignored",  # noqa: F841
+        )
+        assert brief.discovery_mode == "explore"
+        assert brief.product_name == "Test"
 
     @pytest.mark.asyncio
     def test_briefstructured_accepts_valid_fields(self):

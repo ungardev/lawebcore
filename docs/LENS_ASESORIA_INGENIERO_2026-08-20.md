@@ -6,8 +6,9 @@
 > **Proyecto:** La Web Core — LENS Discovery Module
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Ingeniero que documenta:** Sistema (contexto completo del repositorio)
-> **Estado de deploy:** ✅ Railway deploy `7796dc9` 18:26 UTC | ✅ Vercel frontend `df41d9e` 11:30 UTC | ⏳ Railway deploy `a21dd97` pendiente (Hito 28)
+> **Estado de deploy:** ✅ Railway deploy `7796dc9` 18:26 UTC | ✅ Vercel frontend `df41d9e` 11:30 UTC | ✅ Railway deploy `a21dd97` 20:48 UTC (Hito 28) | ⏳ Hito 29 hotfix pendiente de deploy
 > **HikerAPI balance:** ✅ **$43.00 USD** (recargado 2026-08-20)
+> **NUEVO:** Hito 29 HOTFIX — extra='forbid' solo en frontera de entrada (regresión crítica detectada por Opus 5)
 
 ---
 
@@ -27,6 +28,8 @@
 12. [Roadmap H26-H30](#12-roadmap-h26-h30)
 13. [Commits Principales](#13-commits-principales)
 14. [Análisis Exhaustivo de la Sesión 2026-08-20](#14-análisis-exhaustivo-de-la-sesión-2026-08-20)
+15. [Pipeline Coverage Analysis — Brechas Identificadas](#15-pipeline-coverage-analysis--brechas-identificadas-v54)
+16. [Hito 29 Hotfix — Regresión Corregida](#16-hito-29-hotfix--regresión-corregida)
 
 ---
 
@@ -1439,7 +1442,7 @@ El pipeline actual de LENS captura el **~80%** de lo que HikerAPI puede ofrecer.
 
 **Brecha 3 — Geo Post-Enrichment:** El geo_score se calcula en prefilter sin `country`/`city` (disponibles solo post-enrichment). Fix: recalcular geo_score post-enrichment con datos reales.
 
-**Brecha 4 — Tier Enforcement:** `TIER_MIN_FOLLOWERS=5_000` y `TIER_MAX_FOLLOWERS=50_000` no se aplican en prefilter. Perfiles fuera de tier compiten y gastan calls. Fix: skip en prefilter si followers fuera de rango.
+**Brecha 4 — Tier Enforcement:** `TIER_MIN_FOLLOWERS=5_000` y `TIER_MAX_FOLLOWERS=50_000` no se aplican en prefilter. Perfiles fuera de tier compiten y gastan calls. **⚠️ CUESTIONAR ANTES DE IMPLEMENTAR:** según Opus 5, ese rango excluía todo el tier medio y alto. Para Purina/Nestlé quizás necesita otro rango. NO implementar hasta tener datos del primer Explorar.
 
 **Brecha 5 — Cross-Reference Boost:** Si un perfil aparece en múltiples steps (hashtag + keyword), no se bonusifica. Fix: tracking de `_source_count` y boost si aparece en 2+ sources.
 
@@ -1469,21 +1472,82 @@ if profile.get("country"):
                      "city": profile.get("city", "")}, geo_indicators, target_country)
 ```
 
-### 15.4 Roadmap H29-H35
+### 15.4 Roadmap H29-H35 (POSTERGADO — esperar datos del primer Explorar)
 
-| Hito | Brechas | Esfuerzo | Costo Extra |
-|------|---------|----------|-------------|
-| H29 | Brecha 3 + 4 + 6 | 1h | $0 |
-| H31 | Brecha 1 (engagement) | 1h | +$0.10-0.20 |
-| H32 | Brecha 2 (niche captions) + 5 (cross-ref) | 1.5h | +$0.05 |
-| H33 | Brecha 7 (time-decay) | 1h | $0 |
+⚠️ **NOTA:** Según Opus 5, las 8 brechas mejoran cómo se ordenan los candidatos. Y seguimos sin saber cuántos candidatos produce el sistema. **NO implementar ninguna brecha hasta tener el número del primer Explorar** (≥15 handles con bio no vacía, ≥5 seleccionables).
+
+| Hito | Brechas | Esfuerzo | Costo Extra | Status |
+|------|---------|----------|-------------|--------|
+| H29 | **HOTFIX** extra='forbid' solo en frontera de entrada | ✅ APLICADO | $0 | ✅ Listo |
+| H30 | Brecha 4 (tier) — **CUESTIONAR** rango 5K-50K primero | — | — | ⏳ Pendiente |
+| H31 | Brecha 1 (engagement) | 1h | +$0.10-0.20 | ⏳ Post-validación |
+| H32 | Brecha 2 (niche captions) + 5 (cross-ref) | 1.5h | +$0.05 | ⏳ Post-validación |
+| H33 | Brecha 7 (time-decay) | 1h | $0 | ⏳ Post-validación |
+| H35 | Brecha 8 (bot detection) | 2h | $0 | ⏳ Post-validación |
 | H35 | Brecha 8 (bot detection) | 2h | $0 |
 | **TOTAL** | **8 brechas** | **~6.5h** | **+$0.15-0.25** |
 
 ### 15.5 Request para Opus 5
 
-> Opus 5: Analiza las 8 brechas en `docs/ARQUITECTURA_LENS.md` Sección 20. Para cada una, proporciona: (1) confirmación del fix o alternativa, (2) código del patch, (3) orden de aplicación, (4) conflictos con Hito 28 Fix B.
+> Opus 5: Las 8 brechas están identificadas pero postergadas según tu recomendación (§3). No las implementamos hasta tener datos del primer Explorar. Brecha 4 (tier): esperamos tu análisis sobre si el rango 5K-50K tiene sentido para Purina/Nestlé.
 
 ---
 
-*Documento generado con contexto completo del repositorio — sesión 2026-08-20. Hito 28 aplicado (commit `a21dd97`): Fix A pre-flight mode-aware + Fix B DeepSeek skip explorar + extra='forbid'. HikerAPI balance: $43.00 USD. Para más detalle técnico, ver `docs/ARQUITECTURA_LENS.md` v5.4 (Pipeline Coverage Analysis con 8 brechas).*
+## 16. Hito 29 — HOTFIX Extra='forbid' Solo en Frontera de Entrada
+
+> **Fecha:** 2026-08-21
+> **Detectado por:** Opus 5
+> **Severidad:** 🔴 CRÍTICA — TODOS LOS RUNS MORÍAN ANTES DE GASTAR $0
+
+### 16.1 El Bug
+
+Opus 5 recomendó `extra="forbid"` en los schemas para cerrar la clase de bugs de "campo que se pierde en silencio". El equipo lo aplicó a los dos schemas. Pero:
+
+- `DiscoverySearchRequest` → frontera de entrada → `extra="forbid"` ✅ CORRECTO
+- `BriefStructured` → deserializa JSON persistido → `extra="forbid"` ❌ ROMPÍA TODO
+
+El workflow:
+```
+DiscoverySearchRequest.model_dump() → incluye max_candidates
+→ Se guarda en Postgres
+→ worker.py:324 BriefStructured(**brief_parsed) → ValidationError
+→ Run muere antes de la primera llamada HTTP
+```
+
+### 16.2 El Fix
+
+**Archivo:** `packages/discovery/discovery/schemas.py`
+
+```python
+# BriefStructured — ANTES (rompía):
+model_config = ConfigDict(extra="forbid")
+
+# BriefStructured — DESPUÉS (Hito 29):
+model_config = ConfigDict(extra="ignore")
+max_candidates: int = Field(default=20, ge=1, le=100)  # Nuevo campo
+```
+
+### 16.3 La Regla
+
+> **`forbid` va en la FRONTERA DE ENTRADA, `ignore` en la deserialización de datos persistidos.**
+
+### 16.4 Tests
+
+Archivo: `apps/api/tests/test_hito29_e2e_regression.py` — 7 tests anti-regresión.
+
+### 16.5 Plan Post-Hotfix (según Opus 5 §5)
+
+| # | Acción | Costo | Status |
+|---|--------|-------|--------|
+| 1 | Aplicar hotfix (Hito 29) | $0 | ✅ Listo |
+| 2 | Redeploy Railway + verificar worker recargó | $0 | ⏳ Pendiente |
+| 3 | curl get_balance() | ~$0.02 | ⏳ Pendiente |
+| 4 | Run Explorar (brief Purina Dog Chow) | ~$0.64 | ⏳ Pendiente |
+| 5 | Contar handles con bio no vacía | $0 | ⏳ Pendiente |
+| 6 | Analizar 5 handles seleccionados | ~$0.10 | ⏳ Pendiente |
+
+**Criterio de éxito:** ≥15 handles con bio no vacía, ≥5 seleccionables.
+
+---
+
+*Documento generado con contexto completo del repositorio — sesión 2026-08-20 (Hito 29 hotfix 2026-08-21). Fix A/B del Hito 28 intactos. Hito 29 hotfix aplicado: extra='forbid' solo en frontera de entrada. HikerAPI balance: $43.00 USD. 8 brechas postergadas hasta post-validación.*

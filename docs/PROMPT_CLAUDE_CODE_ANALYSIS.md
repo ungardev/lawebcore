@@ -1,12 +1,12 @@
 # PROMPT_CLAUDE_CODE_ANALYSIS — Índice de Auditorías LENS
 
-> **Última actualización:** 2026-08-20
+> **Última actualización:** 2026-08-21
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 28 (Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid')
+> **Hito actual:** Hito 29 (HOTFIX extra='forbid' solo en frontera de entrada — regresión corregida)
 > **HikerAPI balance:** $43.00 USD ✅
-> **NUEVO v5.4:** Audit #14 — Pipeline Coverage Analysis (8 brechas identificadas para Opus 5)
+> **NUEVO v5.5:** Audit #15 — Hito 29 Hotfix (extra='forbid' regresión detectada por Opus 5)
 
-Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente es **#14 — Pipeline Coverage Analysis** (análisis exhaustivo de 8 brechas en el pipeline de discovery para Opus 5).
+Este documento es un **índice histórico** de las auditorías de LENS Discovery. La auditoría más reciente es **#15 — Hito 29 Hotfix** (regresión crítica detectada por Opus 5: extra='forbid' solo en frontera de entrada).
 
 ---
 
@@ -26,7 +26,8 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **11** | `LENS_REUNION_2026-08-20.md` | **2026-08-20** | **Claude Code Opus 5** | Bug `parent_run_id` descartado, 5 correcciones a la documentación, recomendación $20 |
 | **12** | `LENS_REUNION_2026-08-20.md` (Fix A/B/C docs) | **2026-08-20** | **MiniMax** | Fix A (pre-flight), Fix B (DeepSeek), Fix C (useRunPolling) documentados |
 | **13** | *Commit `a21dd97`* | **2026-08-20** | **Claude Code Opus 5 + MiniMax** | Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid', 17 tests — **APLICADO** |
-| **14** | *`docs/ARQUITECTURA_LENS.md` v5.4* | **2026-08-20** | **MiniMax** | Pipeline Coverage Analysis: 8 brechas identificadas — engagement quality, niche captions, geo post-enrich, tier enforcement, cross-ref boost, verified boost, time-decay, bot detection avanzada. Roadmap H29-H35 propuesto para Opus 5 |
+| **14** | *`docs/ARQUITECTURA_LENS.md` v5.4* | **2026-08-20** | **MiniMax** | Pipeline Coverage Analysis: 8 brechas identificadas — engagement quality, niche captions, geo post-enrich, tier enforcement, cross-ref boost, verified boost, time-decay, bot detection avanzada. Roadmap postergado post-validación |
+| **15** | *`docs/hito29_hotfix.patch`* | **2026-08-21** | **Opus 5** | HOTFIX CRÍTICO: extra='forbid' en BriefStructured rompía TODOS los runs. Regla correcta: forbid en frontera de entrada (DiscoverySearchRequest), ignore en persistencia (BriefStructured). 48 runs históricos con campos que ya cambiaron. Fix: schemas.py BriefStructured extra=ignore + max_candidates. Tests anti-regresión en test_hito29_e2e_regression.py |
 
 ---
 
@@ -44,6 +45,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 26:   4 bugs críticos corregidos — dict columnas DB, frontend discovery_mode, polling explored, ledger try/except
 27:   parent_run_id en DiscoverySearchRequest (modo Analizar no repite discovery) + platforms default_factory
 28:   Fix A pre-flight mode-aware ($0.64/$0.10/$1.14) + Fix B DeepSeek skip explorar + extra='forbid' schemas
+29:   HOTFIX: extra='forbid' solo en frontera de entrada (regresión corregida) — BriefStructured extra=ignore + max_candidates
 ```
 
 ### Verificación Empírica (2026-08-20)
@@ -58,7 +60,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | Vercel deploy | ✅ 11:30 UTC (`df41d9e`) |
 | Migration 00106 | ✅ Aplicada y confirmada |
 | Modo Explorar en código | ✅ 4 bugs corregidos |
-| **Hito 28 commit** | ✅ `a21dd97` — Fix A/B + extra='forbid' aplicados |
+| **Hito 28 commit** | ✅ `a21dd97` — Fix A/B correctos, extra='forbid' parcialmente revertido por Hito 29 |
 | **HikerAPI balance** | ✅ **$43.00 USD** — recargado 2026-08-20 (~67 runs Explorar) |
 
 ### Bugs Resueltos
@@ -78,7 +80,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **`platforms` default= en vez de default_factory=** | **Hito 27** | Bug latente Pydantic v2; rompe con TikTok |
 | **Fix A: Pre-flight sobreestimaba costo** | **Hito 28** | Modo-aware: Explorar $0.64, Analizar real, Auto $1.14 — `a21dd97` |
 | **Fix B: DeepSeek corrompía decisión en Explorar** | **Hito 28** | Skip DeepSeek en Explorar; rationale honesto preservado — `a21dd97` |
-| **extra='forbid' en schemas** | **Hito 28** | BriefStructured + DiscoverySearchRequest — clase de bug cerrada — `a21dd97` |
+| **extra='forbid' REVERSIÓN — solo en frontera de entrada** | **Hito 29** | REVERSIÓN PARCIAL: extra='forbid' en BriefStructured rompía TODOS los runs. Regla correcta: forbid en DiscoverySearchRequest (frontera entrada), ignore en BriefStructured (persistencia) — `a21dd97` revertido |
 
 ### Bugs Abiertos
 
@@ -97,21 +99,18 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 
 1. ✅ **Migration 00106** — ejecutada y confirmada
 2. ✅ **Hito 27** — `parent_run_id` en DiscoverySearchRequest (commit `hito27`)
-3. ✅ **Hito 28** — Fix A (pre-flight mode-aware) + Fix B (DeepSeek skip) + extra='forbid' (commit `a21dd97`)
-4. ⏳ **Deploy Railway** — push `a21dd97` a producción (pre-flight requiere deploy para activar)
-5. ✅ **Deploy Railway** — push `a21dd97` a producción (Hito 28 aplicado)
-6. ✅ **Validación con $43** — ~$0.76 para primer run Explorar + Analizar 5 handles
-7. ⏳ **H29** — Tier enforcement + Verified boost + Geo post-enrichment (15 min, $0)
-8. ⏳ **H31** — Engagement quality score (1h, +$0.10-0.20)
-9. ⏳ **H32** — Niche captions + Cross-reference boost (1.5h, +$0.05)
-10. ⏳ **H33** — Time-decay (1h, $0)
-11. ⏳ **H35** — Bot detection avanzada (2h, $0)
+3. ✅ **Hito 28** — Fix A (pre-flight mode-aware) + Fix B (DeepSeek skip) + extra='forbid' parcial (commit `a21dd97`)
+4. ✅ **Hito 29 HOTFIX** — extra='forbid' solo en frontera de entrada (regresión corregida)
+5. ⏳ **Deploy Railway** — push Hito 29 a producción (HOTFIX crítico antes de cualquier run)
+6. ⏳ **Validación con $43** — ~$0.76 para primer run Explorar + Analizar 5 handles
+7. ⏳ **Brecha 4 (tier)** — cuestionar si rango 5K-50K tiene sentido ANTES de reforzarlo
+8. ⏳ **8 brechas restantes** — postergadas hasta tener datos del primer Explorar (≥15 handles con bio)
 
 ---
 
 ## Para Opus 5 — Última Auditoría
 
-La auditoría más reciente es **#14 — Pipeline Coverage Analysis** (`docs/ARQUITECTURA_LENS.md` Sección 20). Esta auditoría identifica 8 brechas en el pipeline actual de LENS Discovery.
+La auditoría más reciente es **#15 — Hito 29 Hotfix** (`docs/hito29_hotfix.patch` + `docs/LENS_RESUMEN_REUNION_2026-08-21.md`). Esta auditoría corrige una regresión crítica introducida por Opus 5 en el Hito 28: extra='forbid' aplicado incorrectamente a BriefStructured.
 
 ### Auditoría #14 — Pipeline Coverage Analysis
 
@@ -167,4 +166,4 @@ La auditoría más reciente es **#14 — Pipeline Coverage Analysis** (`docs/ARQ
 
 ---
 
-*Índice generado: 2026-08-20 — Proyecto LENS con 28 hitos aplicados, HikerAPI $43.00, 1 candidato histórico. Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid'. 17 tests nuevos. v5.4: Audit #14 — 8 brechas Pipeline Coverage Analysis para Opus 5. Validación tomorrow.*
+*Índice generado: 2026-08-21 — Proyecto LENS con 29 hitos aplicados, HikerAPI $43.00. Hito 29 hotfix: extra='forbid' solo en frontera de entrada (regresión corregida). Fix A/B del Hito 28 intactos. 8 brechas postergadas hasta post-validación. Validación hoy: ~$0.76.*

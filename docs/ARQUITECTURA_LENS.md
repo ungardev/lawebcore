@@ -1,12 +1,12 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.4)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.5)
 
-> **Versión:** 5.4 — 2026-08-20
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.3 (`hito28`)
-> **Commit de referencia:** `a21dd97` (Hito 28 aplicado — Fix A/B + extra='forbid')
+> **Versión:** 5.5 — 2026-08-21
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.4 (`pipeline coverage analysis`)
+> **Commit de referencia:** `4658e7e` (Pipeline Coverage Analysis v5.4 — 8 brechas para Opus 5)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), `LENS_AUDIT9_2026-08-19.md` (verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid')
+> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), `LENS_AUDIT9_2026-08-19.md` (verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid'), Hito 29 (2026-08-21: HOTFIX extra='forbid' solo en frontera de entrada)
 > **HikerAPI balance actual:** **$43.00 USD** ✅ (recargado 2026-08-20)
-> **NUEVO v5.4:** Pipeline Coverage Analysis — 8 brechas identificadas para Opus 5
+> **NUEVO v5.5:** Hito 29 Hotfix — extra='forbid' solo en frontera de entrada (regresión corregida)
 
 ---
 
@@ -1726,4 +1726,81 @@ if is_verified:
 
 ---
 
-*Documento generado: 2026-08-20 — Arquitectura LENS v5.4 (Hito 28 aplicado + Pipeline Coverage Analysis). HikerAPI balance: $43.00 USD. 8 brechas identificadas para Opus 5. Roadmap H29-H35 propuesto.*
+## 21. Hito 29 — Hotfix Extra='forbid' Solo en Frontera de Entrada
+
+> **Fecha:** 2026-08-21
+> **Auditoría:** #15 — Hito 29 Hotfix
+> **Detectado por:** Opus 5
+> **Severidad:** 🔴 CRÍTICA — TODOS LOS RUNS MORÍAN ANTES DE GASTAR $0
+
+### 21.1 Qué Pasó
+
+Opus 5 recomendó `extra="forbid"` en los schemas para cerrar la clase de bugs de "campo que se pierde en silencio". El equipo lo aplicó correctamente en el Hito 28 — a los dos schemas. Ahí está el problema: no se distinguish que esos dos schemas hacen cosas distintas.
+
+```
+discovery.py  →  DiscoverySearchRequest(...)         ← entrada de API
+memory.py:222 →  brief_parsed = brief.model_dump()   ← incluye max_candidates
+                          ↓ se guarda en Postgres
+worker.py:324 →  BriefStructured(**brief_parsed)     ← extra="forbid"
+                  ValidationError: max_candidates no permitido
+```
+
+`DiscoverySearchRequest` tiene `max_candidates`. `BriefStructured` **no lo tenía**. Con `forbid`, el worker revienta al deserializar, **antes de la primera llamada HTTP**.
+
+### 21.2 Alcance
+
+`launch_discovery_run` se invoca desde **tres endpoints** (`discovery.py:315, 511, 567`) y su firma recibe `DiscoverySearchRequest`. Los tres caminos —Explorar, Analizar y el chat— guardan el mismo dump.
+
+**Todos los runs fallan.** El producto estaba caído hasta aplicar el fix. Costo real: $0 (falla antes de gastar), pero la demo habría sido un fracaso.
+
+### 21.3 La Regla Correcta
+
+> **`forbid` va en la FRONTERA DE ENTRADA, `ignore` en la deserialización de datos persistidos.**
+
+En la API, `forbid` atrapa typos del cliente y ahí gana. En un schema que lee JSON guardado, `forbid` convierte cualquier evolución del schema en una rotura de todas las filas históricas — y hay 48 runs guardados con campos que ya cambiaron.
+
+### 21.4 El Fix
+
+**Archivo:** `packages/discovery/discovery/schemas.py`
+
+**BriefStructured (lee JSON persistido):**
+```python
+model_config = ConfigDict(extra="ignore")  # Antes: extra="forbid"
+max_candidates: int = Field(default=20, ge=1, le=100)  # Nuevo campo
+```
+
+**DiscoverySearchRequest (frontera de entrada — SIN CAMBIOS):**
+```python
+model_config = ConfigDict(extra="forbid")  # Correcto, permanece así
+```
+
+### 21.5 Tests Anti-Regresión
+
+Archivo: `apps/api/tests/test_hito29_e2e_regression.py`
+
+| Test | Descripción |
+|------|-------------|
+| `test_full_round_trip_discovery_request_to_brief_structured` | DiscoverySearchRequest → model_dump() → BriefStructured debe funcionar |
+| `test_briefstructured_ignores_extra_fields_from_persistence` | Campos unknown se ignoran (no fallan) |
+| `test_briefstructured_max_candidates_default_20` | Default de max_candidates es 20 |
+| `test_briefstructured_max_candidates_respected_when_provided` | max_candidates se respeta si está en JSON |
+| `test_discovery_search_request_still_forbids_extra_fields` | DiscoverySearchRequest SÍ rechaza typos |
+| `test_historical_run_sample_1` | Backward compat con runs históricos |
+| `test_historical_run_sample_2_with_old_fields` | Campos antiguos se ignoran |
+
+### 21.6 Verificación
+
+```bash
+psql $DATABASE_URL -c "SELECT brief_parsed ? 'max_candidates' FROM discovery_runs ORDER BY created_at DESC LIMIT 1;"
+# Debe devolver 't' — confirma que el bug estaba en los datos guardados
+```
+
+### 21.7 Lección
+
+Nueve auditorías, nueve bugs, todos de la misma familia — cosas que fallan sin avisar. El de hoy lo introdujo Opus 5 dando una regla a medias. Eso confirma el diagnóstico: **el problema no es la falta de cuidado, es que el sistema no avisa cuando algo va mal.**
+
+Por eso el paso que más rinde no es corregir bugs más rápido, sino el **test end-to-end que los haga visibles**. Con `extra='forbid'` bien puesto y un test que ejecute Explorar → Analizar de punta a punta, esta regresión habría durado treinta segundos en vez de llegar al día de la demo.
+
+---
+
+*Documento generado: 2026-08-21 — Arquitectura LENS v5.5 (Hito 29 hotfix aplicado). HikerAPI balance: $43.00 USD. Regresión de extra='forbid' corregida: forbid en frontera de entrada, ignore en persistencia. 8 brechas para Opus 5 — postergadas post-validación.*

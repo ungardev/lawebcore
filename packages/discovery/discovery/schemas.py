@@ -54,10 +54,25 @@ class AudienceGender(str, Enum):
 
 
 class BriefStructured(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # HITO 29 FIX — REGRESIÓN DEL HITO 28.
+    #
+    # `extra="forbid"` aquí rompía TODOS los runs. Este schema no valida
+    # entrada de API: deserializa `discovery_runs.brief_parsed`, que se guardó
+    # con `DiscoverySearchRequest.model_dump()` — y ese schema tiene
+    # `max_candidates`, que BriefStructured no tenía. Resultado:
+    #   worker.py:324  BriefStructured(**brief_parsed)
+    #   → ValidationError: Extra inputs are not permitted [max_candidates]
+    #   → el run muere antes de la primera llamada HTTP.
+    #
+    # Regla: `forbid` va en la FRONTERA DE ENTRADA (DiscoverySearchRequest),
+    # donde atrapa typos del cliente. En un schema que lee JSON persistido va
+    # `ignore`: 48 runs históricos tienen campos que ya no existen, y cualquier
+    # cambio futuro de schema volvería a romper las filas viejas.
+    model_config = ConfigDict(extra="ignore")
 
     product_name: str | None = None
     brand_id: UUID | None = None
+    max_candidates: int = Field(default=20, ge=1, le=100)
     brand_name: str | None = None
     industry: str | None = None
     niches: list[str] = Field(default_factory=list)
