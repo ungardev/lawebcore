@@ -820,9 +820,9 @@ class HikerAPIClient:
 
     def _normalize_user(self, user: dict) -> dict[str, Any]:
         pk = user.get("pk") or user.get("id") or user.get("user_id")
-        follower_count = user.get("follower_count", 0) or 0
-        following_count = user.get("following_count", 0) or 0
-        media_count = user.get("media_count", 0) or user.get("posts_count", 0) or 0
+        follower_count = user.get("follower_count")
+        following_count = user.get("following_count")
+        media_count = user.get("media_count") or user.get("posts_count")
 
         hd_pic = user.get("hd_profile_pic_url_info", {}).get("url", "") if isinstance(user.get("hd_profile_pic_url_info"), dict) else ""
         profile_pic = user.get("profile_pic_url", "") or hd_pic
@@ -843,24 +843,16 @@ class HikerAPIClient:
             "username": user.get("username", ""),
             "full_name": user.get("full_name", "") or user.get("fullName", ""),
             "biography": user.get("biography", ""),
-            "bio": user.get("biography", ""),
             "avatar_url": hd_pic or profile_pic,
-            "profilePicUrl": profile_pic,
-            "profilePicUrlHD": hd_pic,
             "follower_count": follower_count,
-            "followersCount": follower_count,
             "following_count": following_count,
-            "followsCount": following_count,
             "posts_count": media_count,
-            "postsCount": media_count,
             "is_business": bool(user.get("is_business", False)),
-            "isBusinessAccount": bool(user.get("is_business", False)),
             "is_verified": bool(user.get("is_verified", False)),
-            "verified": bool(user.get("is_verified", False)),
             "is_private": bool(user.get("is_private", False)),
             "pk": str(pk) if pk else None,
             "country": country_iso,
-            "locationName": user.get("location_name", "") or user.get("city", ""),
+            "location_name": user.get("location_name", "") or user.get("city", ""),
         }
 
 

@@ -504,6 +504,11 @@ detail=f"Tipo de archivo no soportado: {content_type}. Usa PDF, TXT, CSV, MD o J
 @router.post("/search", response_model=DiscoveryRunResponse)
 async def create_discovery_run(body: DiscoverySearchRequest, user: CurrentUserDep):
     """Crea y ejecuta un discovery_run sin chat conversacional."""
+    if not body.product_name:
+        raise HTTPException(status_code=400, detail="product_name es obligatorio")
+    if not body.niches:
+        raise HTTPException(status_code=400, detail="niches es obligatorio")
+
     from discovery.memory import conversation_memory
 
     from app.core.worker_enqueuer import enqueue_discovery_run
@@ -835,6 +840,24 @@ async def download_proposal_csv(run_id: UUID):
 
 # ---- Candidate management ----
 
+
+def _derive_tier(followers: int | None) -> str:
+    """Deriva el tier desde follower_count.
+
+    Alineado con classify_tier() en geo_boost.py:122-130.
+    4 tramos: NANO (<10k), MICRO (10k-100k), MID (100k-500k), MACRO (500k+).
+    """
+    if followers is None:
+        return "NANO"
+    if followers < 10_000:
+        return "NANO"
+    if followers < 100_000:
+        return "MICRO"
+    if followers < 500_000:
+        return "MID"
+    return "MACRO"
+
+
 @router.post("/candidates/{candidate_id}/save")
 async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     """Convierte un discovery_candidate a influencer real."""
@@ -847,26 +870,55 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    influencer = await railway_pg.insert(
+    follower_count = candidate.get("followers")
+    handle = candidate.get("handle", "")
+
+    existing = await railway_pg.select_one(
         table="influencers",
-        values={
-            "full_name": candidate.get("full_name", ""),
-            "email": candidate.get("contact_email", ""),
-            "phone": candidate.get("contact_phone", ""),
-            "country": candidate.get("country", "VE"),
-            "city": candidate.get("city", ""),
-            "primary_tier": "MICRO",
-            "primary_handle": candidate.get("handle", ""),
-            "avatar_url": candidate.get("avatar_url", ""),
-            "bio": candidate.get("bio", ""),
-            "is_discoverable": True,
-            "discovered_at": datetime.now(timezone.utc),
-            "discovery_query": "",
-            "discovery_confidence": candidate.get("match_score", 0),
-            "metadata": {"discovery_candidate_id": str(candidate_id)},
-        },
-        returning="representation",
+        select="id",
+        filters=[f"primary_handle=eq.{handle}"],
     )
+
+    if existing:
+        influencer_id = existing["id"]
+        await railway_pg.update(
+            table="influencers",
+            filters=[f"id=eq.{influencer_id}"],
+            values={
+                "full_name": candidate.get("full_name", ""),
+                "country": candidate.get("country", "VE"),
+                "city": candidate.get("city", ""),
+                "primary_tier": _derive_tier(follower_count),
+                "avatar_url": candidate.get("avatar_url", ""),
+                "bio": candidate.get("bio", ""),
+                "discovery_query": candidate.get("discovery_query", ""),
+                "discovery_confidence": candidate.get("match_score", 0),
+                "followers": follower_count,
+            },
+        )
+        influencer = {"id": influencer_id}
+    else:
+        influencer = await railway_pg.insert(
+            table="influencers",
+            values={
+                "full_name": candidate.get("full_name", ""),
+                "email": candidate.get("contact_email", ""),
+                "phone": candidate.get("contact_phone", ""),
+                "country": candidate.get("country", "VE"),
+                "city": candidate.get("city", ""),
+                "primary_tier": _derive_tier(follower_count),
+                "primary_handle": handle,
+                "avatar_url": candidate.get("avatar_url", ""),
+                "bio": candidate.get("bio", ""),
+                "is_discoverable": True,
+                "discovered_at": datetime.now(timezone.utc),
+                "discovery_query": candidate.get("discovery_query", ""),
+                "discovery_confidence": candidate.get("match_score", 0),
+                "followers": follower_count,
+                "metadata": {"discovery_candidate_id": str(candidate_id)},
+            },
+            returning="representation",
+        )
 
     await railway_pg.update(
         table="discovery_candidates",
@@ -884,7 +936,33 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
             [str(run_id)],
         )
 
-    return {"influencer_id": influencer["id"], "candidate_id": str(candidate_id)}
+    influencer_id = influencer["id"]
+
+    await railway_pg.insert(
+        table="influencer_social_accounts",
+        values={
+            "influencer_id": influencer_id,
+            "platform": "instagram",
+            "handle": handle,
+            "url": f"https://instagram.com/{handle}" if handle else None,
+            "is_primary": True,
+        },
+    )
+
+    await railway_pg.insert(
+        table="influencer_metrics_snapshot",
+        values={
+            "influencer_id": influencer_id,
+            "platform": "instagram",
+            "snapshot_date": datetime.now(timezone.utc).date(),
+            "follower_count": follower_count,
+            "engagement_rate": candidate.get("engagement_rate"),
+            "avg_likes": candidate.get("avg_likes"),
+            "raw_data": candidate.get("raw_payload", {}),
+        },
+    )
+
+    return {"influencer_id": influencer_id, "candidate_id": str(candidate_id)}
 
 
 @router.post("/candidates/{candidate_id}/dismiss")

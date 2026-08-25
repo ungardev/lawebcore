@@ -94,6 +94,7 @@ class DeepSeekClient:
         system: str | None = None,
         temperature: float = 0.1,
         max_tokens: int = 2000,
+        response_format: dict | None = None,
     ) -> LLMResponse:
         """Text completion via DeepSeek."""
         messages = []
@@ -102,7 +103,10 @@ class DeepSeekClient:
         messages.append({"role": "user", "content": prompt})
 
         client = self._build_client()
-        result = await self._call_with_retry(client, messages, temperature=temperature, max_tokens=max_tokens)
+        kwargs = {"temperature": temperature, "max_tokens": max_tokens}
+        if response_format:
+            kwargs["response_format"] = response_format
+        result = await self._call_with_retry(client, messages, **kwargs)
         logger.info(
             "llm_call",
             provider="deepseek",

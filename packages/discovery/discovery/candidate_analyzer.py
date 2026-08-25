@@ -180,14 +180,18 @@ Responde con un JSON array, un objeto por cada handle en orden:
 
 
 def _parse_batch_response(content: str) -> list[dict[str, Any]]:
+    """Parse LLM response as JSON. Uses response_format=json_object from the caller."""
+    import re
     content = content.strip()
-    match = re.search(r"\[[\s\S]*\]", content, re.DOTALL)
+    match = re.search(r"\{[\s\S]*\}", content, re.DOTALL)
     if not match:
-        raise ValueError(f"No JSON array found in response: {content[:200]}")
+        raise ValueError(f"No JSON object found in response: {content[:200]}")
     data = _json.loads(match.group())
-    if not isinstance(data, list):
-        raise ValueError(f"Expected JSON array, got: {type(data)}")
-    return data
+    if "scores" in data and isinstance(data["scores"], list):
+        return data["scores"]
+    if isinstance(data, list):
+        return data
+    raise ValueError(f"Expected scores array in response, got: {type(data)}")
 
 
 def _fallback_scores(candidate: dict[str, Any], elite_data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -245,7 +249,8 @@ def _fallback_scores(candidate: dict[str, Any], elite_data: dict[str, Any] | Non
         "content_quality": content_quality,
         "audience_quality": audience_quality,
         "brand_fit": brand_fit,
-        "ai_summary": None,
+        "ai_summary": "",
+        "is_fallback": True,
     }
 
 
@@ -319,6 +324,7 @@ class CandidateAnalyzer:
                         system=SYSTEM_PROMPT,
                         temperature=0.2,
                         max_tokens=2500,
+                        response_format={"type": "json_object"},
                     )
                     if cost_callback and result.cost_usd is not None:
                         cost_callback(

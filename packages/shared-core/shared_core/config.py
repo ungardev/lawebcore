@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     ARQ_REDIS_URL: str = "redis://localhost:6379/0"
 
     DEEPSEEK_API_KEY: str = ""
-    DEEPSEEK_MODEL: str = "deepseek-chat"
+    DEEPSEEK_MODEL: str = "deepseek-v3"
 
     GOOGLE_SERVICE_ACCOUNT_KEY: str = ""
     GOOGLE_DRIVE_FOLDER_ID: str = ""
@@ -90,6 +90,12 @@ class Settings(BaseSettings):
     HIKERAPI_5XX_BREAKER_THRESHOLD: int = 5
     HIKERAPI_5XX_BREAKER_TTL_S: int = 300
     RUN_MODE: Literal["live", "replay"] = "live"
+
+    # LENS Discovery Search Limits (Hito 33)
+    DISCOVERY_HASHTAG_TOP_LIMIT: int = 3
+    DISCOVERY_HASHTAG_RECENT_LIMIT: int = 2
+    DISCOVERY_KEYWORD_LIMIT: int = 3
+    DISCOVERY_TOP_SEARCH_LIMIT: int = 1
 
 
 @lru_cache

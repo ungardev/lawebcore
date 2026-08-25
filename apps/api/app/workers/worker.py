@@ -34,6 +34,15 @@ from discovery.tools import (
 from discovery.tools.geo_boost import geo_score, has_hard_geo_signal
 from discovery.tools.hikerapi_client import HikerAPIClient
 from shared_core import railway_pg, settings
+from shared_core.observability import (
+    DropLedger,
+    DropReason,
+    FunnelTracker,
+    RunEvent,
+    RunStatus,
+    determine_final_status,
+    drop_profile,
+)
 
 from app.core.discovery_cost_tracker import get_discovery_cost_tracker
 from app.core.metrics import (
@@ -272,6 +281,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] START run_id={run_id}", flush=True)
 
+        structlog.contextvars.bind_contextvars(
+            run_id=run_id,
+        )
+        logger.info(RunEvent.RUN_STARTED.value, run_id=run_id)
+
+        drop_ledger = DropLedger()
+        funnel = FunnelTracker()
+
         run = await railway_pg.select_one(
             table="discovery_runs",
             select="*",
@@ -299,7 +316,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             await budget_fuse.assert_budget_available(run_id, provider="hikerapi")
         except BudgetExhausted as e:
             error_msg = str(e)
-            await _run_set_status(run_id, "failed", error=error_msg)
+            await _run_set_status(run_id, RunStatus.ABORTED_BUDGET.value, error=error_msg)
             await _save_progress_message(
                 run_id,
                 f"🔴 Presupuesto mensual agotado: ${e.current_usd:.4f} de ${e.budget_usd:.2f}. "
@@ -391,8 +408,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         await _run_update_metadata(run_id, {
             "current_step": "step1_hashtag_search",
             "completed_steps": [],
-            "keywords_count": len(plan.keyword_queries),
-            "hashtags_count": len(plan.hashtag_queries),
+            "keywords_planned_count": len(plan.keyword_queries),
+            "keywords_executed_count": min(len(plan.keyword_queries), settings.DISCOVERY_KEYWORD_LIMIT + settings.DISCOVERY_TOP_SEARCH_LIMIT),
+            "hashtags_planned_count": len(plan.hashtag_queries),
+            "hashtags_executed_count": min(len(plan.hashtag_queries), settings.DISCOVERY_HASHTAG_TOP_LIMIT + settings.DISCOVERY_HASHTAG_RECENT_LIMIT),
             "candidates_found": 0,
             "replay_miss_count": 0,
         })
@@ -531,7 +550,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         async def _fetch_step1():
             from discovery.exceptions import SourceUnavailable
             results = []
-            for tag in plan.hashtag_queries[:3]:
+            for tag in plan.hashtag_queries[:settings.DISCOVERY_HASHTAG_TOP_LIMIT]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
                     results.extend(items)
@@ -544,7 +563,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         async def _fetch_step1_recent():
             from discovery.exceptions import SourceUnavailable
             results = []
-            for tag in plan.hashtag_queries[:2]:
+            for tag in plan.hashtag_queries[:settings.DISCOVERY_HASHTAG_RECENT_LIMIT]:
                 try:
                     items = await instagram_source.search_hashtag_recent(tag, limit=20)
                     results.extend(items)
@@ -559,7 +578,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             results = []
             target_country = (brief.audience_countries or ["VE"])[0].upper()
             geo_suffixes = VE_GEO_SUFFIXES[:2]
-            for kw in plan.keyword_queries[:3]:
+            for kw in plan.keyword_queries[:settings.DISCOVERY_KEYWORD_LIMIT]:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=10)
                     results.extend(items)
@@ -582,7 +601,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         async def _fetch_step3():
             from discovery.exceptions import SourceUnavailable
             results = []
-            for kw in plan.keyword_queries[:1]:
+            for kw in plan.keyword_queries[:settings.DISCOVERY_TOP_SEARCH_LIMIT]:
                 try:
                     items = await instagram_source.search_top_accounts(kw, limit=10)
                     results.extend(items)
@@ -945,9 +964,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             scored: list[tuple[str, float]] = []
             bot_flags: dict[str, int] = {}
             for handle, p in profiles.items():
-                followers = p.get("followersCount") or p.get("follower_count") or 0
-                following = p.get("followsCount") or p.get("following_count") or 0
-                posts_count = p.get("postsCount") or p.get("posts_count") or 0
+                followers = p.get("followersCount") if "followersCount" in p else p.get("follower_count")
+                following = p.get("followsCount") if "followsCount" in p else p.get("following_count")
+                posts_count = p.get("postsCount") if "postsCount" in p else p.get("posts_count")
+
+                if followers is None:
+                    followers = 0
+                if following is None:
+                    following = 0
+                if posts_count is None:
+                    posts_count = 0
 
                 if followers > 0:
                     if followers < min_followers:
@@ -1181,12 +1207,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
             about_data = e.get("about")
             profiles[handle].update({
-                "follower_count": e.get("followersCount", 0) or 0,
-                "followersCount": e.get("followersCount", 0) or 0,
-                "following_count": e.get("followsCount", 0) or 0,
-                "followsCount": e.get("followsCount", 0) or 0,
-                "posts_count": e.get("postsCount", 0) or 0,
-                "postsCount": e.get("postsCount", 0) or 0,
+                "follower_count": e.get("followersCount"),
+                "followersCount": e.get("followersCount"),
+                "following_count": e.get("followsCount"),
+                "followsCount": e.get("followsCount"),
+                "posts_count": e.get("postsCount"),
+                "postsCount": e.get("postsCount"),
                 "is_business": e.get("isBusinessAccount", False),
                 "isBusinessAccount": e.get("isBusinessAccount", False),
                 "is_verified": e.get("verified", False),
@@ -1277,7 +1303,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
-            followers = p.get("followersCount") or p.get("follower_count") or 0
+            followers = p.get("followersCount") if "followersCount" in p else p.get("follower_count")
+            if followers is None:
+                followers = 0
             if followers == 0:
                 untracked_no_followers += 1
                 if is_explore_mode:
@@ -1343,12 +1371,15 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         "fetched_at": datetime.now(UTC),
                     })
                     continue
+                drop_profile(handle, DropReason.MISSING_FOLLOWER_FIELD, "scoring", {"followers": 0, "is_explore_mode": False}, ledger=drop_ledger)
                 continue
             if followers < plan.min_followers:
                 low_followers_skipped += 1
+                drop_profile(handle, DropReason.BELOW_MIN_FOLLOWERS, "scoring", ledger=drop_ledger)
                 continue
             if followers > max_followers_cap:
                 above_max_followers += 1
+                drop_profile(handle, DropReason.ABOVE_MAX_FOLLOWERS, "scoring", {"followers": followers, "max_cap": max_followers_cap}, ledger=drop_ledger)
                 continue
 
             latest = p.get("latestPosts") or []
@@ -1374,9 +1405,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             if has_engagement_data:
                 if er > 0.30:
                     bots_filtered += 1
+                    drop_profile(handle, DropReason.BOT_PATTERN, "scoring", {"er": er, "threshold": 0.30}, ledger=drop_ledger)
                     continue
                 if er < 0.005 and followers > 5000:
                     bots_filtered += 1
+                    drop_profile(handle, DropReason.BOT_PATTERN, "scoring", {"er": er, "followers": followers, "reason": "very_low_er"}, ledger=drop_ledger)
                     continue
             else:
                 no_engagement_data += 1
@@ -1395,10 +1428,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             if any(handle_lower.endswith(tld) for tld in non_ve_handle_tlds):
                 geo_country_mismatch += 1
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "tld_mismatch", "tld": [t for t in non_ve_handle_tlds if handle_lower.endswith(t)]}, ledger=drop_ledger)
                 continue
 
             if about_country and about_country != target_country:
                 geo_country_mismatch += 1
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "about_country_mismatch", "about_country": about_country, "target": target_country}, ledger=drop_ledger)
                 continue
 
             non_ve_signals = (
@@ -1412,6 +1447,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             bio_geo = f"{bio.lower()} {handle.lower()} {p.get('full_name', '').lower()}"
             if any(sig in bio_geo for sig in non_ve_signals):
                 geo_country_mismatch += 1
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "bio_geo_signal_mismatch"}, ledger=drop_ledger)
                 continue
 
             geo_indicators = profile_data.get("geo_indicators", [])
@@ -1420,11 +1456,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 geo = max(geo, 0.85)
             if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country):
                 geo_no_signal += 1
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "low_geo_score", "geo_score": geo}, ledger=drop_ledger)
                 continue
 
             bio_or_username = f"{bio.lower()} {handle.lower()}"
             if any(kw in bio_or_username for kw in exclusion_keywords):
                 political_filtered += 1
+                drop_profile(handle, DropReason.POLITICAL_CONTENT, "scoring", {"reason": "exclusion_keyword_match"}, ledger=drop_ledger)
                 continue
 
             geo_passed += 1
@@ -1523,8 +1561,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "country": country_val,
                 "city": p.get("locationName") or p.get("location") or "",
                 "followers": followers,
-                "following": p.get("followsCount") or p.get("following_count") or 0,
-                "posts_count": p.get("postsCount") or p.get("posts_count") or 0,
+                "following": p.get("followsCount") if "followsCount" in p else p.get("following_count"),
+                "posts_count": p.get("postsCount") if "postsCount" in p else p.get("posts_count"),
                 "avg_likes": round(likes_avg) if latest else None,
                 "avg_comments": round(comments_avg) if latest else None,
                 "avg_views": None,
@@ -1744,11 +1782,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
 
-        # HITO 24: modo explorar usa status "explored" en vez de completed/partial
         if is_explore_mode:
-            final_status = "explored"
+            final_status = RunStatus.DELIVERED.value
         else:
-            final_status = "partial" if step3_degraded else "completed"
+            final_status = RunStatus.DEGRADED.value if step3_degraded else RunStatus.DELIVERED.value
+
+        logger.info(RunEvent.RUN_FINISHED.value, run_id=run_id, status=final_status, candidates=total)
 
         await _run_update(run_id, {
             "status": final_status,
@@ -1884,6 +1923,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         lens_active_runs.dec()
         lens_candidates_total.labels(status="inserted").inc(total)
+        structlog.contextvars.clear_contextvars()
         return {"run_id": run_id, "candidates": total}
 
     except SourceUnavailable as e:
@@ -1898,7 +1938,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             f"Fuente de datos no disponible ({e.provider}, HTTP {e.status_code}): {e.message}. "
             "Revisa: hikerapi.com/billing"
         )
-        await _run_set_status(run_id, "failed", error=error_msg)
+        await _run_set_status(run_id, RunStatus.FAILED.value, error=error_msg)
         try:
             await _save_progress_message(
                 run_id,
@@ -1915,20 +1955,22 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             pass
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
+        structlog.contextvars.clear_contextvars()
         return {"run_id": run_id, "error": error_msg, "candidates": 0}
 
     except ReplayMiss as e:
         _replay_miss_count_for_run += 1
         logger.warning("discovery_replay_miss", run_id=run_id, endpoint=e.endpoint, count=_replay_miss_count_for_run)
         await _run_update_metadata(run_id, {"replay_miss_count": _replay_miss_count_for_run})
-        await _run_set_status(run_id, "partial", error=f"Replay miss: {e.message} (+{_replay_miss_count_for_run - 1} more silent)")
+        await _run_set_status(run_id, RunStatus.DEGRADED.value, error=f"Replay miss: {e.message} (+{_replay_miss_count_for_run - 1} more silent)")
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
+        structlog.contextvars.clear_contextvars()
         return {"run_id": run_id, "candidates": 0}
 
     except Exception as e:
         logger.error("discovery_run_failed", run_id=run_id, error=str(e), exc_info=True)
-        await _run_set_status(run_id, "failed", error=str(e))
+        await _run_set_status(run_id, RunStatus.FAILED.value, error=str(e))
         try:
             tracker = get_discovery_cost_tracker()
             await tracker.flush(run_id)
@@ -1936,6 +1978,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             pass
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
+        structlog.contextvars.clear_contextvars()
         raise
 
 

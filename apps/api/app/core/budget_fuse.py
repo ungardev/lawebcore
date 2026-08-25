@@ -209,18 +209,6 @@ end
                 )
                 await r.set(alert_key, "1")
 
-    async def can_make_call(self, run_id: str) -> bool:
-        """Returns False if this run has hit MAX_CALLS_PER_RUN."""
-        try:
-            r = await self._get_redis()
-            run_key = self._run_key(run_id)
-            count_raw = await r.get(run_key)
-            count = int(count_raw) if count_raw else 0
-            return count < self.max_calls_per_run
-        except Exception as e:
-            logger.warning("budget_fuse_run_counter_error", error=str(e))
-            return True
-
     async def record_call(
         self,
         run_id: str,
@@ -258,10 +246,6 @@ end
             )
         except Exception as e:
             logger.warning("budget_fuse_record_error", error=str(e))
-
-    async def check_run_limit(self, run_id: str) -> bool:
-        """Returns True if run can continue, False if at limit."""
-        return await self.can_make_call(run_id)
 
     async def get_current_spend(self, provider: str = "hikerapi") -> BudgetState:
         """Return current spend state for observability."""
