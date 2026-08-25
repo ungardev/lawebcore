@@ -28,6 +28,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 | **13** | *Commit `a21dd97`* | **2026-08-20** | **Claude Code Opus 5 + MiniMax** | Hito 28: Fix A (pre-flight mode-aware), Fix B (DeepSeek skip explorar), extra='forbid', 17 tests — **APLICADO** |
 | **14** | *`docs/ARQUITECTURA_LENS.md` v5.4* | **2026-08-20** | **MiniMax** | Pipeline Coverage Analysis: 8 brechas identificadas — engagement quality, niche captions, geo post-enrich, tier enforcement, cross-ref boost, verified boost, time-decay, bot detection avanzada. Roadmap postergado post-validación |
 | **15** | *`docs/hito29_hotfix.patch`* | **2026-08-21** | **Opus 5** | HOTFIX CRÍTICO: extra='forbid' en BriefStructured rompía TODOS los runs. Regla correcta: forbid en frontera de entrada (DiscoverySearchRequest), ignore en persistencia (BriefStructured). 48 runs históricos con campos que ya cambiaron. Fix: schemas.py BriefStructured extra=ignore + max_candidates. Tests anti-regresión en test_hito29_e2e_regression.py |
+| **16** | *`docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md`* | **2026-08-25** | **Santiago Lanz + MiniMax** | Plan Main de alineación basado en Informe Lanz v1.2. 5 fases: Fallar en voz alta → Ensanchar búsqueda → Contrato datos → Tabla maestra → Decisión negocio. ~16-22h trabajo, ~$0.44/radicional. Basado en 25 claims verificadas contra código. Respetar estándar 13_data_contract_hub.md como padre. |
 
 ---
 
@@ -46,6 +47,7 @@ Este documento es un **índice histórico** de las auditorías de LENS Discovery
 27:   parent_run_id en DiscoverySearchRequest (modo Analizar no repite discovery) + platforms default_factory
 28:   Fix A pre-flight mode-aware ($0.64/$0.10/$1.14) + Fix B DeepSeek skip explorar + extra='forbid' schemas
 29:   HOTFIX: extra='forbid' solo en frontera de entrada (regresión corregida) — BriefStructured extra=ignore + max_candidates
+30-33: Alineación Lanz §7: Fallar en voz alta + Ensanchar búsqueda + Contrato datos + Tabla maestra
 ```
 
 ### Verificación Empírica (2026-08-20)
@@ -166,4 +168,4 @@ La auditoría más reciente es **#15 — Hito 29 Hotfix** (`docs/hito29_hotfix.p
 
 ---
 
-*Índice generado: 2026-08-21 — Proyecto LENS con 29 hitos aplicados, HikerAPI $43.00. Hito 29 hotfix: extra='forbid' solo en frontera de entrada (regresión corregida). Fix A/B del Hito 28 intactos. 8 brechas postergadas hasta post-validación. Validación hoy: ~$0.76.*
+*Índice generado: 2026-08-25 — Proyecto LENS con 29 hitos aplicados + Plan Lanz (Fases 0-5). HikerAPI $43.00. Plan Main alineación en docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md. Basado en Informe Santiago Lanz v1.2 (25 claims verificadas contra código). ~16-22h de trabajo restantes.*

@@ -1,12 +1,12 @@
 # La Web Core — Arquitectura Técnica LENS Discovery (versión 5.5)
 
-> **Versión:** 5.5 — 2026-08-21
+> **Versión:** 5.5 — 2026-08-25
 > **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.4 (`pipeline coverage analysis`)
-> **Commit de referencia:** `4658e7e` (Pipeline Coverage Analysis v5.4 — 8 brechas para Opus 5)
+> **Commit de referencia:** `81db353` (Hito 29 hotfix — extra='forbid' solo en frontera de entrada)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** `LENS_REVIEW_ARQUITECTURA_2026-08-14.md` (original), `LENS_AUDIT2_2026-08-14.md`, `LENS_AUDIT3_2026-08-14.md`, auditoría 5 (2026-08-17), auditoría 6 (2026-08-17), auditoría 7 (2026-08-18 + Opus 5), `LENS_AUDIT8_2026-08-19.md` (Opus 5 Hito 23), `LENS_AUDIT9_2026-08-19.md` (verificación empírica), Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A pre-flight mode-aware + Fix B DeepSeek skip + extra='forbid'), Hito 29 (2026-08-21: HOTFIX extra='forbid' solo en frontera de entrada)
+> **Auditorías previas:** Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A/B + extra='forbid'), Hito 29 (2026-08-21: HOTFIX extra='forbid'), **Santiago Lanz v1.2 (2026-08-24):** Informe de Alineación Técnica con Plan Main de 5 fases
 > **HikerAPI balance actual:** **$43.00 USD** ✅ (recargado 2026-08-20)
-> **NUEVO v5.5:** Hito 29 Hotfix — extra='forbid' solo en frontera de entrada (regresión corregida)
+> **Plan Lanz:** `docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` (Fases 0-5, ~16-22h trabajo, ~$0.44 extra/run)
 
 ---
 
