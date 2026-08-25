@@ -1,12 +1,12 @@
-# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.5)
+# La Web Core — Arquitectura Técnica LENS Discovery (versión 5.6)
 
-> **Versión:** 5.5 — 2026-08-25
-> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.4 (`pipeline coverage analysis`)
-> **Commit de referencia:** `81db353` (Hito 29 hotfix — extra='forbid' solo en frontera de entrada)
+> **Versión:** 5.6 — 2026-08-26
+> **Reemplaza a:** `docs/ARQUITECTURA_LENS.md` v5.5 (post-audit Lanz)
+> **Commit de referencia:** `bd973c7` (Hitos 30-34 aplicados — observabilidad, contrato datos, tabla maestra, ensanche, precisión IA)
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Auditorías previas:** Hito 26 (2026-08-20: 4 bugs críticos), Hito 27 (2026-08-20: parent_run_id + platforms), Hito 28 (2026-08-20: Fix A/B + extra='forbid'), Hito 29 (2026-08-21: HOTFIX extra='forbid'), **Santiago Lanz v1.2 (2026-08-24):** Informe de Alineación Técnica con Plan Main de 5 fases
-> **HikerAPI balance actual:** **$43.00 USD** ✅ (recargado 2026-08-20)
-> **Plan Lanz:** `docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` (Fases 0-5, ~16-22h trabajo, ~$0.44 extra/run)
+> **Auditorías previas:** Hito 26-29 (2026-08-20/21), **Santiago Lanz v1.2 (2026-08-24)**, **Claude Code Fable 5 (2026-08-26)** + subagente explore post-Hitos 30-34
+> **HikerAPI balance actual:** **~$38.00 USD** (~5 gastados en Hitos 30-34 + validación)
+> **Plan Lanz + Fable 5:** `docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` (Hitos #0-#10, ~28.5h trabajo, ~$7.42 extra)
 
 ---
 

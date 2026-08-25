@@ -1,7 +1,8 @@
 # Verificaciones Lanz §8 + H-2 — Resultado
 
 **Fecha:** 2026-08-26
-**Commit verificado:** `81db353`
+**Último commit verificado:** `bd973c7` (Hitos 30-34 aplicados)
+**Commit verificado originalmente para V0:** `81db353`
 
 | # | Pregunta | Respuesta | Evidencia | Bloquea |
 |---|----------|-----------|-----------|---------|
@@ -27,4 +28,6 @@ Requieren acceso al panel de Railway. Son verificaciones operacionales, no bloqu
 
 ## Conclusión General
 
-**Lista para ejecutar Hitos 30-35.** Las verificaciones V1-V4 son operacionales y no bloquean el desarrollo.
+**Hitos 30-34 aplicados** (commit `bd973c7`). Pendientes: Hitos #0 (regresión merge), #1-#10 según plan detallado.
+
+Las verificaciones V1-V4 son operacionales y no bloquean código. Deben ejecutarse en Railway cuando sea posible.

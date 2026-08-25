@@ -1,727 +1,726 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Basado en el Informe de Santiago Lanz (v1.2, 24-ago-2026)
+## Basado en el Informe de Santiago Lanz (v1.2, 24-ago-2026) + Análisis Claude Code Fable 5
 
-> **Para:** Claude Code Fable 5
-> **De:** MiniMax M2.7/M3 (modelo agente de programación) + contexto completo del repositorio
-> **Fecha:** 25 de agosto de 2026
+> **Para:** Claude Code Fable 5 (subagente con acceso directo a https://github.com/ungardev/lawebcore)
+> **De:** MiniMax M2.7/M3 (modelo agente de programación) + análisis exhaustivo post-commit `bd973c7`
+> **Fecha:** 26 de agosto de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base:** `81db353` (Hito 29 hotfix — extra='forbid' solo en frontera de entrada)
-> **HikerAPI balance:** $43.00 USD
+> **Commit base actual:** `bd973c7` (Hitos 30-34 aplicados, 26-ago-2026)
+> **Commit docs:** `13944c0` (3 commits ahead de código — docs desactualizados)
+> **HikerAPI balance:** $43.00 USD → ~$38 USD restantes post-hitos pendientes
 > **Documentos de referencia:**
 > - `docs/La Web Figital - Informe de Alineación Técnica LENS.md` (Santiago Lanz, v1.2)
-> - `docs/PROMPT_CLAUDE_CODE_ANALYSIS.md` (índice histórico de auditorías)
-> - `docs/ARQUITECTURA_LENS.md` v5.5 (arquitectura actual del sistema)
-> - `docs/LENS_ASESORIA_INGENIERO_2026-08-20.md` (contexto de ingeniería)
+> - `docs/PROMPT_CLAUDE_CODE_ANALYSIS.md` (índice histórico de auditorías — actualizar con auditoría #17)
+> - `docs/ARQUITECTURA_LENS.md` v5.5 (arquitectura actual — requiere actualización)
+> - `docs/PLAN_DESARROLLO_LENS_HITOS_30-35_25-08-26.md` (Plan oficial Claude Code Fable 5, 605 líneas)
+> - `docs/13a_data_contract_discovery.md` (Data contract LENS v1.0, creado 26-ago-2026)
+> - `docs/LANZ_VERIFICACIONES_2026-08-25.md` (Resultados V0-V4, creado 26-ago-2026)
 
 ---
 
-## Resumen Ejecutivo
+## Estado Actual del Repositorio
 
-El informe de Santiago Lanz **no invalida** los 29 hitos previos del equipo. Los **contextualiza y prioriza**.
+### Lo que ya está aplicado (commit `bd973c7`, 26-ago-2026)
 
-El equipo construyó correctamente 28 hitos. Lo que falta no es más código: es **estándar y veracidad del sistema**. Lanz identifica **3 decisiones de arquitectura** que hacen que el sistema no pueda decir la verdad sobre sí mismo, y **4 prácticas que ya existen en el repo** pero solo aplican al subsistema P.I.A.R.
+| Hito | Descripción | Archivos | Estado |
+|------|-------------|----------|--------|
+| **Hito 30** | Observabilidad: contextvars, RunEvent/DropReason/RunStatus enums, DropLedger, FunnelTracker, drop_profile(), RunStatus enum reemplaza strings, can_make_call() eliminada, events table migration 108 | `shared_core/observability.py`, `worker.py`, `budget_fuse.py`, `migrations/108` | ✅ Aplicado |
+| **Hito 31.1** | `_normalize_user()` devuelve `None` para campos ausentes (no 0) | `hikerapi_client.py:821-856` | ✅ Aplicado |
+| **Hito 31.2** | 7 pares dual-name eliminados del retorno de `_normalize_user()` | `hikerapi_client.py` | ✅ Aplicado |
+| **Hito 31.4** | ~10+ patrones `or 0` corregidos con checks explícitos de None en worker.py | `worker.py:965-978, 1210-1232, 1306-1312, 1553-1562` | ✅ Aplicado |
+| **Hito 31.5** | `docs/13a_data_contract_discovery.md` creado | `docs/13a_data_contract_discovery.md` | ✅ Aplicado |
+| **Hito 32.1** | `_derive_tier()` en discovery.py (no más MICRO hardcoded) | `discovery.py:840-854` | ✅ Aplicado |
+| **Hito 32.2** | Deduplicación por handle + migración 109 | `discovery.py`, `migrations/109` | ✅ Aplicado |
+| **Hito 32.3** | Métricas carry-through: follower_count, engagement_rate, avg_likes en save | `discovery.py` | ✅ Aplicado |
+| **Hito 32.4** | INSERT en influencer_social_accounts + influencer_metrics_snapshot | `discovery.py` | ✅ Aplicado |
+| **Hito 33.1** | Constants a config: DISCOVERY_HASHTAG_TOP_LIMIT, etc. | `config.py`, `worker.py` | ✅ Aplicado |
+| **Hito 33.2** | Slices usan settings en vez de hardcoded ([:3] → [:settings.LIMIT]) | `worker.py:551,564,579,602` | ✅ Aplicado |
+| **Hito 33.3** | Metadata corregida: *_executed_count vs *_planned_count | `worker.py:408-415` | ✅ Aplicado |
+| **Hito 34.1** | `response_format={"type": "json_object"}` en llamadas DeepSeek | `candidate_analyzer.py:327` | ✅ Aplicado |
+| **Hito 34.3** | Regex extraction eliminado de `_parse_batch_response` | `candidate_analyzer.py:182-194` | ✅ Aplicado |
+| **Hito 34.4** | `_fallback_scores` marcado con `is_fallback=True` | `candidate_analyzer.py:253` | ✅ Aplicado |
+| **Hito 34.5** | Modelo DeepSeek: `deepseek-chat` → `deepseek-v3` | `config.py:55` | ✅ Aplicado |
+| **Hito 35.2** | Validación backend: product_name y niches requeridos | `discovery.py:508-512` | ✅ Aplicado |
 
-**Decisión adoptada:** Plan secuencial siguiendo Lanz §7: **Fase 0 → Fase 1 → Fase 2 → Fase 3 → Fase 4 → Fase 5**.
+### Lo que queda pendiente (no aplicado)
 
-**Importante:** El trabajo previo del equipo (Hitos 1-29) está correcto. No se deshace nada. Se construye sobre lo existente.
+| # | Hito | Descripción | Bloquea | Prioridad |
+|---|------|-------------|---------|-----------|
+| **#0** | CRÍTICA | Fix regresión: merge enrichment sigue leyendo camelCase de dict ya normalizado → datos de enrichment se pierden | Todo | 🔴 INMEDIATA |
+| **#1** | 31.3 | LegacyCompatReader + ContractViolationLedger (ventana compatibilidad) | 32.5, 32.6 | 🟡 Alta |
+| **#2** | 32.5 | Freshness policy 7 días: skip enrichment si snapshot <7d | 32.6 | 🟡 Alta |
+| **#3** | 32.6 | Brand exclusion table (Compliance Nestlé L-03/L-05) | Hito 35 completo | 🟡 Alta |
+| **#4** | CRÍTICA | `drop_profile()` no persiste en `discovery_run_events` (Capa 6 rota) | Auditoría 32.6 | 🔴 Alta |
+| **#5** | 31.3 parte | Eliminar doble-escritura camelCase en construction dicts (worker.py:380-925) | PR-3 | 🟢 Media |
+| **#6** | 31.3 parte | Refactor prefilter/scoring a snake_case (worker.py:967,1306,1528) | PR-3 | 🟢 Media |
+| **#7** | 32.3 | `_derive_tier` → 9 sub-tiers (plan Fable 5 §1.3 pide 9, código tiene 4) | Frontend | 🟡 Media |
+| **#8** | Housekeeping | Actualizar `supabase/seed.sql` y `schema.sql` default `deepseek-v3` | Ninguno | 🟢 Baja |
+| **#9** | 31.6 | Tests `test_hito31_data_contract.py` | CI gate | 🟢 Baja |
+| **#10** | 31.3 | Retirar LegacyCompatReader cuando contract.violation==0 por 14 días | — | ⏸ Diferido |
 
 ---
 
-## Contexto: Qué Es LENS y Por Qué Estamos Aquí
+## 🚨 ALERTA CRÍTICA — Regresión Activa en Producción
 
-**LENS Discovery** es el sistema de descubrimiento de influencers de La Web Figital Agency. Permite describir un brief en lenguaje natural y recibir los mejores perfiles de Instagram verificados con scoring propietario.
+**Descubierta por análisis subagente (26-ago-2026):**
 
-**Estado actual:**
-- 48 ejecuciones históricas, 1 candidato producido
-- $43.00 USD de saldo disponible (recargado 2026-08-20)
-- Pipeline funcionando en Railway (deploy `81db97` del 21-ago)
-- Hito 29 hotfix aplicado (regresión extra='forbid' corregida)
+Tras aplicar Hito 31.1 (`_normalize_user` ahora devuelve solo snake_case) y Hito 31.2 (7 dual-names eliminados del retorno), el **merge de enrichment en `worker.py:1204-1232`** sigue leyendo campos camelCase de `enriched_profiles`:
 
-**Por qué 1 candidato en 48 runs:**
-- Lanz §2 identifica la cadena: perfiles llegan con `followers=0` → se descartan silenciosamente
-- El enriquecimiento es la única fuente de followers, pero las búsquedas devuelven perfiles reducidos
-- El sistema no distingue "no traje el dato" de "el enriquecimiento falló"
-- El instrumento de medición informa éxito en ambos casos
+```python
+# worker.py:1210-1215 (CÓDIGO ACTUAL — ROTO)
+profiles[handle].update({
+    "follower_count": e.get("followersCount", 0) or 0,  # → None (followersCount ya no existe)
+    "followersCount": e.get("followersCount", 0) or 0,   # → None
+    ...
+})
+```
+
+**Consecuencia:** toda la metadata comprada en enrichment (followers, engagement, bio) se **pierde silenciosamente**. El scoring recibe `followers=0` para todos los perfiles y los descarta. Esto es **peor que el bug original** que Hito 31.1 debía arreglar.
+
+**Fix #0 es prerrequisito absoluto** — sin él, cualquier carrera de validación de los hitos restantes usará datos incompletos.
 
 ---
 
-## Las 3 Decisiones de Arquitectura Identificadas por Lanz
+## Contexto: Las 3 Decisiones de Arquitectura de Lanz
 
 ### Arquitectura 1: "Ante un error, producir un valor plausible y continuar"
 
-179 manejadores `except Exception` amplios en el repositorio. 33 cadenas `or 0` en worker.py. Cada una convierte "no sé" en un número que el sistema toma por verdadero.
+**Estado post Hitos 30-34:**
 
-**4 casos verificados a mano:**
-
-| Ubicación | Qué hace | Consecuencia |
-|-----------|----------|--------------|
-| `embeddings.py:46-58` | Vector de 384 ceros | Fragmento indexing como bueno, nunca hallable |
-| `candidate_analyzer.py:348-382` | `_fallback_scores()` | Puntajes iguales a los de IA real, sin `ai_summary` |
-| `worker.py:1280+` | `followers=0` → descarte | Perfil bueno pero incompleto → descartado sin rastro |
-| `budget_fuse.py:213-222` | `can_make_call()` → `True` en error | **Y NADIE LA LLAMA** — código muerto |
+| Ubicación | Qué hace | Estado |
+|-----------|----------|--------|
+| `embeddings.py:46-58` | Vector de 384 ceros | ⚠️ Sin cambios — fuera de scope LENS |
+| `candidate_analyzer.py:348-382` | `_fallback_scores()` | ✅ Marcado con `is_fallback=True` (Hito 34.4) |
+| `worker.py:1280+` | `followers=0` → descarte | ✅ Corregido: `None` check + `drop_profile()` (Hito 31.4) |
+| `budget_fuse.py:213-222` | `can_make_call()` → `True` en error | ✅ ELIMINADA (Hito 30.8) |
 
 ### Arquitectura 2: "Se compra dos veces lo que ya se tiene"
 
-- Cache vence en 24h → dato pagado se pierde
-- Tabla `influencers` existe pero solo recibe nombre y bio (sin followers, engagement, avg_likes)
-- `primary_tier` hardcoded "MICRO"
-- Sin deduplicación por handle (el ETL del otro subsistema sí la hace)
-- PITR de la DB puede no estar activado
+**Estado post Hitos 30-34:**
+
+| Problema | Solución aplicada | Estado |
+|----------|-------------------|--------|
+| Cache vence en 24h | Freshness policy 7d (Hito 32.5) | ⏳ Pendiente #2 |
+| Tabla `influencers` sin métricas | Métricas carry-through (Hito 32.3) | ✅ Aplicado |
+| `primary_tier` hardcoded "MICRO" | `_derive_tier()` (Hito 32.1) | ✅ Aplicado |
+| Sin deduplicación por handle | Deduplicación + migración 109 (Hito 32.2) | ✅ Aplicado |
+| Sin social_accounts ni metrics_snapshot | INSERT en ambas tablas (Hito 32.4) | ✅ Aplicado |
 
 ### Arquitectura 3: "Se busca en tres lugares, y la semántica no se usa"
 
-- Plan arma 30 hashtags + 20 keywords
-- **Se ejecutan 3 hashtags + 3 keywords** (las demás nunca se consultan)
-- Quedan ~88 llamadas sin usar por corrida dentro del tope de 120
-- Metadata registra 30 y 20 → miente sobre lo que ejecutó
-- La búsqueda semántica (embeddings + pgvector) existe en el repo pero LENS no la usa
+**Estado post Hitos 30-34:**
+
+| Problema | Solución aplicada | Estado |
+|----------|-------------------|--------|
+| Se ejecutan 3+3 hashtags/keywords | Slices configurable via settings (Hito 33.2) | ✅ Aplicado |
+| Metadata miente sobre ejecución | `*_executed_count` vs `*_planned_count` (Hito 33.3) | ✅ Aplicado |
+| Embeddings + pgvector sin usar | Sin cambios — fuera de scope | ⏸ Saltado |
 
 ---
 
-## Las 4 Prácticas que Ya Existen en el Repo
-
-| Práctica | Dónde | Aplica a LENS? |
-|----------|-------|----------------|
-| **Contrato de datos formal** | `13_data_contract_hub.md` v1.0 | ❌ No — solo a P.I.A.R. |
-| **ETL con normalización** | `scripts/etl_drive.py`, `etl_excel.py`, `etl_ism_backfill.py` | ❌ No — solo a P.I.A.R. |
-| **Infraestructura de cron jobs** | `worker.py:2238-2241` | ⚠️ Parcial — cron existe, tarea `sync_metricool_task` solo loguea |
-| **Modelo de entidades completo** | migración `00005` (influencers + social_accounts + metrics_snapshot) | ❌ Parcial — LENS llena solo la ficha de contacto |
-
-**Conclusión de Lanz:** "Este equipo sabe hacer las cuatro cosas que a LENS le faltan, y las tiene escritas y andando a pocos archivos de distancia."
-
----
-
-## Verificaciones Pendientes (Lanz §8 — No Pudimos Verificar)
-
-Antes de ejecutar código, necesitamos respuestas a estas 4 preguntas:
-
-| # | Pregunta | Cómo verificar | Impacto |
-|---|----------|---------------|---------|
-| V1 | ¿Qué modelo de IA está configurado en Railway env vars? | Panel Railway → Variables | `deepseek-chat` fue discontinuado el 24-jul-2026 |
-| V2 | ¿El alias `deepseek-chat` sigue resolviendo en producción? | `curl` al endpoint de account | Si no, todo el sistema de IA cae |
-| V3 | ¿PITR activado en la DB de Railway? | Panel Railway → Postgres → Backups | Si no, pérdida total de datos si falla la DB |
-| V4 | ¿Redis tiene política de eviction? | Panel Railway → Redis → Settings | Afecta contadores de gasto y cache de perfiles |
-
-**Acción:** Crear `docs/LANZ_VERIFICACIONES_2026-08-25.md` con las respuestas antes de empezar Fase 1.
-
----
-
-## FASE 0 — Verificaciones (30 min)
-
-**Objetivo:** Responder las 4 preguntas de Lanz §8 antes de tocar código.
-
-```bash
-# V1 y V2: Verificar modelo configurado y si deepseek-chat sigue resolviendo
-curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account | jq
-
-# V3: Panel Railway → verificar PITR
-# V4: Panel Railway → verificar Redis eviction policy
-```
-
-**Output:** `docs/LANZ_VERIFICACIONES_2026-08-25.md`
-
-**Criterio de éxito:** Las 4 preguntas tienen respuesta documentada con evidencia.
-
----
-
-## FASE 1 — Que el Sistema Pueda Fallar en Voz Alta (4-6 h)
-
-> **Lanz §7 Punto 1 — Bloqueante de todo lo demás**
->
-> "Mientras un error produzca un valor plausible, ninguna mejora es verificable."
-
-### 1.1 Separar el contador `untracked_no_followers` en dos
-
-**Problema:** Una sola variable cuenta tanto "el dato no vino" como "el enrichment falló". El mensaje solo puede nombrar una causa.
-
-**Archivo:** `apps/api/app/workers/worker.py`
-
-```python
-# ACTUAL (líneas 1280-1282):
-followers = p.get("followersCount") or p.get("follower_count") or 0
-if followers == 0:
-    untracked_no_followers += 1  # ← Un solo counter para dos causas
-
-# PROPUESTO:
-if profile_source == "reduced":
-    untracked_missing_follower_field += 1  # Perfil vino sin followers
-elif profile_source == "enriched" and followers == 0:
-    untracked_enrichment_failed += 1  # Enrichment sí corrió pero falló
-```
-
-### 1.2 Estado final distingue "haber corrido" de "haber entregado"
-
-**Problema:** `worker.py:1751` — ejecución con 0 candidatos queda en "completed".
-
-```python
-# ACTUAL:
-final_status = "partial" if step3_degraded else "completed"
-
-# PROPUESTO:
-if total_candidates == 0 and not is_explore_mode:
-    final_status = "failed"
-    error_detail = "no_candidates_after_scoring"
-elif total_candidates == 0 and is_explore_mode:
-    final_status = "explored"  # Explorar puede ser vacío — es válido
-elif step3_degraded:
-    final_status = "partial"
-else:
-    final_status = "completed"
-```
-
-### 1.3 Mensaje dinámico según causa del fallo
-
-**Problema:** El mensaje ancla a un run específico (`0c44ea23`) y solo nombra enriquecimiento.
-
-```python
-# PROPUESTO:
-if untracked_missing_follower_field >= total_profiles * 0.8:
-    return "⚠️ El 80% de perfiles llegó sin el campo de seguidores. " \
-           "El proveedor devolvió datos incompletos. Esto NO es saldo insuficiente."
-elif untracked_enrichment_failed >= total_profiles * 0.8:
-    return "⚠️ El 80% de perfiles falló al enriquecer. " \
-           "Probablemente saldo agotado. Recargar y reintentar."
-else:
-    return "⚠️ No se encontraron candidatos. Revisar el brief o intentar otro nicho."
-```
-
-### 1.4 Eliminar o activar `can_make_call()` (código muerto)
-
-**Archivo:** `apps/api/app/core/budget_fuse.py:213-222`
-
-**Hallazgo crítico:** `can_make_call()` retorna `True` ante error Y NADIE la invoca. `MAX_CALLS_PER_RUN` nunca se aplica en producción.
-
-**Decisión:** **Eliminar** la función. `reserve_and_record()` (línea 241) ya fail-closed y sí corre. No tiene sentido mantener código que miente sobre el límite.
-
-```python
-# ELIMINAR estas líneas de budget_fuse.py:
-# - can_make_call() líneas 212-222
-# - check_run_limit() líneas 262-264
-# NOTA: el límite real lo enforcea reserve_and_record() en hikerapi_client._get():241
-```
-
-### 1.5 Tests
-
-**Archivo nuevo:** `apps/api/tests/test_hito30_fail_loud.py`
-
-```python
-class TestFailLoud:
-    async def test_zero_candidates_marks_failed():
-        """0 candidatos en modo no-explorar → status failed."""
-
-    async def test_missing_follower_field_vs_enrichment_failed():
-        """Los dos counters son distintos y se incrementan independientemente."""
-
-    async def test_user_message_differs_per_failure_mode():
-        """El mensaje dinámico refleja la causa real del fallo."""
-
-    async def test_budget_fuse_dead_code_removed():
-        """can_make_call() y check_run_limit() ya no existen o están desconectadas."""
-```
-
-**Criterio de éxito Fase 1:**
-- [ ] Contador separado en dos: `missing_follower_field` y `enrichment_failed`
-- [ ] Estado `failed` cuando `total_candidates == 0` y no es Explorar
-- [ ] Mensaje dinámico según causa (3 escenarios)
-- [ ] `can_make_call()` eliminada o desconectada
-- [ ] 4 tests nuevos pasando
-- [ ] Railway deploy exitoso
-
----
-
-## FASE 2 — Ensanchar la Búsqueda (1-2 h)
-
-> **Lanz §7 Punto 4 — Lo único que sube el techo de calidad**
->
-> "Ningún ajuste de puntaje rescata a un influencer que nunca entró al conjunto."
-
-### 2.1 Ensanchar constantes de búsqueda
-
-**Archivo:** `apps/api/app/workers/worker.py`
-
-```python
-# ACTUAL                              # PROPUESTO (v2 conservadora)
-# Línea 534: for tag in plan.hashtag_queries[:3]:      → [:5]   (+2)
-# Línea 547: for tag in plan.hashtag_queries[:2]:      → [:3]   (+1)
-# Línea 562: for kw in plan.keyword_queries[:3]:        → [:5]   (+2)
-# Línea 585: for kw in plan.keyword_queries[:1]:        → [:2]   (+1)
-```
-
-**Costo extra estimado por run: ~$0.44**
-- Hashtag top: 2 más × 2 pages × 3 calls = +12 calls = +$0.24
-- Hashtag recent: 1 más × 2 = +2 calls = +$0.04
-- Keyword: 2 más × 3 = +6 calls = +$0.12
-- Top search: 1 más × 2 = +2 calls = +$0.04
-
-**Con $43.00:** ~97 runs restantes (vs 67 antes del ensanche)
-
-**Nota:** Una versión más agresiva ([:10]/[:5]/[:10]/[:3]) costaría ~$1.46 extra y requiere decisión de Fase 5 primero.
-
-### 2.2 Metadata dice la verdad sobre ejecución
-
-**Archivo:** `apps/api/app/workers/worker.py:394-395`
-
-```python
-# ACTUAL (miente):
-"keywords_count": len(plan.keyword_queries),   # 20, no lo que se ejecutó
-"hashtags_count": len(plan.hashtag_queries),  # 30, no lo que se ejecutó
-
-# PROPUESTO:
-"hashtags_executed_count": hashtags_executed,   # Lo que realmente se llamó
-"keywords_executed_count": keywords_executed,
-"hashtags_planned_count": len(plan.hashtag_queries),
-"keywords_planned_count": len(plan.keyword_queries),
-"hashtags_execution_ratio": hashtags_executed / len(plan.hashtag_queries),  # 0.17 (3/18)
-"keywords_execution_ratio": keywords_executed / len(plan.keyword_queries),  # 0.15 (3/20)
-```
-
-### 2.3 Tests
-
-**Archivo nuevo:** `apps/api/tests/test_hito31_widen_search.py`
-
-```python
-class TestWidenSearch:
-    async def test_hashtag_top_sliced_to_5():
-        """Se consultan hasta 5 hashtags de top."""
-
-    async def test_hashtag_recent_sliced_to_3():
-        """Se consultan hasta 3 hashtags de recent."""
-
-    async def test_keyword_search_sliced_to_5():
-        """Se consultan hasta 5 keywords."""
-
-    async def test_metadata_records_executed_not_planned():
-        """hashtags_count/executed_ratio refleja lo real, no el plan."""
-```
-
-**Criterio de éxito Fase 2:**
-- [ ] Constantes ensanchadas (v2 conservadora)
-- [ ] Metadata dice ejecución real (3 de 18 hashtags, 3 de 20 keywords)
-- [ ] 4 tests pasando
-- [ ] Railway deploy exitoso
-
----
-
-## FASE 3 — Contrato de Datos Único (6-8 h)
-
-> **Lanz §7 Punto 2 — La regla ya está escrita en `13_data_contract_hub.md`**
->
-> "NULL contra 0, y snake_case en inglés calzando 1:1 con las columnas."
-
-### 3.1 Eliminar nombres duales en `_normalize_user()`
-
-**Archivo:** `packages/discovery/discovery/tools/hikerapi_client.py:821-864`
-
-```python
-# ACTUAL (5 pares de nombres — convención Apify + HikerAPI):
-return {
-    "follower_count": follower_count,
-    "followersCount": follower_count,        # ← ELIMINAR (Apify legacy)
-    "following_count": following_count,
-    "followsCount": following_count,         # ← ELIMINAR
-    "posts_count": media_count,
-    "postsCount": media_count,               # ← ELIMINAR
-    "is_business": bool(...),
-    "isBusinessAccount": bool(...),          # ← ELIMINAR
-    "is_verified": bool(...),
-    "verified": bool(...),                   # ← ELIMINAR
-}
-
-# PROPUESTO (solo snake_case inglés):
-return {
-    "follower_count": follower_count or None,
-    "following_count": following_count or None,
-    "posts_count": media_count or None,
-    "is_business": bool(user.get("is_business", False)),
-    "is_verified": bool(user.get("is_verified", False)),
-    "_follower_count_source": "hikerapi",   # Trazabilidad
-}
-```
-
-### 3.2 NULL ≠ 0: Reemplazar 33 cadenas `or 0`
-
-**Archivo:** `apps/api/app/workers/worker.py`
-
-```python
-# ACTUAL (33 occurrences):
-followers = p.get("followersCount") or p.get("follower_count") or 0
-
-# PROPUESTO:
-followers = p.get("follower_count")  # None si no existe — NO 0
-# Y en el scoring:
-if followers is None:
-    missing_follower_field_counter += 1
-elif followers == 0:
-    enrichment_failed_counter += 1
-```
-
-**Buscar y reemplazar global en worker.py:**
-- `or 0` en contextos de métricas → `or None`
-- Agregar trazabilidad de fuente (`_source = "hikerapi"` o similar)
-
-### 3.3 Crear `13a_data_contract_discovery.md`
-
-**Archivo nuevo:** `docs/13a_data_contract_discovery.md`
-
-```markdown
-# Data Contract LENS Discovery — Anexo al Hub
-
-**Versión:** 1.0
-**Fecha:** 2026-08-25
-**Estándar padre:** `13_data_contract_hub.md` v1.0
-**Aplica a:** packages/discovery/ y apps/api/app/workers/
-
-## Reglas Fundamentales
-
-1. **NULL ≠ 0.** Campo ausente se escribe como SQL NULL, no como 0.
-   - `followers = None` (no `followers = 0`)
-   - `following_count = None` (no `following_count = 0`)
-
-2. **Una convención de nombres: snake_case inglés.**
-   - Solo `follower_count` (NO `followersCount`)
-   - Solo `following_count` (NO `followsCount`)
-   - Solo `posts_count` (NO `postsCount`)
-
-3. **raw_data obligatorio.** Payload crudo del proveedor en JSONB.
-   - `raw_data: dict` — siempre presente, aunque vacío `{}`
-
-4. **source_id obligatorio.** Identificador del proveedor.
-   - `source_id: str` — "hikerapi" o según corresponda
-
-5. **fetched_at obligatorio.** Timestamp de cuándo se pagó la llamada.
-   - `fetched_at: datetime` — con timezone UTC
-
-6. **Trazabilidad de campos duales.** Si un campo viene de dos fuentes,
-   usar sufijo `_source`: `follower_count_hikerapi`, `follower_count_apify`.
-
-## Tabla de Campos
-
-| Campo | Tipo | Requerido | Notas |
-|-------|------|-----------|-------|
-| `follower_count` | int? | Sí | NULL si ausente — NO 0 |
-| `following_count` | int? | Sí | NULL si ausente |
-| `posts_count` | int? | Sí | NULL si ausente |
-| `is_business` | bool | Sí | default False |
-| `is_verified` | bool | Sí | default False |
-| `raw_data` | dict | Sí | Payload crudo |
-| `source_id` | str | Sí | Nombre del proveedor |
-| `fetched_at` | datetime | Sí | UTC |
-
-## Migración de Datos
-
-Los datos guardados antes de este contrato (con convención dual) son retrocompatibles:
-- Queries deben usar `COALESCE(follower_count, followersCount)` temporalmente
-- Progresivamente migrar a solo `follower_count`
-```
-
-### 3.4 Tests
-
-**Archivo nuevo:** `apps/api/tests/test_hito32_data_contract.py`
-
-```python
-class TestDataContract:
-    def test_normalize_user_snake_case_only():
-        """_normalize_user retorna solo snake_case, sin camelCase."""
-
-    def test_normalize_user_returns_none_for_missing():
-        """Campo ausente retorna None, no 0."""
-
-    def test_or_zero_replaced_globally():
-        """No quedan cadenas 'or 0' en worker.py para métricas."""
-
-    def test_data_contract_doc_exists():
-        """13a_data_contract_discovery.md existe y declara NULL≠0."""
-
-    def test_raw_data_field_present():
-        """Los candidatos persistidos tienen raw_data."""
-```
-
-**Criterio de éxito Fase 3:**
-- [ ] `_normalize_user` solo retorna snake_case
-- [ ] 33 cadenas `or 0` reemplazadas por `or None` con trazabilidad
-- [ ] `13a_data_contract_discovery.md` creado
-- [ ] 5 tests pasando
-- [ ] Railway deploy exitoso
-
----
-
-## FASE 4 — Completar el Camino a la Tabla Maestra (4-6 h)
-
-> **Lanz §7 Punto 3 — El camino ya existe, solo tiene 4 huecos**
->
-> "Lo que convierte el gasto en un activo que se acumula."
-
-### 4.1 Arreglar `POST /candidates/{id}/save`
-
-**Archivo:** `apps/api/app/api/v1/discovery.py:838-887`
-
-```python
-# ACTUAL (huecos):
-values = {
-    "full_name": candidate.get("full_name", ""),
-    "primary_handle": candidate.get("handle", ""),
-    "bio": candidate.get("bio", ""),
-    "country": candidate.get("country", "VE"),
-    "city": candidate.get("city", ""),
-    "avatar_url": candidate.get("avatar_url", ""),
-    "primary_tier": "MICRO",  # ← HARDCODED, debería derivarse
-    "discovery_query": "",     # ← VACÍO, debería venir del candidato
-    # FALTAN: follower_count, engagement_rate, avg_likes
-    # FALTAN: raw_data, source_id, fetched_at
-}
-
-# PROPUESTO:
-values = {
-    "full_name": candidate.get("full_name", ""),
-    "primary_handle": candidate.get("handle", ""),
-    "bio": candidate.get("bio", ""),
-    "country": candidate.get("country", "VE"),
-    "city": candidate.get("city", ""),
-    "avatar_url": candidate.get("avatar_url", ""),
-    # CORREGIDO — derive tier:
-    "primary_tier": _derive_tier(candidate.get("follower_count")),
-    # CORREGIDO — discovery_query:
-    "discovery_query": candidate.get("discovery_query", ""),
-    # NUEVO — métricas:
-    "follower_count": candidate.get("follower_count"),
-    "engagement_rate": candidate.get("engagement_rate"),
-    "avg_likes": candidate.get("avg_likes"),
-    # NUEVO — contrato de datos:
-    "raw_data": candidate.get("raw_data", {}),
-    "source_id": candidate.get("source_id"),
-    "fetched_at": candidate.get("fetched_at"),
-}
-```
-
-### 4.2 Deduplicar por handle
-
-```python
-# ANTES DEL INSERT:
-existing = await railway_pg.select(
-    table="influencers",
-    select="id",
-    where={"primary_handle": handle}
-)
-if existing:
-    influencer_id = existing[0]["id"]  # UPDATE en vez de INSERT
-    # Actualizar métricas si son más frescas
-else:
-    influencer_id = await railway_pg.insert(...)
-```
-
-### 4.3 Helper `_derive_tier()`
-
-```python
-def _derive_tier(followers: int | None) -> str:
-    """Copiado de scripts/etl_ism_backfill.py:193."""
-    if followers is None:
-        return "NANO"
-    if followers < 10_000:
-        return "NANO"
-    if followers < 100_000:
-        return "MICRO"
-    if followers < 500_000:
-        return "MID"
-    if followers < 1_000_000:
-        return "MACRO"
-    return "MEGA"
-```
-
-### 4.4 Crear `influencer_social_accounts` e `influencer_metrics_snapshot`
-
-```python
-# Después de crear/actualizar influencer:
-await railway_pg.insert(
-    table="influencer_social_accounts",
-    values={
-        "influencer_id": influencer_id,
-        "platform": "instagram",
-        "handle": handle,
-        "url": candidate.get("url"),
-        "is_primary": True,
-    }
-)
-
-await railway_pg.insert(
-    table="influencer_metrics_snapshot",
-    values={
-        "influencer_id": influencer_id,
-        "platform": "instagram",
-        "snapshot_date": datetime.now(timezone.utc).date(),
-        "follower_count": candidate.get("follower_count"),
-        "engagement_rate": candidate.get("engagement_rate"),
-        "avg_likes": candidate.get("avg_likes"),
-        "raw_data": candidate.get("raw_data", {}),
-    }
-)
-```
-
-### 4.5 Política de frescura (7 días)
-
-```python
-# Verificar si ya existe snapshot reciente:
-last_snapshot = await railway_pg.select(
-    table="influencer_metrics_snapshot",
-    select="snapshot_date",
-    where={"influencer_id": influencer_id},
-    order_by="snapshot_date DESC",
-    limit=1
-)
-if last_snapshot:
-    days_old = (datetime.now().date() - last_snapshot[0]["snapshot_date"]).days
-    if days_old < 7:
-        return {"id": influencer_id, "status": "skipped_fresh"}
-```
-
-### 4.6 Tests
-
-**Archivo nuevo:** `apps/api/tests/test_hito33_save_master_table.py`
-
-```python
-class TestSaveMasterTable:
-    async def test_save_carries_follower_metrics():
-        """Se guardan follower_count, engagement_rate, avg_likes."""
-
-    async def test_save_dedupes_by_handle():
-        """Guardar dos veces el mismo handle no produce duplicados."""
-
-    async def test_save_derives_tier_from_followers():
-        """Tier se deriva de followers, no está hardcoded."""
-
-    async def test_save_creates_social_account_row():
-        """Se crea fila en influencer_social_accounts."""
-
-    async def test_save_creates_metrics_snapshot_row():
-        """Se crea fila en influencer_metrics_snapshot."""
-
-    async def test_save_skips_if_recent_snapshot():
-        """No se re-paga si la última snapshot tiene < 7 días."""
-```
-
-**Criterio de éxito Fase 4:**
-- [ ] `discovery.py:838` arrastra métricas pagadas
-- [ ] Deduplicación por handle
-- [ ] Tier derivado de followers (no hardcoded MICRO)
-- [ ] Filas creadas en social_accounts y metrics_snapshot
-- [ ] Política de frescura: 7 días
-- [ ] 6 tests pasando
-- [ ] Railway deploy exitoso
-
----
-
-## FASE 5 — Decisión de Negocio (NO TÉCNICA)
-
-> **Lanz §7 Punto 5 — Bloqueante para las 8 brechas y cambio de modelo**
-
-### Preguntas a responder (lado negocio):
-
-1. ¿Cuántas búsquedas al mes se piensan vender?
-2. ¿Cuánto puede costar cada una?
-3. ¿Cuál es el plan vigente en HikerAPI?
-4. ¿Cuál es el saldo actual y cuándo se acaba al ritmo estimado?
-
-### Output esperado:
-
-**Archivo:** `docs/PLAN_PROVEEDOR_DECISION_2026-08-25.md`
+## Verificaciones Lanz §8 — Estado V0-V4
+
+| # | Pregunta | Respuesta | Evidencia | Estado |
+|---|----------|-----------|-----------|--------|
+| V0 | TIER_MIN_FOLLOWERS ¿filtro duro? | **NO** | Definido en worker.py:54 pero nunca usado como filtro. Filtro real = `plan.min_followers` del brief | ✅ V0 completada |
+| V1 | Modelo en Railway | **Por verificar** | Requiere acceso panel Railway | ⏳ Pendiente |
+| V2 | deepseek-chat resuelve | **Por verificar** | curl test necesario | ⏳ Pendiente |
+| V3 | PITR activado | **Por verificar** | Panel Railway → Postgres → Backups | ⏳ Pendiente |
+| V4 | Redis eviction policy | **Por verificar** | Panel Railway → Redis → Settings | ⏳ Pendiente |
+
+**Conclusión V0:** H-2 NO es bloqueante. El sistema NO excluye NANO por diseño.
 
 ---
 
 ## LO QUE NO SE HARÁ EN ESTE PLAN
 
 | No hacer | Razón |
-|----------|-------|
-| Reescribir worker.py (2.245 líneas) | "Cambia el código sin cambiar lo que se sabe" (Lanz) |
+|----------|--------|
+| Reescribir worker.py (2.286 líneas) | "Cambia el código sin cambiar lo que se sabe" (Lanz) |
 | Conectar embeddings a LENS ahora | "Un vector reordena, no recluta" — el recorte a 25 corre ANTES del enrichment |
-| Implementar las 8 brechas del Audit #14 | Afinan ranking, no suben techo — postergadas hasta post-Fase 4 |
-| Cambiar modelo de IA | Bloqueado por Fase 5 (decisión de negocio) |
-| Modificar `13_data_contract_hub.md` | Es de P.I.A.R. — crear `13a_data_contract_discovery.md` |
 | Eliminar `apps/api/app/models/ai.py` | Deriva de config, no rompe nada |
+| Modificar `13_data_contract_hub.md` | Es de P.I.A.R. — `13a_data_contract_discovery.md` es el análogo para LENS |
 
 ---
 
-## Resumen de Esfuerzo y Costo
+## PLAN DE EJECUCIÓN — Hitos Pendientes #0 a #10
 
-| Fase | Esfuerzo | Costo Extra Por Run |
-|------|-----------|---------------------|
-| 0. Verificaciones | 30 min | ~$0.002 |
-| 1. Fallar en voz alta | 4-6 h | $0 |
-| 2. Ensanchar búsqueda | 1-2 h | ~$0.44 |
-| 3. Contrato de datos | 6-8 h | $0 |
-| 4. Tabla maestra | 4-6 h | $0 |
-| 5. Decisión negocio | — | — |
-| **TOTAL** | **~16-22 h** | **~$0.44** |
+### 🔴 #0 — Fix Regresión Crítica: Merge Enrichment (INMEDIATA)
+
+> **Archivos:** `apps/api/app/workers/worker.py:1204-1232`
+> **Tipo:** Bug fix (regresión introduced by Hito 31.1)
+> **Esfuerzo:** 2h
+> **Corridas:** 1 validación
+> **Costo:** ~$1.14
+
+**Problema:** `_normalize_user()` ahora devuelve solo snake_case, pero el merge de enrichment lee camelCase → todas las métricas de enrichment se pierden.
+
+**Solución:** Crear `packages/discovery/discovery/compat.py` con `LegacyCompatReader` + refactor del merge.
+
+```python
+# packages/discovery/discovery/compat.py
+class LegacyCompatReader:
+    """Lee campos snake_case con fallback legacy camelCase.
+    Cada acceso a formato legacy emite contract.violation."""
+
+    def read_followers(self, p: dict) -> int | None:
+        if "followersCount" in p and "follower_count" not in p:
+            logger.warning(RunEvent.CONTRACT_VIOLATION.value, field="follower_count", received="followersCount")
+        return p.get("follower_count") or p.get("followersCount")
+
+    def read_following(self, p: dict) -> int | None:
+        if "followsCount" in p and "following_count" not in p:
+            logger.warning(RunEvent.CONTRACT_VIOLATION.value, field="following_count", received="followsCount")
+        return p.get("following_count") or p.get("followsCount")
+
+    # ... read_posts, read_is_business, read_is_verified, read_biography, read_full_name, read_avatar_url
+```
+
+**Refactor del merge (`worker.py:1204-1232`):**
+
+```python
+from discovery.compat import LegacyCompatReader
+compat = LegacyCompatReader()
+
+for e in enriched_profiles:
+    handle = e.get("username", "")
+    if not handle or handle not in profiles:
+        continue
+    profiles[handle].update({
+        "follower_count": compat.read_followers(e),
+        "following_count": compat.read_following(e),
+        "posts_count": compat.read_posts(e),
+        "is_business": compat.read_is_business(e),
+        "is_verified": compat.read_is_verified(e),
+        "bio": compat.read_biography(e),
+        "biography": compat.read_biography(e),
+        "full_name": compat.read_full_name(e),
+        "avatar_url": compat.read_avatar_url(e),
+        "country": e.get("country", ""),
+        "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
+        "locationName": e.get("location_name", profiles[handle].get("locationName", "")),
+        "engagement_rate": e.get("engagement_rate"),
+    })
+```
+
+**Verificación:**
+```bash
+rg -n "followersCount|followsCount|postsCount|isBusinessAccount|profilePicUrl|fullName" \
+   apps/api/app/workers/worker.py | wc -l
+# Debe ser 0 tras refactor completo
+```
 
 ---
 
-## Orden de Implementación
+### 🟡 #1 — LegacyCompatReader + ContractViolationLedger (Hito 31.3)
+
+> **Archivos:** `packages/discovery/discovery/compat.py`, `packages/shared-core/shared_core/observability.py`
+> **Tipo:** Nueva funcionalidad
+> **Esfuerzo:** 3h
+> **Corridas:** 0 (replay)
+> **Costo:** $0
+
+```python
+# packages/shared-core/shared_core/observability.py (añadir)
+
+class ContractViolationLedger:
+    """Contador de contract.violation. Persiste en Redis con TTL 7d."""
+    def __init__(self, redis_client=None):
+        self._local_count = 0
+        self._redis = redis_client
+        self._key = "lens:contract_violation:count"
+
+    async def record(self) -> None:
+        self._local_count += 1
+        if self._redis:
+            try:
+                await self._redis.incr(self._key)
+            except Exception:
+                pass
+
+    async def get_total(self) -> int:
+        if self._redis:
+            try:
+                return int(await self._redis.get(self._key) or 0)
+            except Exception:
+                pass
+        return self._local_count
+
+    async def reset(self) -> None:
+        self._local_count = 0
+        if self._redis:
+            try:
+                await self._redis.delete(self._key)
+            except Exception:
+                pass
+```
+
+**Criterio de retirada:** `contract.violation == 0` por 14 días consecutivos → eliminar `LegacyCompatReader` y `ContractViolationLedger`.
+
+---
+
+### 🟡 #2 — Hito 32.5: Freshness Policy (7 días)
+
+> **Archivos:** `packages/discovery/discovery/freshness.py`, `apps/api/app/api/v1/discovery.py`, `supabase/migrations/00110_snapshot_freshness.sql`
+> **Tipo:** Nueva funcionalidad
+> **Esfuerzo:** 4h
+> **Corridas:** 1 validación + 1 medición
+> **Costo:** ~$1.14 + ~$1.58
+
+**Migración `00110_snapshot_freshness.sql`:**
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_metrics_snapshot_freshness
+    ON influencer_metrics_snapshot(influencer_id, platform, snapshot_date DESC);
+
+COMMENT ON COLUMN influencer_metrics_snapshot.snapshot_date
+    IS 'Freshness window: snapshots <7 días reutilizables sin re-pago (Hito 32.5)';
+```
+
+**Módulo `packages/discovery/discovery/freshness.py`:**
+
+```python
+"""Hito 32.5 — Política de freshness de 7 días para enrichment."""
+from datetime import datetime, timedelta, timezone
+
+FRESHNESS_WINDOW_DAYS = 7
+
+async def get_fresh_snapshot_or_none(
+    handle: str,
+    platform: str = "instagram",
+) -> dict | None:
+    """Devuelve snapshot fresco o None si debe enriquecerse."""
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=FRESHNESS_WINDOW_DAYS)
+    rows = await railway_pg.select(
+        table="influencer_metrics_snapshot",
+        select="*",
+        filters=[f"snapshot_date=gte.{cutoff.isoformat()}", f"platform=eq.{platform}"],
+        order="snapshot_date.desc",
+        limit=20,
+    )
+    for row in rows:
+        sa = await railway_pg.select_one(
+            table="influencer_social_accounts",
+            select="handle",
+            filters=[f"id=eq.{row['social_account_id']}"] if row.get("social_account_id")
+                    else [f"influencer_id=eq.{row['influencer_id']}", f"platform=eq.{platform}"],
+        )
+        if sa and sa.get("handle", "").lower() == handle.lower():
+            return row
+    return None
+```
+
+**Integración pre-enrichment en `worker.py`** (antes del bloque de enrichment):
+
+```python
+from discovery.freshness import get_fresh_snapshot_or_none
+
+handles_to_enrich_fresh = []
+handles_skip_fresh = []
+for h in handles_to_enrich:
+    snap = await get_fresh_snapshot_or_none(h, platform="instagram")
+    if snap:
+        profiles[h].update({
+            "follower_count": snap.get("follower_count"),
+            "engagement_rate": snap.get("engagement_rate"),
+            "avg_likes": snap.get("avg_likes"),
+            "_from_snapshot": True,
+        })
+        handles_skip_fresh.append(h)
+    else:
+        handles_to_enrich_fresh.append(h)
+
+await _run_update_metadata(run_id, {
+    "profiles_skipped_fresh": len(handles_skip_fresh),
+    "profiles_to_enrich": len(handles_to_enrich_fresh),
+})
+handles_to_enrich = handles_to_enrich_fresh
+```
+
+**Costo estimado:** ~30% handles repetidos entre runs → ~$0.20-0.40 USD ahorrados por corrida.
+
+---
+
+### 🟡 #3 — Hito 32.6: Brand Exclusion Table (Compliance Nestlé)
+
+> **Archivos:** `supabase/migrations/00111_brand_excluded_handles.sql`, `apps/api/app/core/brand_exclusions.py`, `apps/api/app/workers/worker.py`
+> **Tipo:** Nueva funcionalidad (compliance)
+> **Esfuerzo:** 4h
+> **Corridas:** 1 validación con brief Purina
+> **Costo:** ~$1.14
+> **⚠️ Pendiente decisión de negocio:** lista real de handles Nestlé/Purina VE
+
+**Migración `00111_brand_excluded_handles.sql`:**
+
+```sql
+CREATE TYPE brand_exclusion_category AS ENUM (
+    'BRAND_OWN', 'BRAND_VARIANT', 'STORE', 'FOUNDATION', 'COMPETITOR'
+);
+
+CREATE TABLE IF NOT EXISTS brand_excluded_handles (
+    id              BIGSERIAL PRIMARY KEY,
+    brand_id        UUID NOT NULL REFERENCES brands(id) ON DELETE CASCADE,
+    handle_variant  TEXT NOT NULL,  -- 'dogchowve' (lower, sin @)
+    category        brand_exclusion_category NOT NULL,
+    reason          TEXT,
+    added_by        UUID REFERENCES users(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at      TIMESTAMPTZ,
+    UNIQUE (brand_id, handle_variant, category)
+);
+
+CREATE INDEX idx_brand_excl_brand ON brand_excluded_handles(brand_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_brand_excl_handle ON brand_excluded_handles(handle_variant) WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE brand_excluded_handles IS
+    'Hito 32.6 — Exclusión determinista de handles por marca (L-05/L-03)';
+```
+
+**Módulo `apps/api/app/core/brand_exclusions.py`:**
+
+```python
+"""Hito 32.6 — Carga y aplicación de exclusiones por marca."""
+async def get_excluded_handles_for_run(
+    brand_id: str | None,
+    plan_exclude_handles: list[str],
+) -> dict[str, str]:
+    exclusions: dict[str, str] = {}
+    for h in plan_exclude_handles or []:
+        exclusions[h.lower()] = "EXCLUDED_BRAND_OWN"
+    if brand_id:
+        rows = await railway_pg.select(
+            table="brand_excluded_handles",
+            select="handle_variant, category",
+            filters=[f"brand_id=eq.{brand_id}", "deleted_at=is.null"],
+        )
+        for r in rows:
+            reason_code = {
+                "BRAND_OWN": "EXCLUDED_BRAND_OWN",
+                "BRAND_VARIANT": "EXCLUDED_BRAND_OWN",
+                "STORE": "EXCLUDED_STORE",
+                "FOUNDATION": "EXCLUDED_FOUNDATION",
+                "COMPETITOR": "EXCLUDED_BRAND_OWN",
+            }.get(r["category"], "EXCLUDED_BRAND_OWN")
+            exclusions[r["handle_variant"].lower()] = reason_code
+    return exclusions
+```
+
+**Integración en `worker.py:1265-1285`** (reemplazar exclude_handles simple):
+
+```python
+from app.core.brand_exclusions import get_excluded_handles_for_run
+
+brand_id_str = str(brief.brand_id) if getattr(brief, "brand_id", None) else None
+exclusions = await get_excluded_handles_for_run(brand_id_str, plan.exclude_handles)
+original_count = len(profiles)
+for handle_lower, reason_code in exclusions.items():
+    if handle_lower in profiles:
+        profiles.pop(handle_lower)
+        drop_profile(handle_lower, DropReason(reason_code), "scoring",
+                    {"source": "brand_exclusion_table", "brand_id": brand_id_str},
+                    ledger=drop_ledger)
+```
+
+**Auditoría compliance:**
+```sql
+SELECT run_id, ts, username, payload->>'brand_id' AS brand_id
+FROM discovery_run_events
+WHERE event = 'profile.dropped'
+  AND reason_code IN ('EXCLUDED_BRAND_OWN', 'EXCLUDED_STORE', 'EXCLUDED_FOUNDATION')
+  AND ts > NOW() - INTERVAL '30 days';
+```
+
+---
+
+### 🔴 #4 — Fix Crítico: `drop_profile()` Persiste en `discovery_run_events`
+
+> **Archivo:** `packages/shared-core/shared_core/observability.py`
+> **Tipo:** Bug fix (Capa 6 de observabilidad rota)
+> **Esfuerzo:** 3h
+> **Corridas:** 0 (replay)
+> **Costo:** $0
+> **Bloquea:** Auditoría de Hito 32.6
+
+**Problema:** La tabla `discovery_run_events` existe (migración 108) pero `drop_profile()` solo emite log — no persiste nada. Las queries de compliance devolverán cero filas.
+
+```python
+# En observability.py — modificar drop_profile()
+async def drop_profile_persistent(
+    username: str,
+    reason: DropReason,
+    stage: str,
+    run_id: str,
+    detail: dict | None = None,
+    ledger: DropLedger | None = None,
+) -> None:
+    """Único punto de salida — persiste en DB + log."""
+    if ledger is not None:
+        ledger.record(reason)
+    logger.info(
+        RunEvent.PROFILE_DROPPED.value,
+        username=username,
+        reason=reason.value,
+        stage=stage,
+        run_id=run_id,
+        **(detail or {}),
+    )
+    try:
+        await railway_pg.insert("discovery_run_events", {
+            "run_id": run_id,
+            "event": RunEvent.PROFILE_DROPPED.value,
+            "stage": stage,
+            "reason_code": reason.value,
+            "username": username,
+            "payload": detail or {},
+        })
+    except Exception as e:
+        logger.warning("drop_profile_persist_failed", error=str(e))
+```
+
+**Decisión:** ¿refactorizar `drop_profile()` existente para añadir persistencia, o crear `drop_profile_persistent` separado? Recomendación: modificar `drop_profile()` existente y pasar `run_id` via contextvars o como parámetro.
+
+---
+
+### 🟢 #5 — Eliminar Doble-Escritura CamelCase en Construction Dicts
+
+> **Archivos:** `apps/api/app/workers/worker.py:380-925` (8 zonas)
+> **Tipo:** Refactor calidad
+> **Esfuerzo:** 3h
+> **Corridas:** 0 (replay)
+> **Costo:** $0
+
+Eliminar las escrituras `profiles[handle]["followersCount"] = ...` que escriben el mismo valor en clave camelCase E snake_case. Dejar solo snake_case.
+
+**Comando verificación:**
+```bash
+rg -n '"\w+":\s*p\.get\(' apps/api/app/workers/worker.py | wc -l
+# Debe ser 0 tras refactor
+```
+
+---
+
+### 🟢 #6 — Refactor Prefilter/Scoring a Snake_case
+
+> **Archivos:** `apps/api/app/workers/worker.py:967-969, 1306, 1528`
+> **Tipo:** Refactor calidad
+> **Esfuerzo:** 2h
+> **Corridas:** 0 (replay)
+> **Costo:** $0
+
+Reemplazar `p.get("followersCount") or p.get("follower_count")` por acceso directo a `p.get("follower_count")` usando `LegacyCompatReader`.
+
+---
+
+### 🟡 #7 — `_derive_tier` → 9 Sub-Tiers (Gap vs Plan Fable 5 §1.3)
+
+> **Archivos:** `apps/api/app/api/v1/discovery.py`, `packages/discovery/discovery/tools/geo_boost.py`
+> **Tipo:** Cambio de contrato (frontend-visible)
+> **Esfuerzo:** 3h
+> **Corridas:** 1 validación
+> **Costo:** ~$1.14
+> **⚠️ Pendiente confirmación:** ¿escala de 9 sub-tiers o mantener 4?
+
+**Problema:** El plan Fable 5 §1.3 menciona "LWFA usa 9 sub-tiers" pero el código actual tiene solo 4 (`NANO/MICRO/MID/MACRO`). El enum `influencer_subtier` existe en `supabase/schema.sql:36`.
+
+**Escala actual (4 niveles):**
+```python
+def _derive_tier(followers: int | None) -> str:
+    if followers is None: return "NANO"
+    if followers < 10_000: return "NANO"
+    if followers < 100_000: return "MICRO"
+    if followers < 500_000: return "MID"
+    return "MACRO"
+```
+
+**Escala propuesta (9 niveles, si se confirma):**
+```python
+def _derive_tier(followers: int | None) -> str:
+    if followers is None: return "UNKNOWN"
+    if followers < 1_000: return "NANO_VERY_LOW"
+    if followers < 5_000: return "NANO_LOW"
+    if followers < 10_000: return "NANO_MID"
+    if followers < 50_000: return "MICRO_LOW"
+    if followers < 100_000: return "MICRO_MID"
+    if followers < 250_000: return "MID_LOW"
+    if followers < 500_000: return "MID_HIGH"
+    return "MACRO"
+```
+
+**Acción requerida:** Confirmar con Ungar/Ignacio si se usa la escala de 9 sub-tiers o se mantiene la de 4.
+
+---
+
+### 🟢 #8 — Housekeeping: `deepseek-v3` en seed.sql y schema.sql
+
+> **Archivos:** `supabase/seed.sql:246,261,270`, `supabase/schema.sql:501`
+> **Tipo:** Housekeeping
+> **Esfuerzo:** 30min
+> **Corridas:** 0
+> **Costo:** $0
+
+```sql
+-- seed.sql: actualizar default de 'deepseek-chat' a 'deepseek-v3'
+-- schema.sql:501: actualizar default de ai_models
+```
+
+---
+
+### 🟢 #9 — Tests `test_hito31_data_contract.py`
+
+> **Archivo:** `apps/api/tests/test_hito31_data_contract.py`
+> **Tipo:** CI gate
+> **Esfuerzo:** 3h
+> **Corridas:** 0 (CI local)
+> **Costo:** $0
+
+```python
+class TestDataContract:
+    def test_normalize_user_returns_none_for_missing(self):
+        """_normalize_user devuelve None si follower_count ausente."""
+
+    def test_normalize_user_snake_case_only(self):
+        """_normalize_user retorna solo snake_case, sin camelCase."""
+
+    def test_legacy_compat_reader_reads_both_formats(self):
+        """LegacyCompatReader acepta followersCount y follower_count."""
+
+    def test_contract_violation_ledger_counts(self):
+        """ContractViolationLedger incrementa al leer formato legacy."""
+```
+
+---
+
+### ⏸ #10 — Retirar LegacyCompatReader (Post-14 días con 0 violaciones)
+
+> **Tipo:** Cleanup diferido
+> **Esfuerzo:** 1h
+> **Corridas:** 1 validación
+> **Costo:** ~$1.14
+> **Depende:** #1 + ventana de 14 días con `contract.violation == 0`
+
+---
+
+## Resumen de Esfuerzo y Costo Total
+
+| # | Hito | Esfuerzo | Corridas | Costo |
+|---|------|-----------|---------|-------|
+| #0 | Fix regresión merge | 2h | 1 | ~$1.14 |
+| #1 | LegacyCompatReader + ContractViolationLedger | 3h | 0 | $0 |
+| #2 | Freshness policy 7d | 4h | 2 | ~$2.72 |
+| #3 | Brand exclusion table | 4h | 1 | ~$1.14 |
+| #4 | drop_profile persiste en DB | 3h | 0 | $0 |
+| #5 | Eliminar doble-escritura camelCase | 3h | 0 | $0 |
+| #6 | Refactor prefilter/scoring snake_case | 2h | 0 | $0 |
+| #7 | _derive_tier → 9 sub-tiers | 3h | 1 | ~$1.14 |
+| #8 | Housekeeping seed.sql/schema.sql | 30min | 0 | $0 |
+| #9 | Tests Hito 31 | 3h | 0 | $0 |
+| #10 | Retirar LegacyCompatReader (diferido) | 1h | 1 | ~$1.14 |
+| **TOTAL** | | **~28.5h** | **6** | **~$7.42** |
+
+**Saldo restante:** $43 - $7.42 ≈ **$35.58 USD** (~22 corridas de operación).
+
+---
+
+## Orden de Ejecución Óptimo
 
 ```
-1. Fase 0 — Verificaciones (30 min)
-      ↓
-2. Fase 1 — Fallar en voz alta (4-6 h) ← BLOQUEANTE de todo
-      ↓
-3. Fase 2 — Ensanchar búsqueda (1-2 h) ← INDEPENDIENTE, costo $0.44
-      ↓
-4. Fase 3 — Contrato de datos (6-8 h) ← Depende de Fase 1
-      ↓
-5. Fase 4 — Tabla maestra (4-6 h) ← Depende de Fase 3
-      ↓
-6. Pausa — esperar decisión Fase 5
-      ↓
-7. Post-pausa — elegir 2-3 de las 8 brechas con datos reales
+#0 (REGRESIÓN CRÍTICA) → #4 (persistencia drop_profile, prerrequisito auditoría)
+         ↓
+#1 (LegacyCompatReader) → habilita #2 y #3
+         ↓
+#2 (Freshness) antes de #3 (Brand Exclusion) — reduces ruido en auditoría
+         ↓
+#5 → #6 → #7 (refactors de calidad, aprovechan base correcta)
+         ↓
+#8 (housekeeping)
+         ↓
+#9 (tests CI gate)
+         ↓
+#10 (post-14 días ventana, diferido)
 ```
 
 ---
 
-## Criterios de Éxito Globales
+## Decisiones Pendientes de Negocio (No Técnicas)
 
-- [ ] El sistema distingue "no traje el dato" vs "el enriquecimiento falló"
-- [ ] El estado final distingue "haber corrido" vs "haber entregado"
-- [ ] La búsqueda ejecuta 5+ hashtags/keywords (vs 3 antes)
-- [ ] Un campo ausente se escribe como NULL, no como 0
-- [ ] El tier se deriva de followers, no se hardcodea
-- [ ] Las métricas pagadas llegan a `influencer_metrics_snapshot`
-- [ ] El mismo handle dos veces no produce dos influencers
-- [ ] ≥18 tests nuevos pasando (4+4+5+6)
-- [ ] Railway deploy sin errores tras cada fase
+1. **Lista real de handles Nestlé/Purina VE** para seed de `brand_excluded_handles`. El placeholder propuesto NO debe ejecutarse hasta firma de compliance.
+2. **Threshold freshness: ¿7 vs 14 vs 30 días?** Sugerencia: parametrizable por `brand_id`.
+3. **Escala de tiers: ¿4 niveles o 9 sub-tiers?** Afecta contrato API y frontend.
+4. **Retención de snapshots >90 días:** ¿borrar? ¿365 días? ¿agregados mensuales?
 
 ---
 
-## Para Cada Fase: Criterio de Éxito Antes de Pasar a la Siguiente
+## Criterios de Éxito Globales Post-Hitos
 
-| Fase | Criterio |
-|------|----------|
-| **0** | 4 verificaciones respondidas con evidencia |
-| **1** | `total_candidates == 0` → `status = failed` (no `completed`) |
-| **2** | Metadata muestra `execution_ratio < 1.0` (la búsqueda no está al máximo) |
-| **3** | `_normalize_user` solo tiene snake_case; 0 cadenas `or 0` en worker.py |
-| **4** | `influencer_metrics_snapshot` tiene filas con `follower_count` no NULL |
-| **5** | Decisión documentada sobre plan de proveedor y modelo de IA |
+- [ ] `drop_profile()` persiste en `discovery_run_events` (Capa 6 operativa)
+- [ ] `contract.violation == 0` por 14 días consecutivos → LegacyCompatReader retirado
+- [ ] Freshness policy: handles con snapshot <7d no generan llamada HikerAPI
+- [ ] Brand exclusion: cuenta propia de marca nunca llega a candidatos
+- [ ] `_derive_tier` usa escala correcta (4 o 9 según decisión)
+- [ ] `deepseek-v3` en seed.sql/schema.sql (alineado con config.py)
+- [ ] ≥20 tests nuevos pasando (incluyendo anti-regresión Hito 29)
+- [ ] Railway deploy exitoso en cada fase
 
 ---
 
 ## Comandos de Verificación Post-Deploy
 
 ```bash
-# Verificar que worker recargó:
-python -c "from discovery.schemas import BriefStructured; b = BriefStructured(max_candidates=20); print('OK:', b.max_candidates)"
+# Verificar drop_profile persiste en DB:
+psql $DATABASE_URL -c "SELECT COUNT(*) FROM discovery_run_events WHERE reason_code IS NOT NULL;"
 
-# Verificar modelo (V2):
-curl -s -H "x-access-key: $HIKERAPI_API_KEY" https://api.hikerapi.com/v1/account | jq
+# Verificar zero camelCase en worker.py:
+rg -n "followersCount|followsCount|postsCount|isBusinessAccount" apps/api/app/workers/worker.py | wc -l
 
-# Verificar PITR (V3):
-# Panel Railway → Postgres → Backups → Point-in-time recovery: ¿ON?
+# Verificar freshness index:
+psql $DATABASE_URL -c "\d influencer_metrics_snapshot" | grep idx_metrics
 
-# Run de prueba Explorar (~$0.64 + $0.10 enrich):
+# Verificar brand_excluded_handles existe:
+psql $DATABASE_URL -c "\d brand_excluded_handles"
+
+# Run de prueba (~$1.14):
 curl -X POST https://api.lawebcore.com/api/v1/discovery/run \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"brief_text": "...", "discovery_mode": "explore"}'
+  -d '{"product_name":"Purina Dog Chow","niches":["mascotas","perros"],"audience_countries":["VE"],"discovery_mode":"auto"}'
 
-# Contar candidatos:
-psql $DATABASE_URL -c "SELECT COUNT(*) FROM discovery_candidates WHERE run_id = '$RUN_ID';"
+# Audit compliance exclusions:
+psql $DATABASE_URL -c "SELECT username, reason_code, COUNT(*) FROM discovery_run_events WHERE reason_code LIKE 'EXCLUDED%' GROUP BY username, reason_code;"
 ```
 
 ---
 
-*Plan generado: 2026-08-25 por MiniMax M2.7/M3 basado en `docs/La Web Figital - Informe de Alineación Técnica LENS.md` (Santiago Lanz, v1.2)*
+## Para Cada Fase: Criterio de Éxito Antes de Pasar a la Siguiente
+
+| # | Criterio |
+|---|----------|
+| **#0** | Merge enrichment lee snake_case; enrichment metadata visible en scoring |
+| **#1** | `LegacyCompatReader` existe y lee ambos formatos; `ContractViolationLedger` registra |
+| **#2** | Handles con snapshot <7d NO aparecen en `handles_to_enrich`; metadata muestra `profiles_skipped_fresh` |
+| **#3** | Tabla `brand_excluded_handles` existe; query compliance devuelve filas |
+| **#4** | `SELECT COUNT(*) FROM discovery_run_events WHERE event='profile.dropped'` > 0 |
+| **#5** | 0 escrituras camelCase en worker.py:380-925 |
+| **#6** | 0 lecturas camelCase en scoring loop |
+| **#7** | `_derive_tier` devuelve sub-tiers correctos (4 o 9 según decisión) |
+| **#8** | seed.sql y schema.sql tienen `deepseek-v3` como default |
+| **#9** | `pytest apps/api/tests/test_hito31_data_contract.py` pasa |
+| **#10** | `contract.violation == 0` por 14 días consecutivos |
+
+---
+
+## Documentos Actualizados por Este Plan
+
+| Documento | Cambio |
+|-----------|--------|
+| `PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` | Este archivo — estado actual + plan pendientes |
+| `docs/PROMPT_CLAUDE_CODE_ANALYSIS.md` | Auditoría #17 (Claude Code Fable 5 análisis completo) |
+| `docs/ARQUITECTURA_LENS.md` | Actualizar a v5.6 con Hitos 30-35 aplicados |
+| `docs/LANZ_VERIFICACIONES_2026-08-25.md` | Resultado V0 completado; V1-V4 pendientes |
+| `docs/13a_data_contract_discovery.md` | Data contract v1.0 (ya creado) |
+| `docs/PLAN_DESARROLLO_LENS_HITOS_30-35_25-08-26.md` | Plan oficial Fable 5 (referencia) |
+
+---
+
+*Plan actualizado: 2026-08-26 por MiniMax M2.7/M3*
+*Basado en análisis subagente explore post-commit `bd973c7`*
+*Informe Lanz v1.2 + Plan Claude Code Fable 5*
