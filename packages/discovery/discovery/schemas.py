@@ -1,6 +1,5 @@
 """Pydantic schemas for the Discovery module."""
 
-from datetime import date
 from enum import Enum
 from typing import Any
 from uuid import UUID

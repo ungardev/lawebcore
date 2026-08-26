@@ -8,10 +8,9 @@ regresiones como la de C-0/C-1 (fixes 35.9-35.10 del Hito 35).
 
 Ref: docs/FIXES_FRONTEND_LENS_C0-C2_27-08-26.md (Issue C-1)
 """
-import pytest
 
-from shared_core.observability import RunStatus
 from discovery.schemas import DiscoveryRunStatus
+from shared_core.observability import RunStatus
 
 
 def test_run_status_is_subset_of_api_enum():
