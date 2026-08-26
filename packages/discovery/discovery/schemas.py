@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class DiscoveryRunStatus(str, Enum):
+    # --- Legacy: presentes en runs históricos. NO ELIMINAR. ---
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -16,6 +17,14 @@ class DiscoveryRunStatus(str, Enum):
     CANCELLED = "cancelled"
     PARTIAL = "partial"  # hito 22 — el worker ya lo emite (migración 104)
     EXPLORED = "explored"  # hito 24 — modo explorar, discovery sin enrichment
+
+    # --- Hito 30: deben coincidir 1:1 con RunStatus en observability.py:72-83 ---
+    QUEUED = "queued"
+    DELIVERED = "delivered"
+    DEGRADED = "degraded"
+    EMPTY = "empty"
+    INCONSISTENT = "inconsistent"
+    ABORTED_BUDGET = "aborted_budget"
 
 
 class CandidateStatus(str, Enum):

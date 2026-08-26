@@ -40,7 +40,13 @@ export interface Influencer {
   full_name: string;
   email?: string;
   country: string;
-  primary_tier: 'NANO' | 'MICRO' | 'MID' | 'MACRO' | 'MEGA' | 'MIX';
+  primary_tier:
+    | 'NANO' | 'MICRO' | 'MID' | 'MACRO' | 'MEGA' | 'MIX'
+    | 'NANO_BAJO' | 'NANO_ALTO'
+    | 'MICRO_BAJO' | 'MICRO_MEDIO' | 'MICRO_ALTO'
+    | 'MID_BAJO' | 'MID_ALTO'
+    | 'MACRO_BAJO' | 'MACRO_ALTO'
+    | null;
   primary_handle?: string;
   avatar_url?: string;
   bio?: string;
