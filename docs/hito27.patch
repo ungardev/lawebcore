@@ -1,0 +1,33 @@
+diff --git a/packages/discovery/discovery/schemas.py b/packages/discovery/discovery/schemas.py
+index bb457db..351337f 100644
+--- a/packages/discovery/discovery/schemas.py
++++ b/packages/discovery/discovery/schemas.py
+@@ -205,7 +205,10 @@ class DiscoverySearchRequest(BaseModel):
+     audience_cities: list[str] = Field(default_factory=list)
+     audience_states: list[str] = Field(default_factory=list)
+     tone: list[str] = Field(default_factory=list)
+-    platforms: list[Platform] = Field(default=lambda: [Platform.INSTAGRAM])
++    # HITO 27 FIX: era `default=lambda: [...]`. En Pydantic v2 `default` se usa
++    # tal cual y NO se valida, así que `brief.platforms` era el objeto lambda,
++    # no una lista. Latente hoy (nadie lo lee), pero rompe al añadir TikTok.
++    platforms: list[Platform] = Field(default_factory=lambda: [Platform.INSTAGRAM])
+     max_candidates: int = Field(default=20, ge=1, le=100)
+     exclude_handles: list[str] = Field(default_factory=list)
+     exclude_stores: bool = Field(default=True)
+@@ -218,6 +221,16 @@ class DiscoverySearchRequest(BaseModel):
+         default_factory=list,
+         description="Handles selected in explore mode to enrich in analyze mode",
+     )
++    parent_run_id: str | None = Field(
++        default=None,
++        description=(
++            "Parent run ID for analyze mode. HITO 27 FIX: sin este campo, "
++            "`analyze_selected` lo asignaba al dict pero Pydantic lo descartaba "
++            "silenciosamente (extra='ignore'), el worker recibía None, "
++            "`_skip_discovery` quedaba en False y el modo Analizar repetía todo "
++            "el discovery (~$0.64) en vez de enriquecer sólo lo seleccionado."
++        ),
++    )
+ 
+ 
+ class DiscoveryRunResponse(BaseModel):

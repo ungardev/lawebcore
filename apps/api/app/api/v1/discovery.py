@@ -841,21 +841,32 @@ async def download_proposal_csv(run_id: UUID):
 # ---- Candidate management ----
 
 
-def _derive_tier(followers: int | None) -> str:
+def _derive_tier(followers: int | None) -> str | None:
     """Deriva el tier desde follower_count.
 
-    Alineado con classify_tier() en geo_boost.py:122-130.
-    4 tramos: NANO (<10k), MICRO (10k-100k), MID (100k-500k), MACRO (500k+).
+    Alineado con TIER_BENCHMARKS en result_ranker.py:6-16.
+    9 sub-tiers: NANO_BAJO, NANO_ALTO, MICRO_BAJO, MICRO_MEDIO,
+    MICRO_ALTO, MID_BAJO, MID_ALTO, MACRO_BAJO, MACRO_ALTO.
     """
     if followers is None:
-        return "NANO"
+        return None
+    if followers < 2_000:
+        return "NANO_BAJO"
     if followers < 10_000:
-        return "NANO"
+        return "NANO_ALTO"
+    if followers < 30_000:
+        return "MICRO_BAJO"
     if followers < 100_000:
-        return "MICRO"
+        return "MICRO_MEDIO"
     if followers < 500_000:
-        return "MID"
-    return "MACRO"
+        return "MICRO_ALTO"
+    if followers < 1_000_000:
+        return "MID_BAJO"
+    if followers < 5_000_000:
+        return "MID_ALTO"
+    if followers < 10_000_000:
+        return "MACRO_BAJO"
+    return "MACRO_ALTO"
 
 
 @router.post("/candidates/{candidate_id}/save")
@@ -870,7 +881,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
     if not candidate:
         raise HTTPException(status_code=404, detail="Candidate not found")
 
-    follower_count = candidate.get("followers")
+    follower_count = candidate.get("followers") or 0
     handle = candidate.get("handle", "")
 
     existing = await railway_pg.select_one(
@@ -938,7 +949,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
 
     influencer_id = influencer["id"]
 
-    await railway_pg.insert(
+    social_account_rows = await railway_pg.upsert(
         table="influencer_social_accounts",
         values={
             "influencer_id": influencer_id,
@@ -947,19 +958,24 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
             "url": f"https://instagram.com/{handle}" if handle else None,
             "is_primary": True,
         },
+        on_conflict=["platform", "handle"],
+        returning="representation",
     )
+    social_account_id = social_account_rows[0]["id"] if social_account_rows else None
 
-    await railway_pg.insert(
+    await railway_pg.upsert(
         table="influencer_metrics_snapshot",
         values={
             "influencer_id": influencer_id,
-            "platform": "instagram",
+            "social_account_id": social_account_id,
             "snapshot_date": datetime.now(timezone.utc).date(),
             "follower_count": follower_count,
             "engagement_rate": candidate.get("engagement_rate"),
             "avg_likes": candidate.get("avg_likes"),
             "raw_data": candidate.get("raw_payload", {}),
         },
+        on_conflict=["influencer_id", "social_account_id", "snapshot_date", "source"],
+        returning="representation",
     )
 
     return {"influencer_id": influencer_id, "candidate_id": str(candidate_id)}

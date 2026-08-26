@@ -19,7 +19,6 @@ ELITE INTEGRATION: Uses profile_data.elite_data to provide:
 
 import asyncio
 import json as _json
-import re
 import structlog
 from typing import Any
 
@@ -183,10 +182,10 @@ def _parse_batch_response(content: str) -> list[dict[str, Any]]:
     """Parse LLM response as JSON. Uses response_format=json_object from the caller."""
     import re
     content = content.strip()
-    match = re.search(r"\{[\s\S]*\}", content, re.DOTALL)
-    if not match:
-        raise ValueError(f"No JSON object found in response: {content[:200]}")
-    data = _json.loads(match.group())
+    try:
+        data = _json.loads(content)
+    except _json.JSONDecodeError:
+        raise ValueError(f"Invalid JSON in response: {content[:200]}")
     if "scores" in data and isinstance(data["scores"], list):
         return data["scores"]
     if isinstance(data, list):

@@ -87,6 +87,7 @@ class DropLedger:
 
     def __init__(self):
         self._counts: dict[DropReason, int] = {r: 0 for r in DropReason}
+        self._stages: dict[DropReason, str] = {}
 
     def record(self, reason: DropReason) -> None:
         self._counts[reason] += 1
@@ -105,6 +106,12 @@ class DropLedger:
     def as_dict(self) -> dict[str, int]:
         return {r.value: c for r, c in self._counts.items() if c > 0}
 
+    def counts(self) -> dict[DropReason, int]:
+        return dict(self._counts)
+
+    def stage_of(self, reason: DropReason) -> str:
+        return self._stages.get(reason, "unknown")
+
 
 def drop_profile(
     username: str,
@@ -122,6 +129,7 @@ def drop_profile(
     logger = structlog.get_logger()
     if ledger is not None:
         ledger.record(reason)
+        ledger._stages[reason] = stage
     logger.info(
         RunEvent.PROFILE_DROPPED.value,
         username=username,
@@ -129,6 +137,51 @@ def drop_profile(
         stage=stage,
         **(detail or {}),
     )
+
+
+async def flush_drop_ledger(
+    run_id: str,
+    ledger: DropLedger,
+    railway_pg,
+) -> None:
+    """Vuelca el libro de descarte completo a discovery_run_events.
+
+    Una sola bulk insert para minimizar overhead.
+    """
+    counts = ledger.counts()
+    if not counts or all(v == 0 for v in counts.values()):
+        return
+
+    rows = []
+    for reason, count in counts.items():
+        if count == 0:
+            continue
+        rows.append({
+            "run_id": run_id,
+            "event": RunEvent.PROFILE_DROPPED.value,
+            "reason_code": reason.value,
+            "stage": ledger.stage_of(reason),
+            "payload": {"reason": reason.value, "count": count},
+        })
+
+    if not rows:
+        return
+
+    cols = ["run_id", "event", "reason_code", "stage", "payload"]
+    placeholders_parts = []
+    all_vals = []
+    param_idx = 1
+    for row in rows:
+        parts = [f"${param_idx + i}" for i in range(len(cols))]
+        placeholders_parts.append(f"({','.join(parts)})")
+        all_vals.extend([row[c] for c in cols])
+        param_idx += len(cols)
+
+    sql = (
+        f"INSERT INTO discovery_run_events ({','.join(cols)}) "
+        f"VALUES {','.join(placeholders_parts)}"
+    )
+    await railway_pg.execute(sql, all_vals)
 
 
 class FunnelTracker:

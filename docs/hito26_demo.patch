@@ -1,0 +1,127 @@
+diff --git a/apps/api/app/workers/worker.py b/apps/api/app/workers/worker.py
+index da2eca4..cfe859c 100644
+--- a/apps/api/app/workers/worker.py
++++ b/apps/api/app/workers/worker.py
+@@ -1272,23 +1272,67 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
+             if followers == 0:
+                 untracked_no_followers += 1
+                 if is_explore_mode:
+-                    # HITO 24: en modo explorar, usamos rough score aunque no haya followers.
+-                    # El analista decide si el perfil es relevante sin datos de enrichment.
++                    # HITO 24: en modo explorar no hay enrichment, así que no hay
++                    # followers. El analista decide con el texto disponible.
++                    #
++                    # HITO 26 FIX: el dict DEBE tener la misma forma que el del
++                    # camino normal. `upsert_many` deriva las columnas de
++                    # records[0].keys(); claves como "profile" o "rough_score"
++                    # no son columnas de discovery_candidates y hacían fallar
++                    # el INSERT entero → 0 candidatos insertados SIEMPRE.
+                     rough = rough_score_map.get(handle, 0.0)
+-                    if rough > 0:
+-                        scored.append({
+-                            "handle": handle,
+-                            "profile": p,
+-                            "match_score": rough * 100,  # rough is 0-1, convert to 0-100
+-                            "rough_score": rough,
+-                            "niche_relevance": rough * 100,
+-                            "geo_relevance": rough * 100,
+-                            "content_quality": None,
+-                            "audience_relevance": None,
+-                            "engagement_rate": None,
+-                            "is_tienda": False,
+-                            "_is_explore_mode": True,
+-                        })
++                    if handle not in rough_score_map:
++                        # Solo los prefiltrados (top-N por rough score) llegan aquí.
++                        continue
++                    bio_ex = p.get("biography") or p.get("bio") or ""
++                    scored.append({
++                        "run_id": run_id,
++                        "platform": "instagram",
++                        "handle": handle,
++                        "full_name": p.get("fullName") or p.get("full_name") or "",
++                        "bio": bio_ex,
++                        "avatar_url": (
++                            p.get("profilePicUrlHD")
++                            or p.get("profilePicUrl")
++                            or p.get("avatar_url")
++                            or (f"https://instagram.com/{handle}/profile_picture" if handle else "")
++                        ),
++                        "country": target_country,
++                        "city": p.get("locationName") or p.get("location") or "",
++                        "followers": 0,
++                        "following": 0,
++                        "posts_count": 0,
++                        "avg_likes": None,
++                        "avg_comments": None,
++                        "avg_views": None,
++                        "engagement_rate": None,
++                        "audience_credibility": None,
++                        "audience_quality": None,
++                        "audience_gender_split": {},
++                        "audience_age_buckets": {},
++                        "match_score": round(rough * 100, 2),
++                        "niche_relevance": round(rough * 100, 2),
++                        "geo_relevance": round(rough * 100, 2),
++                        "audience_relevance": None,
++                        "content_quality": None,
++                        "expected_reach": None,
++                        "expected_engagement": None,
++                        "roi_estimate": None,
++                        "rationale": (
++                            "Descubierto en modo Explorar (sin enriquecer). "
++                            "Señal de nicho/geo derivada de la bio y el usuario. "
++                            "Seleccionalo para analizarlo en profundidad."
++                        ),
++                        "tier": None,
++                        "is_tienda": False,
++                        "status": "new",
++                        "raw_payload": {
++                            "rough_score": round(rough, 4),
++                            "is_explore_mode": True,
++                            "enriched": False,
++                        },
++                        "fetched_at": datetime.now(UTC),
++                    })
+                     continue
+                 continue
+             if followers < plan.min_followers:
+@@ -1796,18 +1840,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
+             "request_count": hikerapi_calls,
+         })
+         # G12 — budget_transactions: ledger inmutable como source of truth
+-        # para reconciliación Redis↔DB. Cada evento de costo se registra aquí.
+-        await railway_pg.insert("budget_transactions", {
+-            "run_id": run_id,
+-            "provider": "hikerapi",
+-            "operation": "discovery_pipeline",
+-            "amount_usd": hikerapi_cost,
+-            "request_count": hikerapi_calls,
+-            "metadata": {
+-                "mode": "explore" if is_explore_mode else ("analyze" if is_analyze_mode else "auto"),
+-                "candidates_found": total,
+-            },
+-        })
++        # para reconciliación Redis↔DB.
++        #
++        # HITO 26 FIX: contabilidad auxiliar — nunca debe tumbar un run que ya
++        # terminó su trabajo. Si la migración 00107 no está aplicada, este
++        # INSERT falla y el `except Exception` de arriba marca el run como
++        # `failed` DESPUÉS de haber insertado los candidatos y gastado el saldo.
++        try:
++            await railway_pg.insert("budget_transactions", {
++                "run_id": run_id,
++                "provider": "hikerapi",
++                "operation": "discovery_pipeline",
++                "amount_usd": hikerapi_cost,
++                "request_count": hikerapi_calls,
++                "metadata": {
++                    "mode": "explore" if is_explore_mode else ("analyze" if is_analyze_mode else "auto"),
++                    "candidates_found": total,
++                },
++            })
++        except Exception as e:
++            logger.warning("budget_ledger_insert_failed", run_id=run_id, error=str(e))
+         await tracker.flush(run_id)
+         # reset_run_counter va DESPUÉS de leer el contador, no antes.
+         await budget_fuse.reset_run_counter(run_id)

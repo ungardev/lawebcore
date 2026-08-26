@@ -42,6 +42,7 @@ from shared_core.observability import (
     RunStatus,
     determine_final_status,
     drop_profile,
+    flush_drop_ledger,
 )
 
 from app.core.discovery_cost_tracker import get_discovery_cost_tracker
@@ -1207,25 +1208,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 continue
             about_data = e.get("about")
             profiles[handle].update({
+                "_enriched": True,
                 "follower_count": e.get("followersCount"),
-                "followersCount": e.get("followersCount"),
                 "following_count": e.get("followsCount"),
-                "followsCount": e.get("followsCount"),
                 "posts_count": e.get("postsCount"),
-                "postsCount": e.get("postsCount"),
                 "is_business": e.get("isBusinessAccount", False),
-                "isBusinessAccount": e.get("isBusinessAccount", False),
                 "is_verified": e.get("verified", False),
-                "verified": e.get("verified", False),
                 "bio": e.get("biography", profiles[handle].get("bio", "")),
-                "biography": e.get("biography", profiles[handle].get("biography", "")),
                 "full_name": e.get("fullName", profiles[handle].get("full_name", "")),
-                "fullName": e.get("fullName", profiles[handle].get("fullName", "")),
                 "avatar_url": e.get("profilePicUrlHD") or e.get("profilePicUrl") or profiles[handle].get("avatar_url", ""),
-                "profilePicUrl": e.get("profilePicUrlHD") or e.get("profilePicUrl") or profiles[handle].get("profilePicUrl", ""),
                 "country": e.get("country", ""),
                 "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
-                "locationName": e.get("locationName", profiles[handle].get("locationName", "")),
                 "location": e.get("locationName", profiles[handle].get("location", "")),
                 "latestPosts": e.get("latestPosts", []),
                 "engagement_rate": e.get("engagement_rate"),
@@ -1303,11 +1296,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
-            followers = p.get("followersCount") if "followersCount" in p else p.get("follower_count")
+            followers = p.get("followers_count") if "followers_count" in p else p.get("followersCount")
             if followers is None:
                 followers = 0
+                was_enriched = p.get("_enriched", False)
+                if was_enriched:
+                    untracked_no_followers += 1
+                    drop_profile(handle, DropReason.MISSING_FOLLOWER_FIELD, "scoring", {"followers": 0, "is_explore_mode": False}, ledger=drop_ledger)
+                    continue
+                if not is_explore_mode:
+                    untracked_no_followers += 1
+                    drop_profile(handle, DropReason.MISSING_FOLLOWER_FIELD, "scoring", {"followers": 0, "is_explore_mode": False}, ledger=drop_ledger)
+                    continue
             if followers == 0:
-                untracked_no_followers += 1
                 if is_explore_mode:
                     # HITO 24: en modo explorar no hay enrichment, así que no hay
                     # followers. El analista decide con el texto disponible.
@@ -1923,6 +1924,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         lens_active_runs.dec()
         lens_candidates_total.labels(status="inserted").inc(total)
+        await flush_drop_ledger(str(run_id), drop_ledger, railway_pg)
         structlog.contextvars.clear_contextvars()
         return {"run_id": run_id, "candidates": total}
 
