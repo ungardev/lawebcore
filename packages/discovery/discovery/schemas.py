@@ -127,7 +127,7 @@ class DiscoveryPlan(BaseModel):
     hashtag_queries: list[str] = Field(default_factory=list)
     enrichment_batch_size: int = 10
     analytics_top_n: int = 20
-    min_followers: int = 1000
+    min_followers: int = 500
     max_followers: int = 10_000_000
     exclude_handles: list[str] = Field(default_factory=list)
     profile: dict[str, Any] | None = None

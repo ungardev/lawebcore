@@ -60,7 +60,7 @@ MAX_HANDLES_TO_ENRICH = 25
 # Llamadas estimadas de la fase de descubrimiento, para el pre-flight de saldo.
 ESTIMATED_DISCOVERY_CALLS = 32
 MAX_POSTS_PER_HASHTAG = 20
-TIER_MIN_FOLLOWERS = 5_000
+TIER_MIN_FOLLOWERS = 500
 TIER_MAX_FOLLOWERS = 50_000
 MIN_FOLLOWERS_BOT_CHECK = 1000
 
@@ -1782,7 +1782,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
 
-        if is_explore_mode:
+        if total == 0:
+            final_status = RunStatus.INCONSISTENT.value if step3_degraded else RunStatus.EMPTY.value
+        elif is_explore_mode:
             final_status = RunStatus.DELIVERED.value
         else:
             final_status = RunStatus.DEGRADED.value if step3_degraded else RunStatus.DELIVERED.value

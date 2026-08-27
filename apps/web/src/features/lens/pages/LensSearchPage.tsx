@@ -75,7 +75,8 @@ export function LensSearchPage() {
     }
   };
 
-  const hasResults = run?.status === 'completed' || run?.status === 'partial' || run?.status === 'explored' || run?.status === 'delivered' || run?.status === 'degraded' || run?.status === 'empty';
+  const TERMINAL_STATUSES = ['completed', 'partial', 'explored', 'delivered', 'degraded', 'empty', 'inconsistent', 'aborted_budget'];
+  const hasResults = TERMINAL_STATUSES.includes(run?.status);
   const statusLabel = run?.status === 'running'
     ? 'Discovery en curso'
     : run?.status === 'pending'

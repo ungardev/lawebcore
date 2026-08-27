@@ -787,7 +787,7 @@ CREATE TABLE discovery_runs (
   audience_countries TEXT[], audience_cities TEXT[],
   tone TEXT, platforms TEXT[],
   status TEXT NOT NULL DEFAULT 'pending'
-      CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'partial', 'explored')),
+      CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'partial', 'explored', 'delivered', 'degraded', 'empty', 'inconsistent', 'aborted_budget', 'queued')),
   total_candidates INTEGER DEFAULT 0, accepted INTEGER DEFAULT 0,
   actual_cost_usd NUMERIC(10, 4),
   started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ, error TEXT,
