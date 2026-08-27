@@ -179,7 +179,7 @@ class DataProvider(ABC):
 
 1. **Single LLM call per brief** — Combine brief parsing + niche detection + initial candidate ranking into ONE DeepSeek call with a well-structured prompt that returns both `BriefStructured` JSON AND top 5 candidate handles.
 
-2. **Use `deepseek-chat` for all calls** — Reserve `deepseek-reasoner` for complex multi-step reasoning only (1% of calls).
+2. **Use `deepseek-v4-flash` for all calls** — Reserve `deepseek-reasoner` (R1) for complex multi-step reasoning only (1% of calls).
 
 3. **Prompt compression** — Strip whitespace, use Spanish abbreviations, reuse system prompt across calls. Cache the compressed prompt.
 

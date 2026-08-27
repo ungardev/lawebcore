@@ -83,8 +83,8 @@ Lanz §7 define 5 acciones de alineación. Aquí el estado actual:
 
 | Sub-requisito | Estado | Evidencia |
 |--------------|--------|-----------|
-| `DEEPSEEK_MODEL=deepseek-v3` en código | ✅ Hecho | `config.py:55`, `.env.example:32` |
-| `DEEPSEEK_MODEL` en Railway verificado | ❌ **NO: Railway usa `deepseek-chat`** | ⚠️ Confirmado 27-ago-2026: Railway tiene `deepseek-chat` (modelo retired, discontinuado 24-jul-2026). Código default es `deepseek-v3`. **Cambiar en Railway dashboard.** |
+| `DEEPSEEK_MODEL=deepseek-v4-flash` en código | ✅ Hecho | `config.py:55`, `.env.example:32` (actualizado a `deepseek-v4-flash` el 27-ago-2026) |
+| `DEEPSEEK_MODEL` en Railway | ⚠️ Pendiente | Railway dashboard tiene `deepseek-chat` (retired, discontinuado 24-jul-2026). **Cambiar a `deepseek-v4-flash`** en Railway → Environment Variables |
 | `response_format` usado en scoring | ⚠️ Parcial | Solo en `candidate_analyzer.py:326`; 3 otros call sites usan regex |
 | Modelo de RAG no se reutiliza | ✅ Confirmado | Discovery no usa embeddings; Lanz §5.2 aplica |
 | `api_costs` registra model name | ❌ No | Solo provider; sin model column |
@@ -231,9 +231,9 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 
 **Descripción:** `models/ai.py:34-35` — defaults de tabla de prompts son de otra era. El código fuerza DeepSeek en la práctica (`ai_service.py:280-294`).
 
-### 3.19 — Docs stale con `deepseek-chat`
+### 3.19 — DEEPSEEK_MODEL actualizado a `deepseek-v4-flash`
 
-**Descripción:** El sistema opera en producción con `DEEPSEEK_MODEL=deepseek-chat` (modelo retired, discontinuado 24-jul-2026). El código default en `config.py:55` especifica `deepseek-v3`. Railway actualmente tiene `deepseek-chat` configurado como env var. Esto constituye un drift crítico entre código y producción.
+**Descripción:** El sistema ahora usa `deepseek-v4-flash` como modelo default en código (`config.py:55`, `.env.example:32`). Railway aún tiene `deepseek-chat` configurado — debe cambiarse a `deepseek-v4-flash` en el dashboard. `deepseek-chat` fue el nombre legacy de `deepseek-v4-flash` y está discontinuado desde el 24-jul-2026.
 
 ### 3.20 — `api_costs` sin columna model name
 
@@ -276,7 +276,7 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 | 17 | `FunnelTracker()` dead | 🟡 MEDIA | Deuda técnica |
 | 18 | `is_discoverable` columna muerta | 🟡 MEDIA | Deuda técnica |
 | 19 | `influencers.enriched_at` sin leer | 🟡 MEDIA | Feature incompleto |
-| 20 | docs stale con deepseek-chat | 🟠 MEDIO | Sistema opera con modelo retired en producción — cambiar `deepseek-chat` → `deepseek-v3` en Railway dashboard |
+| 20 | Railway `DEEPSEEK_MODEL` pendiente de actualizar a `deepseek-v4-flash` | 🟠 MEDIO | Railway tiene `deepseek-chat` (retired). Cambiar a `deepseek-v4-flash` en Railway dashboard → Environment Variables |
 | 21 | `api_costs` sin model name | 🟢 BAJA | Deuda técnica |
 | 22 | `discovery.router` double-mounted | 🟢 BAJA | Rate limit halved |
 | 23 | `ai_prompts` defaults stale | 🟢 BAJA | Drift de docs |
@@ -341,8 +341,8 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 |---|--------|
 | 4.1 | Agregar `response_format={"type": "json_object"}` a `brief_parser.py:194,308` y `profile_generator.py:502` |
 | 4.2 | Eliminar `_extract_json` regex en `brief_parser.py` y `complete_json()` regex en `deepseek_client.py:130-141` |
-| 4.3 | **CORREGIDO**: Railway tiene `deepseek-chat`. **Cambiar a `deepseek-v3`** en Railway dashboard → Environment Variables |
-| 4.4 | Limpiar docs stale + **cambiar DEEPSEEK_MODEL en Railway de `deepseek-chat` a `deepseek-v3`** |
+| 4.3 | Cambiar `DEEPSEEK_MODEL` en Railway dashboard de `deepseek-chat` → `deepseek-v4-flash` (el código ya usa `deepseek-v4-flash`) |
+| 4.4 | Limpiar docs stale (`LAWEBCORE_PROYECTO_COMPLETO.md`, `CREDENCIALES_Y_SUSCRIPCIONES.md`, etc.) |
 | 4.5 | Limpiar dead code: `import re` en `candidate_analyzer.py:183`, `FunnelTracker()` |
 | 4.6 | Agregar `model` column a `api_costs` |
 
@@ -390,7 +390,7 @@ Las siguientes preguntas requieren acceso a producción y no se pueden responder
 | # | Pregunta | Cómo se verifica |
 |---|---------|-----------------|
 | 1 | ~1 ~~¿Migraciones 108/109 aplicadas?~~ — **SÍ, aplicadas 26-ago-2026 ✅** | — |
-| 2 | ~~¿`DEEPSEEK_MODEL` en Railway es `deepseek-v3`?~~ — **NO: es `deepseek-chat`** ✅** | Cambiar a `deepseek-v3` en Railway dashboard |
+| 2 | ~~¿`DEEPSEEK_MODEL` en Railway es `deepseek-v3`?~~ — **NO: es `deepseek-chat` (retired)** | **Cambiar a `deepseek-v4-flash` en Railway dashboard** |
 | 3 | ¿El sistema produce candidatos después del fix BUG #1? | Logs de Railway post-deploy `1bdacc3` |
 | 4 | ¿Hay política de desalojo de Redis activa? | Railway Redis dashboard |
 | 5 | ¿PITR habilitado en Railway PostgreSQL? | Railway Dashboard → PostgreSQL → Backups |
@@ -411,6 +411,7 @@ Las siguientes preguntas requieren acceso a producción y no se pueden responder
 | `f0ecbf9` | 27-ago | FASE 3 — search limits widened |
 | `1bdacc3` | 27-ago | **BUG #1 y #2 corregidos** |
 | `8baa49e` | 27-ago | Lanz v2.0 audit doc + PLAN_MAIN update + PROMPT_CLAUDE_CODE_ANALYSIS entry #24 |
+| `f7ddc19` | 27-ago | Super update docs — DEEPSEEK_MODEL correction + deepseek-v4-flash en código |
 
 ---
 

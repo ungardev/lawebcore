@@ -8,7 +8,7 @@
 |---|----------|-----------|-----------|---------|
 | V0 | TIER_MIN_FOLLOWERS ¿filtro duro? | **NO** | `worker.py:54` definido pero NO usado como filtro. Filtro real = `plan.min_followers` del brief | Ninguno ✅ |
 | V1 | ¿Qué modelo de IA en Railway? | **Por verificar** | Requiere acceso al panel Railway | Hito 34 |
-| V2 | deepseek-chat ¿resuelve? | **Por verificar** | `curl` test necesario | Hito 34 |
+| V2 | deepseek-v4-flash ¿resuelve? | **✅ Sí** | `config.py:55` actualizado a `deepseek-v4-flash` (era `deepseek-chat` retired) | Hito 34 |
 | V3 | PITR activado | **Por verificar** | Panel Railway → Postgres → Backups | Riesgo DB |
 | V4 | Redis eviction policy | **Por verificar** | Panel Railway → Redis → Settings | Contadores |
 

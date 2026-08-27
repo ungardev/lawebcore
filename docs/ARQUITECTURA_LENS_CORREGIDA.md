@@ -130,8 +130,8 @@ El Protocol `InstagramSource` declara 5 métodos (`search_hashtag`, `search_keyw
 
 `ApifyInstagramSource` (148 líneas) no implementa ocho de los métodos que el worker necesita. Cambiar `INSTAGRAM_SOURCE=apify` no degrada el sistema: lo rompe. Rehabilitar Apify exige completar antes el contrato.
 
-### 4.3 DeepSeek-V3
-Parsing de brief, generación de `DiscoveryProfile`, análisis de candidatos. `deepseek-chat`, caché de prompt habilitada. ~$0.001 USD/1K tokens.
+### 4.3 DeepSeek-V4-Flash
+Parsing de brief, generación de `DiscoveryProfile`, análisis de candidatos. `deepseek-v4-flash`, caché de prompt habilitada. ~$0.001 USD/1K tokens.
 
 ---
 

@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     ARQ_REDIS_URL: str = "redis://localhost:6379/0"
 
     DEEPSEEK_API_KEY: str = ""
-    DEEPSEEK_MODEL: str = "deepseek-v3"
+    DEEPSEEK_MODEL: str = "deepseek-v4-flash"
 
     GOOGLE_SERVICE_ACCOUNT_KEY: str = ""
     GOOGLE_DRIVE_FOLDER_ID: str = ""

@@ -220,7 +220,7 @@ cd apps/web && pnpm test --passWithNoTests
 | `DATABASE_URL` | Connection string asyncpg (Railway Postgres) |
 | `ARQ_REDIS_URL` | Redis para ARQ workers |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase |
-| `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | DeepSeek-V3 |
+| `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | DeepSeek-V4-Flash |
 | `HIKERAPI_API_KEY` | Source de datos (discovery/enrichment) |
 | `ADMIN_TOKEN` | JWT secret |
 | `API_ENV` | `development` / `production` |

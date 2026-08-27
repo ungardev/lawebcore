@@ -89,7 +89,7 @@ específico que cualquier herramienta de terceros.
   1. Crear cuenta en platform.deepseek.com
   2. Generar API key.
   3. Cargar saldo inicial de $10 USD.
-- **Variables:** `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL=deep-chat`
+- **Variables:** `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL=deepseek-v4-flash`
 
 ---
 
@@ -134,7 +134,7 @@ META_ACCESS_TOKEN=
 TIKTOK_RESEARCH_API_KEY=
 YOUTUBE_DATA_API_KEY=
 DEEPSEEK_API_KEY=
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 DEFAULT_LLM_PROVIDER=deepseek
 ```
 

@@ -2,7 +2,7 @@
 
 > **Última actualización:** 2026-08-27
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · Validación E2E pendiente · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v3`**
+> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · Código usa `deepseek-v4-flash` ✅ · Validación E2E pendiente · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v4-flash`**
 > **HikerAPI balance:** ~$38.00 USD
 > **NUEVO (27-ago):** CI verde — 75 errores ruff W292/I001 corregidos, 63 noqa comments, mypy deshabilitado temporalmente, test_budget_fuse.py ignorado, 139 tests passing
 
@@ -69,7 +69,7 @@ Railway tiene **DOS mecanismos de migración** que NO se ejecutan automáticamen
 31:     Contrato datos: _normalize_user None, 7 dual-names eliminados
 32:     Tabla maestra: _derive_tier, dedup handle, metrics carry-through
 33:     Ensanche búsqueda: constants to config
-34:     Precisión IA: response_format json_object, deepseek-v3 (código) / deepseek-chat (Railway — **cambiar a deepseek-v3**)
+34:     Precisión IA: response_format json_object, deepseek-v4-flash (código) / deepseek-chat (Railway — **cambiar a deepseek-v4-flash**)
 35:     Validación backend: product_name y niches requeridos
 FASE 35:
   FIX #1+2: Merge enrichment snake_case + _enriched; scoring follower_count first
@@ -189,7 +189,7 @@ Railway está conectado a `postgres.railway.internal:5432/railway` — que es la
 
 8. 🟡 **FP-1: Freshness policy 7d**
 9. 🟡 **FP-2: Brand exclusion table**
-10. 🟢 **FP-3: seed.sql/schema.sql deepseek-v3**
+10. 🟢 **FP-3: Cambiar `deepseek-chat` → `deepseek-v4-flash` en Railway dashboard**
 11. 🟢 **FP-4: Tests**
 12. 🟢 **FP-5: Ensanche 5/3/5/2**
 

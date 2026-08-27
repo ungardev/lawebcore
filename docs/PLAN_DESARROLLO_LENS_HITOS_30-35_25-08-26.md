@@ -330,7 +330,7 @@ Numeración continuando desde el Hito 29\. Cada hito es desplegable y reversible
 | :---- | :---- | :---- | :---- |
 | **V0** | ¿`TIER_MIN_FOLLOWERS = 5_000` es filtro duro o reparto por tiers? | Lectura de sus usos en `worker.py` | **Todo** — hallazgo H-2 |
 | V1 | ¿Qué modelo está configurado en las variables de Railway? | Panel de Railway | Hito 34 |
-| V2 | ¿El alias `deepseek-chat` todavía resuelve? | Una llamada al proveedor | Hito 34 |
+| V2 | ¿El alias `deepseek-chat` todavía resuelve? (Railway tiene `deepseek-chat` retired) | **SÍ resuelve** pero está discontinuado. Cambiar a `deepseek-v4-flash` | Hito 34 |
 | V3 | ¿Está activada la recuperación a un punto en el tiempo en la base? | Panel de Railway | Riesgo de pérdida total |
 | V4 | ¿Redis tiene política de desalojo por memoria? | Panel de Railway | Integridad de contadores de gasto |
 

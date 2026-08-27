@@ -788,7 +788,7 @@ ARQ_REDIS_URL=redis://localhost:6379/0
 
 # AI
 DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_MODEL=deepseek-chat
+DEEPSEEK_MODEL=deepseek-v4-flash
 
 # APIs Externas
 APIFY_API_KEY=

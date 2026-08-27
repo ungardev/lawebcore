@@ -32,7 +32,7 @@
 | 33.3 Metadata planned/executed | ✅ Confirmado | `worker.py:411-414` |
 | 34.1 `response_format` | ✅ Confirmado | `candidate_analyzer.py:327` |
 | **34.3 Sin `re.search`** | ⚠️ **Desviación** | Ver D-3 |
-| 34.5 `deepseek-v3` | ✅ Confirmado | `config.py:55` |
+| 34.5 `deepseek-v4-flash` | ✅ Confirmado | `config.py:55` (actualizado a deepseek-v4-flash) |
 | 35.2 Validación backend | ✅ Confirmado | `discovery.py:507-510` |
 
 **Resumen: 16 confirmados, 2 desviaciones, 1 no aplicado.**
