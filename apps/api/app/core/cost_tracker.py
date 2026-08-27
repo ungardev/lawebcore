@@ -45,6 +45,7 @@ class CostTracker:
             return 0
 
         from sqlalchemy import insert
+
         from app.models.operation import ApiCost  # noqa: F401
 
         inserted = 0

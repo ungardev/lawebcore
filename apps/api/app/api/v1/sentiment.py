@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
-
-from app.ai.sentiment_analyzer import analyze_comments_full, SentimentDistribution
 from shared_core import railway_pg
+
+from app.ai.sentiment_analyzer import SentimentDistribution, analyze_comments_full
 from app.core.security import CurrentUserDep
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])

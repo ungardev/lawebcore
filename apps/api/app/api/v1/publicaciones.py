@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
 
 router = APIRouter()

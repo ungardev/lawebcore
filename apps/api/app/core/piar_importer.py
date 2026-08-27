@@ -24,7 +24,6 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-
 from shared_core import railway_pg
 
 logger = structlog.get_logger(__name__)

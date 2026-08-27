@@ -75,7 +75,7 @@ export function LensSearchPage() {
     }
   };
 
-  const hasResults = run?.status === 'completed' || run?.status === 'partial' || run?.status === 'explored';
+  const hasResults = run?.status === 'completed' || run?.status === 'partial' || run?.status === 'explored' || run?.status === 'delivered' || run?.status === 'degraded' || run?.status === 'empty';
   const statusLabel = run?.status === 'running'
     ? 'Discovery en curso'
     : run?.status === 'pending'

@@ -1,20 +1,20 @@
 """P.I.A.R. Scoring + Benchmarks endpoints."""
 
 from fastapi import APIRouter, HTTPException, Query
+from shared_core import railway_pg
 
+from app.core.piar_benchmarks import (
+    compare_with_benchmark,
+    get_all_benchmarks_formatted,
+    get_benchmark_by_followers,
+    get_benchmark_status_for_influencer,
+)
 from app.core.piar_scoring import (
+    ScoreDecision,
+    ScoringMode,
     calcular_score,
     calcular_score_profile,
-    ScoringMode,
-    ScoreDecision,
 )
-from app.core.piar_benchmarks import (
-    get_all_benchmarks_formatted,
-    get_benchmark_status_for_influencer,
-    compare_with_benchmark,
-    get_benchmark_by_followers,
-)
-from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 
 router = APIRouter()

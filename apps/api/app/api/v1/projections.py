@@ -1,9 +1,9 @@
 """P.I.A.R projection endpoints."""
 
 from fastapi import APIRouter, HTTPException
+from shared_core import railway_pg
 
 from app.core.piar_engine import PiarEngine
-from shared_core import railway_pg
 from app.core.security import CurrentUserDep
 from app.schemas.projections import (
     ProjectionCalculateRequest,

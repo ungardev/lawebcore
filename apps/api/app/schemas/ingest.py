@@ -1,8 +1,9 @@
 """P.I.A.R. Data Contract schemas — PublicacionIngest + validation."""
 
-from pydantic import BaseModel, Field, HttpUrl
 from typing import Any
 from uuid import UUID
+
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class PublicacionIngest(BaseModel):

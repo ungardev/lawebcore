@@ -12,12 +12,12 @@ y se agregan los totales a `publicaciones` (sentimiento_positivo/neutro/negativo
 """
 
 import json
-import structlog
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from shared_ai import deepseek_client, LLMResponse
+import structlog
+from shared_ai import LLMResponse, deepseek_client
 
 logger = structlog.get_logger(__name__)
 

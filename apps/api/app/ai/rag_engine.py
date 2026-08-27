@@ -12,9 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import structlog
-
-from shared_ai import deepseek_client
-from shared_ai import embed_text
+from shared_ai import deepseek_client, embed_text
 
 logger = structlog.get_logger(__name__)
 

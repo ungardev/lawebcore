@@ -10,15 +10,14 @@ Uses the existing document_chunks table (no document_id required for P.I.A.R. da
 we use metadata to link back to the source).
 """
 
-import structlog
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
 
+import structlog
+from shared_ai import chunk_text, embed_texts
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared_ai import embed_texts, chunk_text
 
 logger = structlog.get_logger(__name__)
 

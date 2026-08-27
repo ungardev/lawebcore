@@ -11,9 +11,9 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
+from shared_core import close_db, init_db, settings, supabase_rest
 from sqlalchemy import text
 
-from shared_core import settings, close_db, init_db, supabase_rest
 from app.api.v1 import api_router
 from app.core.logging import configure_logging
 
@@ -43,7 +43,9 @@ import multiprocessing
 def _arq_worker_entry():
     """Entry point for the ARQ worker process."""
     import asyncio
+
     from arq.worker import run_worker
+
     from app.workers.worker import WorkerSettings
     asyncio.run(run_worker(WorkerSettings))
 
@@ -109,9 +111,9 @@ app.mount("/metrics", metrics_app)
 
 # Rate limiting (slowapi)
 from slowapi import Limiter
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
 app.state.limiter = limiter
@@ -160,8 +162,9 @@ async def readiness():
 async def health_sources():
     """Check status of all Instagram data sources (HikerAPI, Apify) and remaining credits."""
     import os
-    from discovery.tools.hikerapi_client import HikerAPIClient
+
     from discovery.tools.apify_client import apify_client
+    from discovery.tools.hikerapi_client import HikerAPIClient
 
     result = {
         "active_source": os.getenv("INSTAGRAM_SOURCE", "hikerapi"),
@@ -229,6 +232,7 @@ async def health_sources():
 async def net_debug():
     """Debug network connectivity to Supabase hosts."""
     import socket
+
     import httpx
     result = {
         "outbound_ip": None,

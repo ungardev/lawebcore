@@ -1,12 +1,13 @@
 """AI endpoints: chat (RAG), generation, embeddings, indexing."""
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+import time
+
+import structlog
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from shared_core import get_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-import time
-import structlog
 
-from shared_core import get_db
 from app.core.security import CurrentUserDep
 from app.schemas import AIChatRequest, AIChatResponse, AIGenerateRequest
 from app.services.ai_service import AIService
@@ -87,7 +88,7 @@ async def reindex_piar(
     - neither: only index recent publications (last 100)
     """
     try:
-        from app.ai.indexer import reindex_all_piar, index_publicaciones_by_campaign
+        from app.ai.indexer import index_publicaciones_by_campaign, reindex_all_piar
     except ImportError as e:
         logger.error("indexer_import_failed", error=str(e))
         raise HTTPException(status_code=500, detail="Indexer not available")

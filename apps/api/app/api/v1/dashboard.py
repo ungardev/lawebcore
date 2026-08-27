@@ -1,10 +1,11 @@
 """Dashboard endpoints - using Supabase REST API."""
-import structlog
 from decimal import Decimal
 from typing import Any
-from fastapi import APIRouter, Query
 
+import structlog
+from fastapi import APIRouter, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
 from app.schemas import DashboardKPIs
 

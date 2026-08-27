@@ -1,46 +1,46 @@
 """SQLAlchemy ORM models for La Web Core."""
 
-from app.models.base import Base
-from app.models.user import User, Role, Permission, UserRole, BusinessUnit, Team, TeamMember
-from app.models.commercial import Client, Brand, BrandContact, ClientContract
-from app.models.influencer import Influencer, InfluencerSocialAccount, InfluencerMetricsSnapshot
-from app.models.campaign import (
-    Campaign,
-    CampaignStatusHistory,
-    CampaignInfluencer,
-    CampaignLink,
-    CampaignDocument,
-)
-from app.models.kpi import KPIDefinition, CampaignKPIValue, Benchmark, Insight, WinningFormat
-from app.models.operation import (
-    Budget,
-    BudgetItem,
-    Task,
-    Form,
-    FormSubmission,
-    Automation,
-    AutomationLog,
-)
 from app.models.ai import (
+    AIConversation,
+    AIJob,
+    AIMessage,
     AIPrompt,
     Document,
     DocumentChunk,
-    AIConversation,
-    AIMessage,
-    AIJob,
     Notification,
 )
 from app.models.analytics import (
-    Dashboard,
-    Widget,
-    ScheduledReport,
     AuditLog,
-    Integration,
-    Webhook,
+    Dashboard,
     Export,
+    Integration,
+    ScheduledReport,
+    Webhook,
+    Widget,
+)
+from app.models.base import Base
+from app.models.campaign import (
+    Campaign,
+    CampaignDocument,
+    CampaignInfluencer,
+    CampaignLink,
+    CampaignStatusHistory,
+)
+from app.models.comentario import Comentario
+from app.models.commercial import Brand, BrandContact, Client, ClientContract
+from app.models.influencer import Influencer, InfluencerMetricsSnapshot, InfluencerSocialAccount
+from app.models.kpi import Benchmark, CampaignKPIValue, Insight, KPIDefinition, WinningFormat
+from app.models.operation import (
+    Automation,
+    AutomationLog,
+    Budget,
+    BudgetItem,
+    Form,
+    FormSubmission,
+    Task,
 )
 from app.models.publicacion import Publicacion
-from app.models.comentario import Comentario
+from app.models.user import BusinessUnit, Permission, Role, Team, TeamMember, User, UserRole
 
 __all__ = [
     "Base",

@@ -1,12 +1,11 @@
 """Pydantic schemas for API serialization."""
 
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Any, Generic, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-
 
 T = TypeVar("T")
 
@@ -310,6 +309,7 @@ from app.schemas.projections import (
     ProjectionCalculateResponse,
     ProjectionTierInput,
 )
+
 
 class DashboardKPIs(BaseModel):
     total_campaigns: int

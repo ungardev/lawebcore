@@ -1,6 +1,7 @@
 """Pydantic schemas for P.I.A.R projection endpoints."""
 
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 

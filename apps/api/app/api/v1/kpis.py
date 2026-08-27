@@ -1,10 +1,10 @@
 """KPIs endpoints: definitions + campaign KPI values."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from shared_core import get_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_core import get_db
 from app.core.security import CurrentUserDep
 from app.schemas import KPIRead, KPIValueCreate
 

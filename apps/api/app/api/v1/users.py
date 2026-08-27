@@ -1,10 +1,10 @@
 """Users endpoint - list users (admin) or self."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from shared_core import get_db
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared_core import get_db
 from app.core.security import CurrentUserDep
 from app.schemas import UserRead
 

@@ -1,8 +1,9 @@
 """Clients endpoints."""
 from fastapi import APIRouter, HTTPException, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
-from app.schemas import ClientRead, ClientCreate
+from app.schemas import ClientCreate, ClientRead
 
 router = APIRouter()
 

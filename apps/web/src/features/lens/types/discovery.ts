@@ -1,4 +1,4 @@
-export type DiscoveryRunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'partial' | 'explored';
+export type DiscoveryRunStatus = 'pending' | 'running' | 'queued' | 'delivered' | 'degraded' | 'empty' | 'inconsistent' | 'aborted_budget' | 'partial' | 'explored' | 'completed' | 'failed' | 'cancelled';
 export type CandidateStatus = 'new' | 'saved' | 'dismissed' | 'contacted' | 'replied' | 'won' | 'lost';
 export type ConversationStep = 'start' | 'brief' | 'refining' | 'searching' | 'ranking' | 'candidates_review' | 'done';
 export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'facebook';

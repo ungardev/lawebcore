@@ -163,7 +163,7 @@ class InlineAssistantMessage(BaseModel):
 @router.post("/conversations", response_model=ConversationResponse)
 async def create_conversation(body: DiscoveryConversationCreate, user: CurrentUserDep):
     """Crea una conversación nueva de discovery."""
-    from discovery.memory import conversation_memory, _generate_conversation_title
+    from discovery.memory import _generate_conversation_title, conversation_memory
 
     conversation_id = uuidlib.uuid4()
     result = await orchestrator.create_conversation(
@@ -802,6 +802,7 @@ async def list_run_candidates(
 async def download_proposal_csv(run_id: UUID):
     """Descarga propuesta CSV con los candidatos guardados (top 10)."""
     from fastapi.responses import StreamingResponse
+
     from app.services.proposal_generator import generate_proposal_csv
 
     candidates = await railway_pg.select(

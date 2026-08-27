@@ -1,20 +1,19 @@
 """Rate limiting middleware usando slowapi."""
 
 from fastapi import Request, Response
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-from slowapi.middleware import SlowAPIMiddleware
-from slowapi.errors import RateLimitExceeded
-
 from shared_core import settings
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 
 
 def get_user_identifier(request: Request) -> str:
     """Usa el JWT sub claim si está autenticado, si no el IP."""
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
-        import json
         import base64
+        import json
         try:
             token = auth_header.split(" ")[1]
             _, payload, _ = token.split(".")

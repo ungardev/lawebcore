@@ -3,23 +3,23 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    admin,
+    ai,
     auth,
-    clients,
     brands,
     campaigns,
+    clients,
+    dashboard,
+    discovery,
+    imports,
     influencers,
     kpis,
-    dashboard,
-    ai,
-    users,
+    lens,
     projections,
     publicaciones,
-    imports,
     scoring,
     sentiment,
-    discovery,
-    lens,
-    admin,
+    users,
 )
 
 api_router = APIRouter()

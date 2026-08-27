@@ -1,7 +1,6 @@
 """Prometheus metrics for the Lens discovery pipeline."""
 
-from prometheus_client import Counter, Histogram, Gauge
-
+from prometheus_client import Counter, Gauge, Histogram
 
 lens_pipeline_duration_seconds = Histogram(
     "lens_pipeline_duration_seconds",

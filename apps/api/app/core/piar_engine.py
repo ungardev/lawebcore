@@ -8,10 +8,11 @@ una regresión da resultados frágiles.
 Ver: 04_motor_de_proyeccion.md
 """
 
-import structlog
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
+
+import structlog
 from dateutil.relativedelta import relativedelta
 
 from app.core.piar_constants import (
@@ -60,7 +61,7 @@ class PiarEngine:
             return ESCENARIOS, "SIN_DATOS", None
 
         try:
-            from app.core.piar_scoring import calcular_score, ScoringMode, ScoreDecision
+            from app.core.piar_scoring import ScoreDecision, ScoringMode, calcular_score
         except ImportError:
             return ESCENARIOS, "ERROR_IMPORT", None
 

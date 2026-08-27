@@ -5,10 +5,9 @@ from uuid import UUID
 import bcrypt
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
-
-from app.core.security import CurrentUserDep, create_access_token, get_current_user
 from shared_core import railway_pg
 
+from app.core.security import CurrentUserDep, create_access_token, get_current_user
 
 router = APIRouter()
 

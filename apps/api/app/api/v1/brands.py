@@ -1,8 +1,9 @@
 """Brands endpoints."""
 from fastapi import APIRouter, HTTPException, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
-from app.schemas import BrandRead, BrandCreate
+from app.schemas import BrandCreate, BrandRead
 
 router = APIRouter()
 

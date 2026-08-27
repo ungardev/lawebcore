@@ -1,8 +1,9 @@
 """Influencers endpoints."""
 from fastapi import APIRouter, HTTPException, Query
 from shared_core import railway_pg
+
 from app.core.security import CurrentUserDep
-from app.schemas import InfluencerRead, InfluencerCreate, InfluencerMetricsRead
+from app.schemas import InfluencerCreate, InfluencerMetricsRead, InfluencerRead
 
 router = APIRouter()
 

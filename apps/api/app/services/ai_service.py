@@ -15,11 +15,10 @@ from uuid import UUID, uuid4
 
 import structlog
 from langchain_openai import ChatOpenAI
+from shared_ai import embed_text
+from shared_core import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from shared_core import settings
-from shared_ai import embed_text
 
 logger = structlog.get_logger(__name__)
 
