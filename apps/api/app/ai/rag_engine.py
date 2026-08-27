@@ -7,7 +7,6 @@ Builds on top of AIService. Adds:
 - Detection of queries that need RAG vs. general knowledge
 """
 
-import json
 from dataclasses import dataclass
 from typing import Any
 

@@ -80,8 +80,8 @@ async def track_cost(
     """Context manager para trackear costo y latencia de una operación."""
     start = time.monotonic()
     cost_usd = 0.0
-    tokens_in = None
-    tokens_out = None
+    tokens_in = None  # noqa: F841
+    tokens_out = None  # noqa: F841
 
     try:
         yield

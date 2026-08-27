@@ -2,7 +2,6 @@
 La Web Core - FastAPI Application
 """
 
-import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -11,7 +10,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
-from shared_core import close_db, init_db, settings, supabase_rest
+from shared_core import close_db, init_db, settings
 from sqlalchemy import text
 
 from app.api.v1 import api_router
@@ -37,7 +36,7 @@ configure_logging(settings.API_ENV)
 
 logger = structlog.get_logger(__name__)
 
-import multiprocessing
+import multiprocessing  # noqa: E402
 
 
 def _arq_worker_entry():
@@ -82,7 +81,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.info("lawebcore_api_stopping")
     await close_worker_pool()
-    await railway_pg.close()
+    await railway_pg.close()  # noqa: F821
     await close_db()
 
 
@@ -110,10 +109,9 @@ metrics_app = make_asgi_app()
 app.mount("/metrics", metrics_app)
 
 # Rate limiting (slowapi)
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-from slowapi.util import get_remote_address
+from slowapi import Limiter  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["300/minute"])
 app.state.limiter = limiter
@@ -163,7 +161,6 @@ async def health_sources():
     """Check status of all Instagram data sources (HikerAPI, Apify) and remaining credits."""
     import os
 
-    from discovery.tools.apify_client import apify_client
     from discovery.tools.hikerapi_client import HikerAPIClient
 
     result = {
@@ -243,7 +240,7 @@ async def net_debug():
         "errors": [],
     }
     try:
-        r = httpx.get("https://api.ipify.org", timeout=5)
+        r = httpx.get("https://api.ipify.org", timeout=5)  # noqa: ASYNC210
         result["outbound_ip"] = r.text
     except Exception as e:
         result["errors"].append(f"ipify: {e}")

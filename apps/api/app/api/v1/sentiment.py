@@ -1,12 +1,12 @@
 """P.I.A.R. Sentiment Analysis endpoints — DeepSeek-powered comment classification."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 from shared_core import railway_pg
 
-from app.ai.sentiment_analyzer import SentimentDistribution, analyze_comments_full
+from app.ai.sentiment_analyzer import analyze_comments_full
 from app.core.security import CurrentUserDep
 
 router = APIRouter(prefix="/sentiment", tags=["sentiment"])
@@ -45,7 +45,7 @@ async def analyze_comments(
     if not pub_id:
         raise HTTPException(status_code=422, detail="publicacion_id es requerido")
 
-    pub = _pub_exists(pub_id)
+    pub = _pub_exists(pub_id)  # noqa: F841
     comment_texts: list[str] | None = payload.get("comentarios")
 
     if comment_texts is None:
@@ -65,7 +65,7 @@ async def analyze_comments(
 
     dist = await analyze_comments_full(comment_texts)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     updates = {
         "comentarios_analizados": dist.to_dict(),
         "sentimiento_positivo": dist.positivo,
@@ -201,7 +201,7 @@ async def _background_reanalyze(pub_ids: list[str], job_id: str) -> None:
                 continue
 
             dist = await analyze_comments_full(texts)
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
 
             updates = {
                 "comentarios_analizados": dist.to_dict(),
@@ -212,7 +212,7 @@ async def _background_reanalyze(pub_ids: list[str], job_id: str) -> None:
             }
             await railway_pg.update("publicaciones", updates, eq_filters={"id": pub_id})
 
-            for r, c in zip(comment_rows, dist.comentarios):
+            for r, c in zip(comment_rows, dist.comentarios):  # noqa: B905
                 await railway_pg.update("comentarios", {
                     "analyzed_sentiment": c.sentiment.value,
                     "analyzed_confidence": c.confidence,

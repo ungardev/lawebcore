@@ -40,7 +40,6 @@ from shared_core.observability import (
     FunnelTracker,
     RunEvent,
     RunStatus,
-    determine_final_status,
     drop_profile,
     flush_drop_ledger,
 )
@@ -247,7 +246,7 @@ async def _save_progress_message(
     tool: str = "discovery_pipeline",
 ) -> None:
     """Guarda un mensaje de progreso en el conversation asociado al run."""
-    from uuid import UUID as pyUUID
+    from uuid import UUID as pyUUID  # noqa: N811
     try:
         conv_id = await _get_conversation_id_for_run(run_id)
         if not conv_id:
@@ -288,7 +287,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         logger.info(RunEvent.RUN_STARTED.value, run_id=run_id)
 
         drop_ledger = DropLedger()
-        funnel = FunnelTracker()
+        funnel = FunnelTracker()  # noqa: F841
 
         run = await railway_pg.select_one(
             table="discovery_runs",
@@ -1813,7 +1812,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             filters=[f"discovery_run_id=eq.{run_id}"],
         )
         if conv:
-            from uuid import UUID as pyUUID
+            from uuid import UUID as pyUUID  # noqa: N811
 
             from discovery.memory import conversation_memory
             top_candidates = qualified[:10]
@@ -1941,7 +1940,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "Revisa: hikerapi.com/billing"
         )
         await _run_set_status(run_id, RunStatus.FAILED.value, error=error_msg)
-        try:
+        try:  # noqa: SIM105
             await _save_progress_message(
                 run_id,
                 f"🔴 La búsqueda falló por un problema con HikerAPI: HTTP {e.status_code}. "

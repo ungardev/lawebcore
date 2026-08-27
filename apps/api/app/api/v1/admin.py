@@ -4,7 +4,7 @@ import asyncio
 import json
 import random
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
@@ -77,9 +77,9 @@ async def _upsert_batch(table: str, rows: list[dict], on_conflict_col: str | Non
 
 
 def _tier(followers: int) -> str:
-    if followers < 10_000: return "NANO"
-    if followers < 100_000: return "MICRO"
-    if followers < 500_000: return "MID"
+    if followers < 10_000: return "NANO"  # noqa: E701
+    if followers < 100_000: return "MICRO"  # noqa: E701
+    if followers < 500_000: return "MID"  # noqa: E701
     return "MACRO"
 
 
@@ -87,9 +87,9 @@ def _tier(followers: int) -> str:
 # 1. SEED PURINA DOG CHOW
 # ================================================================
 async def _seed_purina() -> dict:
-    CID  = "f0000000-0000-0000-0000-000000000001"
-    BID  = "f0000000-0000-0000-0000-000000000002"
-    CAMPID = "f0000000-0000-0000-0000-000000000003"
+    CID  = "f0000000-0000-0000-0000-000000000001"  # noqa: N806
+    BID  = "f0000000-0000-0000-0000-000000000002"  # noqa: N806
+    CAMPID = "f0000000-0000-0000-0000-000000000003"  # noqa: N806
 
     client_rows = [{
         "id": CID, "code": "NESTLE_VE", "name": "Nestlé Venezuela",
@@ -167,7 +167,7 @@ async def _seed_purina() -> dict:
             "source": "manual",
         })
 
-        for j in range(3):
+        for j in range(3):  # noqa: B007
             dias = random.randint(0, 20)
             horas = random.randint(8, 22)
             fecha = (datetime(2026, 7, 10) + timedelta(days=dias, hours=horas)).isoformat()
@@ -466,7 +466,7 @@ async def enrich_influencers(
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
-            updates["enriched_at"] = datetime.now(timezone.utc)
+            updates["enriched_at"] = datetime.now(UTC)
             try:
                 await railway_pg.update(
                     table="influencers",
@@ -495,7 +495,7 @@ async def enrich_influencers(
                 ))
                 failed_count += 1
 
-    try:
+    try:  # noqa: SIM105
         await railway_pg.insert("api_costs", {
             "provider": "apify",
             "cost_usd": apify_cost,
@@ -625,7 +625,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
         step = demo.pop("step", "brief")
 
         try:
-            conv_record = await railway_pg.insert(
+            conv_record = await railway_pg.insert(  # noqa: F841
                 table="discovery_conversations",
                 values={
                     "id": str(conv_id),
@@ -635,8 +635,8 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                     "accumulated_brief": demo.get("accumulated_brief", ""),
                     "message_count": len(messages),
                     "status": "active",
-                    "started_at": datetime.now(timezone.utc),
-                    "last_message_at": datetime.now(timezone.utc),
+                    "started_at": datetime.now(UTC),
+                    "last_message_at": datetime.now(UTC),
                 },
             )
         except Exception as e:
@@ -657,7 +657,7 @@ async def preload_demo_conversations(x_admin_token: str | None = Header(None)):
                         "tool_results": json.dumps(msg.get("tool_results")) if msg.get("tool_results") else None,
                         "cost_usd": msg.get("cost_usd", 0),
                         "latency_ms": msg.get("latency_ms", 0),
-                        "created_at": datetime.now(timezone.utc),
+                        "created_at": datetime.now(UTC),
                     },
                 )
             except Exception as e:

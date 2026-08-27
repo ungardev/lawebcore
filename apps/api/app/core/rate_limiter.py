@@ -4,7 +4,6 @@ from fastapi import Request, Response
 from shared_core import settings
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 
 

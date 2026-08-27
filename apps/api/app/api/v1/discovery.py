@@ -2,7 +2,7 @@
 
 import contextlib
 import uuid as uuidlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from discovery.orchestrator import orchestrator
@@ -378,7 +378,7 @@ async def send_message(
         table="discovery_conversations",
         filters=[f"id=eq.{conversation_id}"],
         values={
-            "last_message_at": datetime.now(timezone.utc),
+            "last_message_at": datetime.now(UTC),
             "current_step": ai_response.get("step", "brief"),
             "discovery_run_id": discovery_run_id,
         },
@@ -404,14 +404,14 @@ async def upload_brief_from_file(user: CurrentUserDep, file: UploadFile = File(.
 
     from pypdf import PdfReader
 
-    ALLOWED_TYPES = {
+    ALLOWED_TYPES = {  # noqa: N806
         "application/pdf": "pdf",
         "text/plain": "txt",
         "text/csv": "csv",
         "text/markdown": "md",
         "application/json": "json",
     }
-    MAX_SIZE = 5 * 1024 * 1024
+    MAX_SIZE = 5 * 1024 * 1024  # noqa: N806
 
     content_type = file.content_type or ""
     file_ext = ALLOWED_TYPES.get(content_type)
@@ -448,7 +448,7 @@ detail=f"Tipo de archivo no soportado: {content_type}. Usa PDF, TXT, CSV, MD o J
                 if page_text:
                     text += page_text + "\n"
         except Exception as e:
-            raise HTTPException(status_code=422, detail=f"Error leyendo PDF: {e}")
+            raise HTTPException(status_code=422, detail=f"Error leyendo PDF: {e}")  # noqa: B904
         if not text.strip():
             raise HTTPException(
                 status_code=422,
@@ -691,7 +691,7 @@ async def enrich_influencers(body: EnrichRequest, user: CurrentUserDep):
         inf_id = str(inf["id"])
         if inf_id in enriched_map:
             updates = enriched_map[inf_id]
-            updates["enriched_at"] = datetime.now(timezone.utc)
+            updates["enriched_at"] = datetime.now(UTC)
             try:
                 await railway_pg.update(
                     table="influencers",
@@ -923,7 +923,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
                 "avatar_url": candidate.get("avatar_url", ""),
                 "bio": candidate.get("bio", ""),
                 "is_discoverable": True,
-                "discovered_at": datetime.now(timezone.utc),
+                "discovered_at": datetime.now(UTC),
                 "discovery_query": candidate.get("discovery_query", ""),
                 "discovery_confidence": candidate.get("match_score", 0),
                 "followers": follower_count,
@@ -969,7 +969,7 @@ async def save_candidate(candidate_id: UUID, user: CurrentUserDep):
         values={
             "influencer_id": influencer_id,
             "social_account_id": social_account_id,
-            "snapshot_date": datetime.now(timezone.utc).date(),
+            "snapshot_date": datetime.now(UTC).date(),
             "follower_count": follower_count,
             "engagement_rate": candidate.get("engagement_rate"),
             "avg_likes": candidate.get("avg_likes"),

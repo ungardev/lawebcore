@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated, Any, Generic, TypeVar
+from typing import Annotated, Any, Generic, TypeVar  # noqa: F401
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
@@ -25,7 +25,7 @@ class PaginationParams(BaseModel):
     sort_dir: str = Field(default="desc", pattern="^(asc|desc)$")
 
 
-class Page(BaseModel, Generic[T]):
+class Page(BaseModel, Generic[T]):  # noqa: UP046
     items: list[T]
     total: int
     page: int
@@ -304,10 +304,10 @@ class AIGenerateRequest(BaseModel):
 
 # ---------- Dashboard ----------
 
-from app.schemas.projections import (
-    ProjectionCalculateRequest,
-    ProjectionCalculateResponse,
-    ProjectionTierInput,
+from app.schemas.projections import (  # noqa: E402
+    ProjectionCalculateRequest,  # noqa: F401
+    ProjectionCalculateResponse,  # noqa: F401
+    ProjectionTierInput,  # noqa: F401
 )
 
 

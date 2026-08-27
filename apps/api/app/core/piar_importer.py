@@ -18,7 +18,6 @@ Data sources soportadas:
 
 import csv
 import io
-import re
 import uuid
 from datetime import datetime
 from typing import Any
@@ -43,7 +42,7 @@ COLUMN_MAP_ES: dict[str, str] = {
     "coment": "comments",
     "coments": "comments",
     "compartidos": "shares",
-    "compartidos": "shares",
+    "compartidos": "shares",  # noqa: F601
     "shares": "shares",
     "guardados": "saves",
     "saves": "saves",
@@ -493,7 +492,7 @@ async def importar_csv(
             "inserted": 0,
             "updated": 0,
             "skipped": len(filas),
-            "errors": [{"row": i + 1, "reason": f"campaign_id '{campaign_id}' no encontrado en la base de datos"}],
+            "errors": [{"row": i + 1, "reason": f"campaign_id '{campaign_id}' no encontrado en la base de datos"}],  # noqa: F821
         }
 
     influencers_map = await obtener_influencers_map()

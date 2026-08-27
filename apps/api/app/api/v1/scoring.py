@@ -4,13 +4,11 @@ from fastapi import APIRouter, HTTPException, Query
 from shared_core import railway_pg
 
 from app.core.piar_benchmarks import (
-    compare_with_benchmark,
     get_all_benchmarks_formatted,
     get_benchmark_by_followers,
     get_benchmark_status_for_influencer,
 )
 from app.core.piar_scoring import (
-    ScoreDecision,
     ScoringMode,
     calcular_score,
     calcular_score_profile,
@@ -92,7 +90,7 @@ async def get_benchmark_by_tier(subtier: str, user: CurrentUserDep):
     Retorna el benchmark para una sub-tier específica.
     Ejemplo: NANO_BAJO, MICRO_MEDIO, MACRO_ALTO
     """
-    benchmark = await get_benchmark_by_followers(None)
+    benchmark = await get_benchmark_by_followers(None)  # noqa: F841
     rows = await railway_pg.table(
         "tier_benchmarks",
         select="*",

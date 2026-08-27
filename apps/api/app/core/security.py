@@ -1,7 +1,6 @@
 """Security: Local JWT verification (HS256), password hashing, RBAC helpers."""
 
-from datetime import datetime, timedelta, timezone
-from functools import lru_cache
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
@@ -24,7 +23,7 @@ class CurrentUser(BaseModel):
 
 def create_access_token(user_id: UUID, email: str, role: str, full_name: str | None = None) -> str:
     """Create a HS256 JWT signed with ADMIN_TOKEN."""
-    exp = datetime.now(timezone.utc) + timedelta(hours=24)
+    exp = datetime.now(UTC) + timedelta(hours=24)
     payload = {
         "sub": str(user_id),
         "email": email,
@@ -32,7 +31,7 @@ def create_access_token(user_id: UUID, email: str, role: str, full_name: str | N
         "app_role": role,
         "full_name": full_name or "",
         "exp": exp,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "iss": "lawebcore-api",
         "aud": "lawebcore-web",
     }
@@ -51,7 +50,7 @@ def verify_local_token(token: str) -> dict:
         )
         return claims
     except JWTError as e:
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {e}",
             headers={"WWW-Authenticate": "Bearer"},

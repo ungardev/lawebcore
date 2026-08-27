@@ -1,6 +1,5 @@
 """P.I.A.R. import endpoints — CSV, JSON, HypeAuditor ingestion."""
 
-import csv
 import io
 
 from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile
@@ -12,7 +11,6 @@ from app.core.piar_importer import (
     importar_json,
 )
 from app.schemas.imports import (
-    CSVImportRequest,
     ImportError,
     ImportReport,
     JSONImportRequest,
@@ -53,7 +51,7 @@ async def import_csv(
         try:
             csv_text = contents.decode("latin-1")
         except Exception:
-            raise HTTPException(status_code=400, detail="No se pudo decodificar el archivo. Usa UTF-8.")
+            raise HTTPException(status_code=400, detail="No se pudo decodificar el archivo. Usa UTF-8.")  # noqa: B904
 
     report = await importar_csv(
         csv_text=csv_text,

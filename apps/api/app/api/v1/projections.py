@@ -36,4 +36,4 @@ async def calcular_proyeccion(
         )
         return ProjectionCalculateResponse.model_validate(resultado)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error calculando proyección: {e}")
+        raise HTTPException(status_code=500, detail=f"Error calculando proyección: {e}")  # noqa: B904

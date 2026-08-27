@@ -29,7 +29,6 @@ Decisión:
 C-07: Manejo correcto de NULL vs 0 — nunca defaultear a 2pts.
 """
 
-import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -40,13 +39,13 @@ from shared_core import railway_pg
 logger = structlog.get_logger(__name__)
 
 
-class ScoringMode(str, Enum):
+class ScoringMode(str, Enum):  # noqa: UP042
     BY_POST = "BY_POST"
     BY_WAVE = "BY_WAVE"
     BY_PROFILE = "BY_PROFILE"
 
 
-class ScoreDecision(str, Enum):
+class ScoreDecision(str, Enum):  # noqa: UP042
     ESCALAR = "ESCALAR"
     OPTIMIZAR = "OPTIMIZAR"
     DESCARTAR = "DESCARTAR"
@@ -108,7 +107,7 @@ def resolve_subtier(followers: int | None, benchmarks: dict[str, dict[str, Any]]
     """Resuelve el sub-tier desde followers usando los benchmarks."""
     if followers is None:
         return None
-    for subtier, b in benchmarks.items():
+    for subtier, b in benchmarks.items():  # noqa: B007
         if b["er_min"] > 0:
             pass
     return None
@@ -121,9 +120,9 @@ def get_benchmark_for_followers(
     """Retorna el benchmark que corresponde a un follower count."""
     if followers is None:
         return None
-    for subtier, b in benchmarks.items():
-        er_min_test = b.get("er_min", 0)
-        vf_min_test = b.get("vf_min", 0)
+    for subtier, b in benchmarks.items():  # noqa: B007
+        er_min_test = b.get("er_min", 0)  # noqa: F841
+        vf_min_test = b.get("vf_min", 0)  # noqa: F841
     return None
 
 
@@ -270,7 +269,7 @@ async def calcular_score_post(
     if engagement_total is not None and vistas and vistas > 0 and er_vistas is None:
         er_vistas = (engagement_total / vistas) * 100
 
-    if vistas and followers and followers > 0:
+    if vistas and followers and followers > 0:  # noqa: SIM108
         vf_ratio = vistas / followers
     else:
         vf_ratio = None
@@ -281,7 +280,7 @@ async def calcular_score_post(
 
     scores = [s for s in [s_ret, s_eng, s_vir] if s is not None]
 
-    if not scores:
+    if not scores:  # noqa: SIM108
         score_final = None
     else:
         score_final = sum(scores) / len(scores)

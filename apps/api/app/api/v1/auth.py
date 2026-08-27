@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from shared_core import railway_pg
 
-from app.core.security import CurrentUserDep, create_access_token, get_current_user
+from app.core.security import CurrentUserDep, create_access_token
 
 router = APIRouter()
 

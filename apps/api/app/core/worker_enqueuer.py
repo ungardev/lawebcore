@@ -30,7 +30,7 @@ async def close_worker_pool() -> None:
     """Cierra el pool Redis ARQ en shutdown de la API."""
     global _pool
     if _pool is not None:
-        try:
+        try:  # noqa: SIM105
             await _pool.aclose()
         except Exception:
             pass

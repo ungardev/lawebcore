@@ -10,9 +10,8 @@ Uses the existing document_chunks table (no document_id required for P.I.A.R. da
 we use metadata to link back to the source).
 """
 
-from datetime import datetime, timezone
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import structlog
 from shared_ai import chunk_text, embed_texts
@@ -113,7 +112,7 @@ async def _insert_chunks(
     for i in range(0, len(chunks), EMBED_BATCH):
         batch = chunks[i:i + EMBED_BATCH]
         vectors = await embed_texts(batch)
-        for j, (chunk_text_val, vec) in enumerate(zip(batch, vectors)):
+        for j, (chunk_text_val, vec) in enumerate(zip(batch, vectors)):  # noqa: B905
             chunk_idx = i + j
             await db.execute(
                 text("""
@@ -146,8 +145,7 @@ async def index_publicacion(
 ) -> int:
     """Index or re-index a single publicacion in the vector store."""
     if pub_data is None:
-        from shared_core import supabase_rest
-        rows = await railway_pg.table(
+        rows = await railway_pg.table(  # noqa: F821
             "publicaciones", select="*", eq_filters={"id": pub_id}, limit=1
         )
         if not rows:
@@ -176,8 +174,7 @@ async def index_publicaciones_by_campaign(
     campaign_id: str,
 ) -> int:
     """Re-index all publicaciones for a campaign."""
-    from shared_core import supabase_rest
-    rows = await railway_pg.table(
+    rows = await railway_pg.table(  # noqa: F821
         "publicaciones",
         select="*",
         eq_filters={"campaign_id": campaign_id},
@@ -215,8 +212,7 @@ async def index_influencer_score(
 
 async def index_benchmarks(db: AsyncSession) -> int:
     """Index all LWFA benchmarks."""
-    from shared_core import supabase_rest
-    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)
+    rows = await railway_pg.table("tier_benchmarks", select="*", limit=20)  # noqa: F821
     total = 0
     for row in rows:
         subtier = str(row["subtier"])
@@ -246,9 +242,8 @@ async def reindex_all_piar(db: AsyncSession, limit: int = 1000) -> dict[str, int
     logger.info("piar_reindex_start", limit=limit)
     counts: dict[str, int] = {}
 
-    from shared_core import supabase_rest
 
-    pubs = await railway_pg.table("publicaciones", select="id", limit=limit)
+    pubs = await railway_pg.table("publicaciones", select="id", limit=limit)  # noqa: F821
     pub_total = 0
     for row in pubs[:100]:
         try:

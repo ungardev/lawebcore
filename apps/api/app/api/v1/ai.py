@@ -40,7 +40,7 @@ async def chat(payload: AIChatRequest, user: CurrentUserDep, db: AsyncSession = 
         )
     except Exception as e:
         logger.error("ai_chat_failed", error=str(e), user_id=str(user.id))
-        raise HTTPException(status_code=500, detail=f"AI chat failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI chat failed: {e}")  # noqa: B904
 
 
 @router.post("/generate", summary="Generate content via AI (brief, post-mortem, etc.)")
@@ -54,10 +54,10 @@ async def generate(payload: AIGenerateRequest, user: CurrentUserDep, db: AsyncSe
         )
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))  # noqa: B904
     except Exception as e:
         logger.error("ai_generate_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"AI generate failed: {e}")
+        raise HTTPException(status_code=500, detail=f"AI generate failed: {e}")  # noqa: B904
 
 
 @router.get("/conversations")
@@ -91,7 +91,7 @@ async def reindex_piar(
         from app.ai.indexer import index_publicaciones_by_campaign, reindex_all_piar
     except ImportError as e:
         logger.error("indexer_import_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Indexer not available")
+        raise HTTPException(status_code=500, detail="Indexer not available")  # noqa: B904
 
     if campaign_id:
         try:
@@ -100,7 +100,7 @@ async def reindex_piar(
             return {"status": "ok", "indexed": count, "scope": f"campaign:{campaign_id}"}
         except Exception as e:
             logger.error("reindex_campaign_failed", error=str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e))  # noqa: B904
 
     if full:
         try:
@@ -109,7 +109,7 @@ async def reindex_piar(
             return {"status": "ok", "indexed": counts, "scope": "full"}
         except Exception as e:
             logger.error("reindex_full_failed", error=str(e))
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e))  # noqa: B904
 
     return {"status": "ok", "message": "Specify campaign_id or full=true"}
 

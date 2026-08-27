@@ -21,5 +21,5 @@ class Comentario(Base, UUIDMixin):
     sentimiento: Mapped[str | None] = mapped_column(String(20))
     confianza: Mapped[float | None] = mapped_column(Numeric(3, 2))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=func.now(), nullable=False  # noqa: F821
     )

@@ -16,7 +16,6 @@ Usage:
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import UUID
 
 import structlog
 from shared_core.railway_pg import railway_pg

@@ -153,7 +153,7 @@ async def get_campaign(campaign_id: str, user: CurrentUserDep):
         brand=brand,
         client=client,
         kpis=kpis,
-        links=[CampaignLinkRead(**l) for l in links],
+        links=[CampaignLinkRead(**l) for l in links],  # noqa: E741
         insights=[InsightRead(**i) for i in insights],
     )
 

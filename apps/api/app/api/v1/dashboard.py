@@ -36,9 +36,9 @@ async def _safe_table(
         )
     except Exception as e:
         if "does not exist" in str(e).lower():
-            logger.warning(f"dashboard_table_missing", table=table, error=str(e))
+            logger.warning("dashboard_table_missing", table=table, error=str(e))
             return []
-        logger.warning(f"dashboard_table_query_failed", table=table, error=str(e))
+        logger.warning("dashboard_table_query_failed", table=table, error=str(e))
         return []
 
 

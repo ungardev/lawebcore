@@ -8,8 +8,7 @@ una regresión da resultados frágiles.
 Ver: 04_motor_de_proyeccion.md
 """
 
-from datetime import datetime, timezone
-from decimal import Decimal
+from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -114,7 +113,7 @@ class PiarEngine:
             Incluye ajuste de escenarios según calidad de creadores del histórico.
         """
         if reference_date is None:
-            reference_date = datetime.now(timezone.utc)
+            reference_date = datetime.now(UTC)
 
         brand_info = await self._get_brand_info(brand_id)
         client_id = brand_info["client_id"]
@@ -383,7 +382,7 @@ class PiarEngine:
         if not publicaciones:
             return {"er": None, "retencion": None, "vistas_promedio": None}
 
-        ahora = datetime.now(timezone.utc)
+        ahora = datetime.now(UTC)
         cutoff = ahora - relativedelta(months=MESES_RECIENTE)
 
         total_er_weighted: float = 0.0
@@ -412,21 +411,21 @@ class PiarEngine:
 
             er = p.get("er_alcance") or p.get("er_vistas")
             if er is not None and er != "N/A":
-                try:
+                try:  # noqa: SIM105
                     total_er_weighted += float(er) * peso
                 except (ValueError, TypeError):
                     pass
 
             retencion = p.get("retencion")
             if retencion is not None and retencion != "N/A":
-                try:
+                try:  # noqa: SIM105
                     total_retencion_weighted += float(retencion) * peso
                 except (ValueError, TypeError):
                     pass
 
             vistas = p.get("vistas")
             if vistas is not None and vistas != "N/A":
-                try:
+                try:  # noqa: SIM105
                     total_vistas_weighted += float(vistas) * peso
                 except (ValueError, TypeError):
                     pass
@@ -453,7 +452,7 @@ class PiarEngine:
         """
         er = promedios.get("er") or 0.0
         vistas_promedio = promedios.get("vistas_promedio") or 0.0
-        retencion = promedios.get("retencion")
+        retencion = promedios.get("retencion")  # noqa: F841
 
         escenarios: dict[str, dict[str, Any]] = {}
 

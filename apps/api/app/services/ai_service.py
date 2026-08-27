@@ -8,8 +8,6 @@ This service is the entry point for all AI features:
 
 from __future__ import annotations
 
-import json
-from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -18,7 +16,7 @@ from langchain_openai import ChatOpenAI
 from shared_ai import embed_text
 from shared_core import settings
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
 
 logger = structlog.get_logger(__name__)
 
@@ -121,7 +119,7 @@ class AIService:
         await db.rollback()
 
         # 4. Build prompt and call LLM
-        _SYSTEM_PROMPT_FALLBACK = (
+        _SYSTEM_PROMPT_FALLBACK = (  # noqa: N806
             "Eres el asistente estratégico de La Web Figital Agency — la agencia de influencer marketing "
             "#1 en Venezuela, con 12 años ejecutando campañas en Latam.\n\n"
             "CONOCIMIENTO CLAVE:\n"

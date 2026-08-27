@@ -22,7 +22,7 @@ from shared_ai import LLMResponse, deepseek_client
 logger = structlog.get_logger(__name__)
 
 
-class Sentiment(str, Enum):
+class Sentiment(str, Enum):  # noqa: UP042
     POSITIVO = "POSITIVO"
     NEUTRO = "NEUTRO"
     NEGATIVO = "NEGATIVO"
@@ -99,7 +99,7 @@ def _parse_llm_response(raw: str, num_comments: int) -> list[dict[str, Any]]:
     cleaned = raw.strip()
     if cleaned.startswith("```"):
         lines = cleaned.splitlines()
-        cleaned = "".join(l for l in lines if not l.startswith("```")).strip()
+        cleaned = "".join(l for l in lines if not l.startswith("```")).strip()  # noqa: E741
     try:
         data = json.loads(cleaned)
         results = data.get("results", [])
@@ -186,7 +186,7 @@ async def analyze_comments_full(comments: list[str]) -> SentimentDistribution:
     if not comments:
         return SentimentDistribution()
 
-    all_dist = SentimentDistribution()
+    all_dist = SentimentDistribution()  # noqa: F841
     all_comentarios: list[CommentSentiment] = []
 
     for i in range(0, len(comments), BATCH_SIZE):

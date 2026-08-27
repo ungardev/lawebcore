@@ -1,5 +1,4 @@
 """Minimal HTTP health server for Railway healthcheck."""
-import asyncio
 from contextlib import asynccontextmanager
 
 import uvicorn
