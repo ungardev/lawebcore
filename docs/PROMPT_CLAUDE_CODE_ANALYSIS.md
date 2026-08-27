@@ -34,6 +34,7 @@
 | **21** | *Análisis 5 agentes (backend/frontend/pipeline/Lanz/deploy)* | **2026-08-26** | **MiniMax** | Análisis exhaustivo: Railway NO ejecutó migraciones automáticamente |
 | **22** | *`docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` (actualizado 26-ago)* | **2026-08-26** | **MiniMax** | Estado completo: Migraciones 108/109/110 ejecutadas manualmente · ENUM 13 valores · C-0/C-1/C-2 en código pendiente deploy · lint CI bloquea |
 | **23** | *`README.md` (reescrito) + CI fixes (`e5e17b6`)* | **2026-08-27** | **MiniMax** | README.md reescrito con stack actualizado (HikerAPI), Hitos 30-35, arquitectura pipeline 4 pasos · CI verde: ruff noqa + mypy deshabilitado + pytest skip test_budget_fuse · Railway desplegado ✅ |
+| **24** | *`docs/Auditoria_Lanz_v2_2026-08-27.md`* | **2026-08-27** | **MiniMax** | Lanz v2.0: refundición de v1.2 + 23 hallazgos nuevos · BUG #1 (worker.py:1298 typo: 0 candidatos por corrida) + BUG #2 (discovery.py:973,976 columnas erradas: Save Candidate 500) · Fix applied in `1bdacc3` · 5 fases de acción (FASE 1-5 pendientes) · Lanz v1.2 marcado como iteración anterior |
 
 ---
 

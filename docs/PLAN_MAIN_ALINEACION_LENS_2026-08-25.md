@@ -1,12 +1,13 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 6 — Estado al 27-ago-2026 · CI Verde · Railway Desplegado
+## Iteración 7 — Estado al 27-ago-2026 · Lanz v2.0 · BUG #1/#2 Corregidos
 
 > **De:** MiniMax M2.7/M3
 > **Fecha:** 27 de agosto de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base actual (en repositorio):** `e5e17b6` (CI fix, 27-ago-2026)
-> **Último commit deployado en Railway:** `e5e17b6` ✅
+> **Commit base actual (en repositorio):** `1bdacc3` (BUG #1 + #2 fix, 27-ago-2026)
+> **Último commit deployado en Railway:** `1bdacc3` ✅ (pending deploy)
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
+> **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` — 23 hallazgos nuevos, 5 fases de acción
 > **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅
 > **Deduplicación manual ejecutada:** `paola_cocina_` (4→1 registros)
 > **ENUM discovery_run_status en Railway:** 13 valores (7 legacy + 6 Hito 30)
