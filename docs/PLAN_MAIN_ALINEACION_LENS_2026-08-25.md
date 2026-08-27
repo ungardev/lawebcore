@@ -41,7 +41,7 @@
 
 ### Sistema Completamente Operativo
 
-El pipeline está desplegado y funcional **tras corregir BUG #1 y #2** en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código ahora usa `deepseek-v4-flash`. **Pendiente: cambiar `DEEPSEEK_MODEL` en Railway de `deepseek-chat` a `deepseek-v4-flash`** (modelo retired en producción).
+El pipeline está desplegado y funcional **tras corregir BUG #1 y #2** en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway ahora usan `deepseek-v4-flash` ✅.
 
 ---
 
@@ -234,7 +234,7 @@ ORDER BY e.enumsortorder;
 | **Hito 34.1** | `response_format={"type": "json_object"}` | ✅ Confirmado | ✅ |
 | **Hito 34.3** | Regex extraction eliminada | ✅ Confirmado | ✅ |
 | **Hito 34.4** | `_fallback_scores` marcado | ✅ Confirmado | ✅ |
-| **Hito 34.5** | Modelo DeepSeek: `deepseek-v4-flash` | ✅ Código=`deepseek-v4-flash`, **Railway=`deepseek-chat` (retired)** | ⚠️ Pendiente: cambiar Railway a `deepseek-v4-flash` |
+| **Hito 34.5** | Modelo DeepSeek: `deepseek-v4-flash` | ✅ Código=`deepseek-v4-flash` | ✅ Railway=`deepseek-v4-flash` |
 | **Hito 35.2** | Validación backend | ✅ Confirmado | ✅ |
 
 ### 8 Fixes Fase 35 aplicados (commit `2446e75`, 27-ago-2026)
@@ -391,7 +391,7 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 |---|---------|---------|-------|
 | FP-1 | Freshness policy 7d | Validación E2E | ~$0.30-0.50/run ahorrado |
 | FP-2 | Brand exclusion table | Q1 (handles Nestlé/Purina) | $0 |
-| FP-3 | Cambiar `DEEPSEEK_MODEL` de `deepseek-chat` → `deepseek-v4-flash` en Railway dashboard | Cambio en Railway dashboard | $0 |
+| FP-3 | ~~Cambiar `DEEPSEEK_MODEL` de `deepseek-chat` → `deepseek-v4-flash` en Railway dashboard~~ ✅ HECHO | — | — |
 | FP-4 | Tests `test_hito31_data_contract.py` | post-estabilización | $0 |
 | FP-5 | Ensanche 5/3/5/2 | Q4 (aprobación) | ~$0.44/corrida extra |
 | FP-6 | Mypy re-habilitado + fixes strict errors | Post-FP-4 | $0 |
@@ -454,4 +454,4 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 *Documento actualizado: 27 de agosto de 2026 por MiniMax M2.7/M3*
 *Basado en: Informe Lanz v1.2 + Lanz v2.0 + Ejecución migraciones Railway + Fixes CI + Deploy Railway*
 *Commit base: `8baa49e` — BUG #1/#2 corregidos ✅ · Lanz v2.0 audit ✅ · Docs actualizadas ✅*
-*Estado: DB completa ✅ · Pipeline funcional ✅ (BUG #1/#2 fixed) · Código usa `deepseek-v4-flash` ✅ · CI verde ✅ · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v4-flash`***
+*Estado: DB completa ✅ · Pipeline funcional ✅ (BUG #1/#2 fixed) · `deepseek-v4-flash` en código + Railway ✅ · CI verde ✅*

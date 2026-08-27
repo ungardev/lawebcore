@@ -84,7 +84,7 @@ Lanz §7 define 5 acciones de alineación. Aquí el estado actual:
 | Sub-requisito | Estado | Evidencia |
 |--------------|--------|-----------|
 | `DEEPSEEK_MODEL=deepseek-v4-flash` en código | ✅ Hecho | `config.py:55`, `.env.example:32` (actualizado a `deepseek-v4-flash` el 27-ago-2026) |
-| `DEEPSEEK_MODEL` en Railway | ⚠️ Pendiente | Railway dashboard tiene `deepseek-chat` (retired, discontinuado 24-jul-2026). **Cambiar a `deepseek-v4-flash`** en Railway → Environment Variables |
+| `DEEPSEEK_MODEL` en Railway | ✅ Hecho | Railway actualizado a `deepseek-v4-flash` (27-ago-2026). Antes `deepseek-chat` (retired, discontinuado 24-jul-2026) |
 | `response_format` usado en scoring | ⚠️ Parcial | Solo en `candidate_analyzer.py:326`; 3 otros call sites usan regex |
 | Modelo de RAG no se reutiliza | ✅ Confirmado | Discovery no usa embeddings; Lanz §5.2 aplica |
 | `api_costs` registra model name | ❌ No | Solo provider; sin model column |
@@ -341,7 +341,7 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 |---|--------|
 | 4.1 | Agregar `response_format={"type": "json_object"}` a `brief_parser.py:194,308` y `profile_generator.py:502` |
 | 4.2 | Eliminar `_extract_json` regex en `brief_parser.py` y `complete_json()` regex en `deepseek_client.py:130-141` |
-| 4.3 | Cambiar `DEEPSEEK_MODEL` en Railway dashboard de `deepseek-chat` → `deepseek-v4-flash` (el código ya usa `deepseek-v4-flash`) |
+| 4.3 | ~~Cambiar `DEEPSEEK_MODEL` en Railway dashboard de `deepseek-chat` → `deepseek-v4-flash`~~ — ✅ **HECHO** (27-ago-2026) |
 | 4.4 | Limpiar docs stale (`LAWEBCORE_PROYECTO_COMPLETO.md`, `CREDENCIALES_Y_SUSCRIPCIONES.md`, etc.) |
 | 4.5 | Limpiar dead code: `import re` en `candidate_analyzer.py:183`, `FunnelTracker()` |
 | 4.6 | Agregar `model` column a `api_costs` |

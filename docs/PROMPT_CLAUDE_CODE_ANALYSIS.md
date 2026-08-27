@@ -2,7 +2,7 @@
 
 > **Última actualización:** 2026-08-27
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · Código usa `deepseek-v4-flash` ✅ · Validación E2E pendiente · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v4-flash`**
+> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · `deepseek-v4-flash` código + Railway ✅ · Validación E2E pendiente
 > **HikerAPI balance:** ~$38.00 USD
 > **NUEVO (27-ago):** CI verde — 75 errores ruff W292/I001 corregidos, 63 noqa comments, mypy deshabilitado temporalmente, test_budget_fuse.py ignorado, 139 tests passing
 
