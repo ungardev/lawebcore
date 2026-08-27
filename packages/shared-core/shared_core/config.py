@@ -92,10 +92,11 @@ class Settings(BaseSettings):
     RUN_MODE: Literal["live", "replay"] = "live"
 
     # LENS Discovery Search Limits (Hito 33)
-    DISCOVERY_HASHTAG_TOP_LIMIT: int = 3
-    DISCOVERY_HASHTAG_RECENT_LIMIT: int = 2
-    DISCOVERY_KEYWORD_LIMIT: int = 3
-    DISCOVERY_TOP_SEARCH_LIMIT: int = 1
+    # Widened from 3/2/3/1 to 6/4/6/3 per Lanz §5 audit (+$0.20/run)
+    DISCOVERY_HASHTAG_TOP_LIMIT: int = 6
+    DISCOVERY_HASHTAG_RECENT_LIMIT: int = 4
+    DISCOVERY_KEYWORD_LIMIT: int = 6
+    DISCOVERY_TOP_SEARCH_LIMIT: int = 3
 
 
 @lru_cache
