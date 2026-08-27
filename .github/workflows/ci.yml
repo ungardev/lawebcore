@@ -21,6 +21,7 @@ jobs:
       - name: Install deps
         run: |
           pip install -e ".[dev]"
+          pip install -e ../../packages/discovery
       - name: Lint
         run: ruff check app
       # - name: Typecheck
