@@ -49,6 +49,12 @@ export const CAMPAIGN_OBJECTIVES = [
 ] as const;
 
 export const INFLUENCER_TIERS = ['NANO', 'MICRO', 'MID', 'MACRO', 'MEGA', 'MIX'] as const;
+export const INFLUENCER_SUBTIERS = [
+  'NANO_BAJO', 'NANO_ALTO',
+  'MICRO_BAJO', 'MICRO_MEDIO', 'MICRO_ALTO',
+  'MID_BAJO', 'MID_ALTO',
+  'MACRO_BAJO', 'MACRO_ALTO',
+] as const;
 
 export const STATUS_COLORS: Record<string, string> = {
   BRIEF: 'bg-slate-100 text-slate-700 border-slate-300',

@@ -1,4 +1,9 @@
 export type DiscoveryRunStatus = 'pending' | 'running' | 'queued' | 'delivered' | 'degraded' | 'empty' | 'inconsistent' | 'aborted_budget' | 'partial' | 'explored' | 'completed' | 'failed' | 'cancelled';
+export const DISCOVERY_RUN_STATUSES: DiscoveryRunStatus[] = [
+  'pending', 'running', 'queued', 'delivered', 'degraded', 'empty',
+  'inconsistent', 'aborted_budget', 'partial', 'explored', 'completed',
+  'failed', 'cancelled',
+];
 export type CandidateStatus = 'new' | 'saved' | 'dismissed' | 'contacted' | 'replied' | 'won' | 'lost';
 export type ConversationStep = 'start' | 'brief' | 'refining' | 'searching' | 'ranking' | 'candidates_review' | 'done';
 export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'x' | 'facebook';

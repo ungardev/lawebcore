@@ -64,6 +64,24 @@ export function isTienda(bio: string | null): boolean {
 
 export function getTierColor(tier: string | null): string {
   switch (tier) {
+    case "NANO_BAJO":
+      return "border-warning/20 bg-warning/5 text-warning";
+    case "NANO_ALTO":
+      return "border-warning/40 bg-warning/10 text-warning";
+    case "MICRO_BAJO":
+      return "border-lime-400/40 bg-lime-400/10 text-lime-600";
+    case "MICRO_MEDIO":
+      return "border-success/30 bg-success/10 text-success";
+    case "MICRO_ALTO":
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-600";
+    case "MID_BAJO":
+      return "border-cyan-400/40 bg-cyan-400/10 text-cyan-600";
+    case "MID_ALTO":
+      return "border-info/30 bg-info/10 text-info";
+    case "MACRO_BAJO":
+      return "border-brand-purple/20 bg-brand-purple/5 text-brand-purple";
+    case "MACRO_ALTO":
+      return "border-brand-purple/40 bg-brand-purple/10 text-brand-purple";
     case "MACRO":
       return "border-brand-purple/30 bg-brand-purple/10 text-brand-purple";
     case "MID":
