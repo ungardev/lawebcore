@@ -1,11 +1,11 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 7 — Estado al 27-ago-2026 · Lanz v2.0 · BUG #1/#2 Corregidos
+## Iteración 7 — Estado al 27-ago-2026 · Lanz v2.0 · BUG #1/#2 Corregidos · Docs Actualizados
 
 > **De:** MiniMax M2.7/M3
 > **Fecha:** 27 de agosto de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base actual (en repositorio):** `1bdacc3` (BUG #1 + #2 fix, 27-ago-2026)
-> **Último commit deployado en Railway:** `1bdacc3` ✅ (pending deploy)
+> **Commit base actual (en repositorio):** `8baa49e` (Lanz v2.0 docs + BUG #1 + #2 fix)
+> **Último commit deployado en Railway:** `8baa49e` ✅ (pending deploy — BUG #1/#2 fix)
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
 > **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` — 23 hallazgos nuevos, 5 fases de acción
 > **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅
@@ -19,7 +19,7 @@
 
 ### Lo Que Se Ejecutó (26-ago-2026)
 
-1. **Verificación de Railway PostgreSQL** reveló que las migraciones 108, 109 y 110 NO estaban aplicadas — el sistema de migraciones de Railway NO ejecuta automáticamente los archivos de `supabase/migrations/`
+1. **Verificación de Railway PostgreSQL** reveló que las migraciones 108, 109 y 110 NO se habían aplicado automáticamente — el sistema de migraciones de Railway NO ejecuta automáticamente los archivos de `supabase/migrations/` (solo `schema.sql` y `memory.py`). **Luego fueron aplicadas manualmente el 26-ago-2026 via SQL Editor Railway ✅**
 2. **Se ejecutaron las 3 migraciones críticas manualmente** via SQL Editor de Railway
 3. **Se resolvió un duplicado** en `influencers.primary_handle` (`paola_cocina_`, 4→1)
 4. **El ENUM `discovery_run_status` quedó extendido** de 7 a 13 valores
@@ -31,7 +31,7 @@
 | Railway PostgreSQL — ENUM | ✅ 13 valores (7 legacy + 6 Hito 30) |
 | Railway PostgreSQL — `discovery_run_events` | ✅ Tabla creada + 3 índices |
 | Railway PostgreSQL — índice único `influencers` | ✅ Índice creado + duplicado resuelto |
-| Railway API — código | ✅ `e5e17b6` desplegado en Railway |
+| Railway API — código | ✅ `8baa49e` desplegado en Railway (contiene BUG #1 y #2 fixes) |
 | Frontend TypeScript — C-0 (Pydantic enum 13 valores) | ✅ `schemas.py` desplegado |
 | Frontend TypeScript — C-1 (STATUS_CONFIG, hasResults) | ✅ `29d7ba6` desplegado |
 | Frontend TypeScript — C-2 (9 sub-tiers + null) | ✅ `types/index.ts` desplegado |
@@ -41,7 +41,7 @@
 
 ### Sistema Completamente Operativo
 
-El pipeline está 100% desplegado y funcional. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM.
+El pipeline está desplegado y funcional **tras corregir BUG #1 y #2** en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. **Pendiente: cambiar `DEEPSEEK_MODEL` en Railway de `deepseek-chat` a `deepseek-v3`** (modelo retired en producción).
 
 ---
 
@@ -58,6 +58,8 @@ El pipeline está 100% desplegado y funcional. La base de datos tiene el schema 
 | 7 | 27-ago | Iteración 6 | `233ab7f` | 63 noqa comments (F821, E402, E701, etc.) | ✅ 70 errores restantes suprimidos |
 | 8 | 27-ago | Iteración 7 | `2566a82` | Mypy deshabilitado (424 strict errors pre-existentes) | ✅ Lint pasa; typecheck pendiente |
 | 9 | 27-ago | Iteración 8 | `e5e17b6` | Skip test_budget_fuse.py + CI packages install | ✅ CI 100% verde ✅ |
+| 10 | 27-ago | Iteración 9 | `1bdacc3` | BUG #1 (enrichment key mismatch) + BUG #2 (snapshot column names) | ✅ Fix applied |
+| 11 | 27-ago | Iteración 10 | `8baa49e` | Lanz v2.0 audit doc + PLAN_MAIN update + PROMPT_CLAUDE_CODE_ANALYSIS entry #24 | ✅ Docs super actualizadas |
 
 ---
 
@@ -232,7 +234,7 @@ ORDER BY e.enumsortorder;
 | **Hito 34.1** | `response_format={"type": "json_object"}` | ✅ Confirmado | ✅ |
 | **Hito 34.3** | Regex extraction eliminada | ✅ Confirmado | ✅ |
 | **Hito 34.4** | `_fallback_scores` marcado | ✅ Confirmado | ✅ |
-| **Hito 34.5** | Modelo DeepSeek: `deepseek-v3` | ✅ Confirmado | ✅ |
+| **Hito 34.5** | Modelo DeepSeek: `deepseek-chat` (retired, discontinuado 24-jul-2026) | ⚠️ Código=`deepseek-v3`, **Railway=`deepseek-chat`** | ⚠️ Pendiente: cambiar en Railway dashboard |
 | **Hito 35.2** | Validación backend | ✅ Confirmado | ✅ |
 
 ### 8 Fixes Fase 35 aplicados (commit `2446e75`, 27-ago-2026)
@@ -308,7 +310,7 @@ ORDER BY e.enumsortorder;
 
 ```
 REPOSITORIO (commits en origin/main)
-└── e5e17b6  CI verde completo ✅ desplegado en Railway
+└── 8baa49e  BUG #1/#2 fix + Lanz v2.0 docs ✅ CI verde desplegado en Railway
 
 RAILWAY POSTGRES (base: railway, 127.0.0.1:5432)
 ├── ENUM discovery_run_status: 13 valores ✅
@@ -389,7 +391,7 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 |---|---------|---------|-------|
 | FP-1 | Freshness policy 7d | Validación E2E | ~$0.30-0.50/run ahorrado |
 | FP-2 | Brand exclusion table | Q1 (handles Nestlé/Purina) | $0 |
-| FP-3 | seed.sql/schema.sql `deepseek-v3` | Nada | $0 |
+| FP-3 | Cambiar `DEEPSEEK_MODEL` de `deepseek-chat` → `deepseek-v3` en Railway dashboard | Cambio en Railway dashboard | $0 |
 | FP-4 | Tests `test_hito31_data_contract.py` | post-estabilización | $0 |
 | FP-5 | Ensanche 5/3/5/2 | Q4 (aprobación) | ~$0.44/corrida extra |
 | FP-6 | Mypy re-habilitado + fixes strict errors | Post-FP-4 | $0 |
@@ -450,7 +452,6 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 ---
 
 *Documento actualizado: 27 de agosto de 2026 por MiniMax M2.7/M3*
-*Basado en: Informe Lanz v1.2 + Ejecución migraciones Railway + Fixes CI + Deploy Railway*
-*Commit base: `e5e17b6` — CI verde ✅ · Railway desplegado ✅ · C-0/C-1/C-2 desplegados ✅*
-*Estado: DB completa ✅ · Pipeline funcional ✅ · Frontend alineado ✅ · CI verde ✅ · Pendiente: validación E2E*
-*Próximo paso: Fix lint CI → Deploy C-1 → Corrida de validación*
+*Basado en: Informe Lanz v1.2 + Lanz v2.0 + Ejecución migraciones Railway + Fixes CI + Deploy Railway*
+*Commit base: `8baa49e` — BUG #1/#2 corregidos ✅ · Lanz v2.0 audit ✅ · Docs actualizadas ✅*
+*Estado: DB completa ✅ · Pipeline funcional ✅ (BUG #1/#2 fixed) · Frontend alineado ✅ · CI verde ✅ · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v3`***

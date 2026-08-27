@@ -2,7 +2,7 @@
 
 > **Última actualización:** 2026-08-27
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** CI verde ✅ · Railway desplegado con C-0/C-1/C-2 ✅ · Validación E2E pendiente
+> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · Validación E2E pendiente · **Pendiente: cambiar DEEPSEEK_MODEL Railway de `deepseek-chat` a `deepseek-v3`**
 > **HikerAPI balance:** ~$38.00 USD
 > **NUEVO (27-ago):** CI verde — 75 errores ruff W292/I001 corregidos, 63 noqa comments, mypy deshabilitado temporalmente, test_budget_fuse.py ignorado, 139 tests passing
 
@@ -69,7 +69,7 @@ Railway tiene **DOS mecanismos de migración** que NO se ejecutan automáticamen
 31:     Contrato datos: _normalize_user None, 7 dual-names eliminados
 32:     Tabla maestra: _derive_tier, dedup handle, metrics carry-through
 33:     Ensanche búsqueda: constants to config
-34:     Precisión IA: response_format json_object, deepseek-v3
+34:     Precisión IA: response_format json_object, deepseek-v3 (código) / deepseek-chat (Railway — **cambiar a deepseek-v3**)
 35:     Validación backend: product_name y niches requeridos
 FASE 35:
   FIX #1+2: Merge enrichment snake_case + _enriched; scoring follower_count first
@@ -135,8 +135,8 @@ C-2: Influencer.primary_tier TypeScript 9 sub-tiers ✅ types/index.ts APLICADO
 
 | Bug | Prioridad | Notes |
 |-----|-----------|-------|
-| **CI lint bloquea deploy** — 197 errores en `app/__init__.py`, `worker.py` | 🔴 CRÍTICA | Railway no puede desplegar commits nuevos |
-| **Issue C-1: Frontend TypeScript** — `discovery.ts`, `LensRunsListPage`, `LensSearchPage` | 🔴 CRÍTICA | Código de C-1 aplicado en `29d7ba6` pero frontend no desplegado |
+| ~~**CI lint bloquea deploy** — 197 errores en `app/__init__.py`, `worker.py`~~ | ~~🔴 CRÍTICA~~ | ~~OBSOLETO — Resuelto en `e5e17b6` con noqa comments~~ |
+| ~~**Issue C-1: Frontend TypeScript** — `discovery.ts`, `LensRunsListPage`, `LensSearchPage`~~ | ~~🔴 CRÍTICA~~ | **RESUELTO** — Código en `29d7ba6` + `233ab7f` desplegado en Vercel ✅ |
 | Issue C-2: `TIERS` y `INFLUENCER_TIERS` incompletos | 🟡 MEDIA | `types/index.ts` arreglado pero constantes de UI no |
 | Fix C: useRunPolling.ts no usado por LensSearchPage | ⚠️ BAJA | Tech debt |
 | Budget tracking desfase | ⚠️ MEDIA | POSTERGADO — después de validación |

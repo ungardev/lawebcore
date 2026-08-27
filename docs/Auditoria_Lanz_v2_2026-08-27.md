@@ -16,7 +16,7 @@
 
 | Bug | Severidad | Impacto |
 |-----|-----------|---------|
-| BUG #1: `worker.py:1298` — typo `followers_count` vs `follower_count` | 🔴 CRÍTICO | 0 candidatos por corrida en auto/analyze mode desde Hito 35 |
+| BUG #1: `worker.py:1298` — typo `followers_count` vs `follower_count` | 🔴 CRÍTICO | 0 candidatos por corrida en auto/analyze mode desde Hito 35 (26-ago-2026) |
 | BUG #2: `discovery.py:973,976` — columnas `follower_count`/`raw_data` vs `followers`/`raw_payload` | 🔴 CRÍTICO | Save Candidate retorna 500 en cada click |
 | 12 bugs abiertos de Lanz v1.2 | 🟡 CRÍTICO | Sistema aún no cumple los 5 puntos del §7 |
 | 9 bugs nuevos de deuda técnica | 🟠 MEDIO | Dead code, drift de docs, columnas muertas |
@@ -84,7 +84,7 @@ Lanz §7 define 5 acciones de alineación. Aquí el estado actual:
 | Sub-requisito | Estado | Evidencia |
 |--------------|--------|-----------|
 | `DEEPSEEK_MODEL=deepseek-v3` en código | ✅ Hecho | `config.py:55`, `.env.example:32` |
-| `DEEPSEEK_MODEL` en Railway verificado | ❌ Desconocido | No se puede verificar sin acceso al dashboard |
+| `DEEPSEEK_MODEL` en Railway verificado | ❌ **NO: Railway usa `deepseek-chat`** | ⚠️ Confirmado 27-ago-2026: Railway tiene `deepseek-chat` (modelo retired, discontinuado 24-jul-2026). Código default es `deepseek-v3`. **Cambiar en Railway dashboard.** |
 | `response_format` usado en scoring | ⚠️ Parcial | Solo en `candidate_analyzer.py:326`; 3 otros call sites usan regex |
 | Modelo de RAG no se reutiliza | ✅ Confirmado | Discovery no usa embeddings; Lanz §5.2 aplica |
 | `api_costs` registra model name | ❌ No | Solo provider; sin model column |
@@ -233,7 +233,7 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 
 ### 3.19 — Docs stale con `deepseek-chat`
 
-**Descripción:** `docs/LAWEBCORE_PROYECTO_COMPLETO.md:791`, `docs/CREDENCIALES_Y_SUSCRIPCIONES.md:92,137` aún mencionan `DEEPSEEK_MODEL=deepseek-chat` (retired).
+**Descripción:** El sistema opera en producción con `DEEPSEEK_MODEL=deepseek-chat` (modelo retired, discontinuado 24-jul-2026). El código default en `config.py:55` especifica `deepseek-v3`. Railway actualmente tiene `deepseek-chat` configurado como env var. Esto constituye un drift crítico entre código y producción.
 
 ### 3.20 — `api_costs` sin columna model name
 
@@ -276,7 +276,7 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 | 17 | `FunnelTracker()` dead | 🟡 MEDIA | Deuda técnica |
 | 18 | `is_discoverable` columna muerta | 🟡 MEDIA | Deuda técnica |
 | 19 | `influencers.enriched_at` sin leer | 🟡 MEDIA | Feature incompleto |
-| 20 | docs stale con deepseek-chat | 🟢 BAJA | Drift de docs |
+| 20 | docs stale con deepseek-chat | 🟠 MEDIO | Sistema opera con modelo retired en producción — cambiar `deepseek-chat` → `deepseek-v3` en Railway dashboard |
 | 21 | `api_costs` sin model name | 🟢 BAJA | Deuda técnica |
 | 22 | `discovery.router` double-mounted | 🟢 BAJA | Rate limit halved |
 | 23 | `ai_prompts` defaults stale | 🟢 BAJA | Drift de docs |
@@ -341,8 +341,8 @@ p = {"_enriched": True, "follower_count": 5000}  # worker.py:1211 escribe
 |---|--------|
 | 4.1 | Agregar `response_format={"type": "json_object"}` a `brief_parser.py:194,308` y `profile_generator.py:502` |
 | 4.2 | Eliminar `_extract_json` regex en `brief_parser.py` y `complete_json()` regex en `deepseek_client.py:130-141` |
-| 4.3 | Verificar env var `DEEPSEEK_MODEL` en Railway dashboard — confirmar `deepseek-v3` |
-| 4.4 | Limpiar docs stale: `LAWEBCORE_PROYECTO_COMPLETO.md`, `CREDENCIALES_Y_SUSCRIPCIONES.md` |
+| 4.3 | **CORREGIDO**: Railway tiene `deepseek-chat`. **Cambiar a `deepseek-v3`** en Railway dashboard → Environment Variables |
+| 4.4 | Limpiar docs stale + **cambiar DEEPSEEK_MODEL en Railway de `deepseek-chat` a `deepseek-v3`** |
 | 4.5 | Limpiar dead code: `import re` en `candidate_analyzer.py:183`, `FunnelTracker()` |
 | 4.6 | Agregar `model` column a `api_costs` |
 
@@ -389,8 +389,8 @@ Las siguientes preguntas requieren acceso a producción y no se pueden responder
 
 | # | Pregunta | Cómo se verifica |
 |---|---------|-----------------|
-| 1 | ¿Migraciones 108/109 aplicadas en Railway PostgreSQL? | `SELECT version, filename FROM schema_migrations ORDER BY version;` en SQL Editor Railway |
-| 2 | ¿`DEEPSEEK_MODEL` en Railway es `deepseek-v3`? | Railway dashboard → Variables de entorno |
+| 1 | ~1 ~~¿Migraciones 108/109 aplicadas?~~ — **SÍ, aplicadas 26-ago-2026 ✅** | — |
+| 2 | ~~¿`DEEPSEEK_MODEL` en Railway es `deepseek-v3`?~~ — **NO: es `deepseek-chat`** ✅** | Cambiar a `deepseek-v3` en Railway dashboard |
 | 3 | ¿El sistema produce candidatos después del fix BUG #1? | Logs de Railway post-deploy `1bdacc3` |
 | 4 | ¿Hay política de desalojo de Redis activa? | Railway Redis dashboard |
 | 5 | ¿PITR habilitado en Railway PostgreSQL? | Railway Dashboard → PostgreSQL → Backups |
@@ -410,6 +410,7 @@ Las siguientes preguntas requieren acceso a producción y no se pueden responder
 | `2a9d4b6` | 27-ago | FASE 2-4 — sub-tiers, tests |
 | `f0ecbf9` | 27-ago | FASE 3 — search limits widened |
 | `1bdacc3` | 27-ago | **BUG #1 y #2 corregidos** |
+| `8baa49e` | 27-ago | Lanz v2.0 audit doc + PLAN_MAIN update + PROMPT_CLAUDE_CODE_ANALYSIS entry #24 |
 
 ---
 
