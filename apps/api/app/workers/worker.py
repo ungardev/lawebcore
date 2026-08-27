@@ -1295,7 +1295,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
-            followers = p.get("followers_count") if "followers_count" in p else p.get("followersCount")
+            followers = p.get("follower_count") if "follower_count" in p else p.get("followersCount")
             if followers is None:
                 followers = 0
                 was_enriched = p.get("_enriched", False)
