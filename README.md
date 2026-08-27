@@ -1,344 +1,289 @@
 # La Web Core
 
-> Plataforma interna de **La Web Figital Agency** para gestión integral de campañas de marketing, KPIs, operaciones de marca y producto, e Inteligencia Artificial.
->
-> **El corazón y núcleo operativo de la agencia, todo en un solo producto.**
+> El núcleo operativo de **La Web Figital Agency** — gestión integral de campañas de influencer marketing, discovery con IA propietario y scoring LWFA.
+
+[![CI](https://github.com/ungardev/lawebcore/actions/workflows/ci.yml/badge.svg)](https://github.com/ungardev/lawebcore/actions)
+[![Railway](https://img.shields.io/badge/Railway-Production-00d4aa?logo=railway)](https://railway.app)
+[![Vercel](https://img.shields.io/badge/Vercel-Frontend-000000?logo=vercel)](https://vercel.com)
+
+**Producción:** [API](https://lawebcore-production.up.railway.app) · [Frontend](https://lawebcore.vercel.app) · [Health](https://lawebcore-production.up.railway.app/api/v1/health)
 
 ---
 
-## LENS
+## Qué es LaWebCore
 
-**LENS** — *El sistema de discovery de influencers más inteligente de Venezuela.*
+Plataforma interna con 3 módulos核心:
 
-Con LENS, describe tu brief en lenguaje natural y recibe los mejores perfiles de Instagram verificados con scoring LWFA propietario — todo en minutos, no en días.
-
-| Lo que hacían antes | Con LENS ahora |
-|---|---|
-| Búsqueda manual de 200+ perfiles en Instagram | Pipeline automatizado de 4 capas en segundos |
-| Scoring genérico (followers/ER) | **4 KPIs LWFA exclusivos**: ICA, Geo-Foco Real, Engagement Velocity, Business Intent |
-| Sin contexto VE | **Inteligencia local**: slang, hashtags reales, benchmarks VE |
-| Sin filtro anti-bot | **Anti-bot filter**: descarta cuentas fake antes del enrichment |
-| Sin inteligencia de nicho | **Sistema ELITE**: genera hashtags/keywords/geo adaptados a VE automáticamente |
-| Apify directo ($$$) | **Cache inteligente Redis** → $0.30 por campaign vs $3.30 |
+| Módulo | Descripción |
+|--------|-------------|
+| **LENS** | Discovery de influencers — pipeline automatizado 4 capas con IA (HikerAPI + DeepSeek-V3) |
+| **PIAR** | Scoring y benchmarking de publicaciones con KPIs propietarios LWFA |
+| **Core** | Campañas, clientes, operaciones, KPIs y métricas |
 
 ---
 
-## Estado actual (Sprint 2 — Agosto 2026)
+## LENS — Discovery de Influencers
 
-- ✅ Pipeline de 4 capas Apify deployed en Railway
-- ✅ LWFA Scoring (4 KPIs exclusivos + composite 0-100)
-- ✅ Sistema **ELITE** — generación automática de queries con inteligencia VE
-- ✅ **Anti-bot filter** — descarta cuentas fake antes del enrichment
-- ✅ **Redis cache layer** — $0.30 por campaign vs $3.30
-- ✅ Discovery conversacional con DeepSeek-V3
-- ✅ Chat conversacional + Brief Wizard + Búsqueda directa
-- ✅ AI scoring: content_quality, audience_quality, brand_fit
-- ✅ Propuesta CSV con top candidatos
-- ✅ Railway deploy: `https://lawebcore-production.up.railway.app`
-- ✅ 5 funciones ARQ worker activas
+Describe tu brief en lenguaje natural y recibe los mejores perfiles verificados con scoring LWFA — todo en minutos, no en días.
 
----
+### Pain points antes / después
 
-## Stack
+| Antes | Con LENS |
+|-------|---------|
+| Búsqueda manual de 200+ perfiles | Pipeline automatizado de 4 capas en segundos |
+| Scoring genérico (followers/ER) | **4 KPIs LWFA exclusivos**: ICA, Geo-Foco, Engagement Velocity, Business Intent |
+| Sin contexto VE | **Inteligencia local**: slang VE, hashtags reales, benchmarks VE |
+| Sin filtro anti-bot | Filtro anti-bot: descarta cuentas fake antes del enrichment |
+| Sin inteligencia de nicho | **Sistema ELITE**: hashtags/keywords/geo adaptados a VE automáticamente |
+| HikerAPI directo ($$$) | **Cache Redis** → ~$0.30 por campaign |
 
-- **Frontend:** React 19 + Vite + TypeScript + shadcn/ui + Tailwind + TanStack Query + Zustand
-- **Backend:** FastAPI (Python 3.12 async) + SQLAlchemy 2.0 + Pydantic v2
-- **DB / Auth / Storage:** Supabase (Postgres 16 + Auth + Storage + Realtime + pgvector)
-- **Jobs async:** ARQ sobre Redis (Railway)
-- **IA:** DeepSeek-V3 (LLM) + fastembed (embeddings) via pgvector
-- **Discovery:** Apify (4 actores: search-scraper, hashtag-scraper, profile-scraper, engagement-analytics)
-- **Hosting:** Vercel (FE) + Railway (API + workers + Redis) + Supabase Cloud (DB)
-- **Monorepo:** pnpm workspaces
-
----
-
-## Arquitectura del Pipeline de Discovery
+### Arquitectura del Pipeline
 
 ```
-[BRIEF: "Mascotas/Perros en VE para Purina Dog Chow, mujeres 25-45, tono aspiracional"]
+[BRIEF: "Mascotas/Perros en VE, mujeres 25-45"]
                     ↓
-╔═══════════════════════════════════════════════════════════════════╗
-║  BRIEF PARSER (DeepSeek)                                          ║
-║  Texto libre → BriefStructured (industry, niches, audience...)     ║
-╚═══════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════╗
+║  BRIEF PARSER (DeepSeek-V3)             ║
+║  Texto libre → BriefStructured          ║
+╚══════════════════════════════════════════╝
                     ↓
-╔═══════════════════════════════════════════════════════════════════╗
-║  PROFILE GENERATOR (DeepSeek) — Sistema ELITE                    ║
-║  BriefStructured → DiscoveryProfile con elite_data                 ║
-║  Genera: hashtags, keywords, geo_indicators, buy_intent_keywords ║
-║  + elite_data: content_themes, local_slang, credibility_signals,  ║
-║    anti_bot_signals, niche_benchmarks, competitor_intel,           ║
-║    geo_local_signals, query_variations                            ║
-╚═══════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════╗
+║  PROFILE GENERATOR — Sistema ELITE      ║
+║  BriefStructured → elite_data JSONB     ║
+║  hashtags · keywords · geo_indicators   ║
+║  · local_slang · credibility_signals   ║
+╚══════════════════════════════════════════╝
                     ↓
-╔═══════════════════════════════════════════════════════════════════╗
-║  WORKER (ARQ)                                                    ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  STEP 1: KEYWORD DISCOVERY (Apify)                               ║
-║    Method: search_users_by_multiple_keywords()                    ║
-║    Output: handles únicos de keyword search                        ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  STEP 2: HASHTAG DEEP DIVE (Apify)                              ║
-║    Method: scrape_hashtags_batch()                                ║
-║    Output: posts con geotags + engagement data                    ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  STEP 3: PRE-FILTER + ENRICHMENT (Apify)                        ║
-║    Pre-filter: geo_score + niche_relevance + anti_bot_signals     ║
-║    Enrich: top 25 handles con datos oficiales IG                   ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  STEP 4: SCORING                                                  ║
-║    geo_score (≥0.85 threshold)                                   ║
-║    lens_score (0-100): tier_norm_er + geo + niche + business     ║
-║    cross-reference bonus (STEP1 + STEP2)                          ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  STEP 5: AI ANALYSIS (DeepSeek)                                  ║
-║    content_quality, audience_quality, brand_fit (0-100)         ║
-║    Usa elite_data para scoring contextualizado                     ║
-╚═══════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════╗
+║  WORKER (ARQ — Railway)                ║
+╠══════════════════════════════════════════╣
+║  STEP 1: Hashtag Search (HikerAPI)     ║
+║  STEP 2: Keyword Search (HikerAPI)      ║
+║  STEP 3: Profile Enrichment (HikerAPI)  ║
+║  STEP 4: Scoring (LWFA + DeepSeek)     ║
+╚══════════════════════════════════════════╝
                     ↓
-[TOP CANDIDATES → discovery_candidates DB]
+[CANDIDATES → discovery_candidates DB]
 ```
 
----
+### Sistema ELITE — Inteligencia Automática por Brief
 
-## Sistema ELITE — Inteligencia Automática por Brief
+Generado por DeepSeek-V3 para cada brief:
 
-El `profile_generator.py` analiza cada brief y genera automáticamente:
-
-### Datos estándar
-- **hashtags** — 20-30 hashtags que la gente USA realmente en el país
-- **keywords** — 15-25 frases de búsqueda reales
-- **niche_keywords** — términos del nicho en español
-- **geo_indicators** — capitales, ciudades, gentilicios, abreviaturas, emoji bandera
-- **buy_intent_keywords** — en idioma y moneda local (bs, $, pesos)
-
-### elite_data (JSONB) — Generado por DeepSeek por cada brief
 | Campo | Descripción |
 |-------|-------------|
+| `hashtags` | 20-30 hashtags reales usados en el país |
+| `keywords` | 15-25 frases de búsqueda reales |
+| `local_slang` | Slang VE: panas, jeva, chamo, fulete... |
 | `content_themes` | Tipos de contenido winners para el nicho en IG VE |
-| `audience_behavior` | posting_hours, best_days, content_formats, engagement_pattern |
-| `competitor_intel` | brands, hashtags, strategies de competidores en VE |
-| `local_slang` | Slang VE: panas, jeva, chamo, fulete, peluche... |
 | `credibility_signals` | Señales de perfil real: external_url, email in bio... |
-| `niche_benchmarks` | min_followers, min_er, target_er, ideal_range |
-| `anti_bot_signals` | Patrones de cuentas fake/bot específicos del nicho |
-| `geo_local_signals` | Neighborhoods por ciudad, wealth_areas, trending_areas |
-| `query_variations` | hashtag_stacking, keyword_combinations efectivos |
+| `anti_bot_signals` | Patrones de cuentas fake específicas del nicho |
+| `niche_benchmarks` | min_followers, min_ER, target_ER, ideal_range |
+
+### 9 Sub-Tiers LWFA
+
+| Sub-Tier | Followers | Sub-Tier | Followers |
+|----------|-----------|----------|-----------|
+| `NANO_BAJO` | 500–2K | `MID_BAJO` | 500K–1M |
+| `NANO_ALTO` | 2K–10K | `MID_ALTO` | 1M–5M |
+| `MICRO_BAJO` | 10K–30K | `MACRO_BAJO` | 5M–10M |
+| `MICRO_MEDIO` | 30K–100K | `MACRO_ALTO` | 10M+ |
+| `MICRO_ALTO` | 100K–500K | | |
+
+### 13 Estados de Run (RunStatus)
+
+```
+pending → queued → running → delivered  (éxito completo)
+                           → degraded   (parcial + warnings)
+                           → empty      (0 candidatos)
+                           → inconsistent (datos corruptos)
+                           → aborted_budget (saldo agotado)
+                    → partial   (resultados mixtos)
+                    → explored  (modo explorar sin enrichment)
+              → completed  (legado)
+              → failed     (error)
+              → cancelled  (usuario canceló)
+```
+
+### KPIs Exclusivos LWFA
+
+| KPI | Fórmula | Qué mide |
+|-----|---------|---------|
+| **ICA** | `(comentarios con keywords de compra / total comentarios) * 100` | Intención de compra real |
+| **Geo-Foco Real** | Geotags VE + idioma captions | Perfiles con audiencia VE verificable |
+| **Engagement Velocity** | `(likes + comments) / posts / días` | Engagement constante vs. spikes |
+| **Business Intent** | `0.4*multilink + 0.4*facebook_page + 0.2*business_account` | Señales comerciales verificables |
 
 ---
 
-## LWFA Scoring — Los 4 KPIs Exclusivos
+## Stack de Tecnología
 
-### 1. ICA — Index de Conversión Aparentada
-```python
-# = (comentarios con keywords de compra / total comentarios) * 100
-BUY_INTENT_KEYWORDS = ["precio", "donde", "link", "comprar", "tienda", "oferta", ...]
+```
+Frontend   React 19 + Vite 6 + TypeScript 5.7 + Tailwind CSS
+           shadcn/ui + Radix UI + Zustand + TanStack Query + Sonner
+           Vitest 2.1 (testing)
+
+Backend    FastAPI (Python 3.12 async) + SQLAlchemy 2.0 + Pydantic v2
+           ARQ (Redis) + Uvicorn
+
+DB / Cache PostgreSQL 16 (Railway) + Redis 8.2 (Railway)
+
+AI         DeepSeek-V3 (LLM) + fastembed all-MiniLM-L6-v2 (embeddings)
+
+Discovery  HikerAPI (hashtag/keyword/enrichment — 4 endpoints)
+
+Infra      Vercel (Frontend) + Railway (API + workers) + Supabase Cloud
 ```
 
-### 2. Geo-Foco Real
-```python
-# Cruza geotags VE (caracas, vzla, maracaibo...) + idioma captions
-# Penaltiza perfiles con captions en inglés puro sin geotag VE
-```
-
-### 3. Engagement Velocity
-```python
-# = (likes + comments) / num_posts / días_desde_primera_publicacion
-# Detecta perfiles que mantienen engagement constante vs. spikes
-```
-
-### 4. Business Intent Score
-```python
-# = 0.4*has_multilink + 0.4*has_facebook_page + 0.2*is_business_account
-# Perfiles con intención comercial verificable
-```
-
-### Benchmarks LWFA (9 tiers)
-
-| Tier | Followers | ER Range |
-|------|-----------|----------|
-| NANO_BAJO | 500–2K | 8–15% |
-| NANO_ALTO | 2K–10K | 6–12% |
-| MICRO_BAJO | 10K–30K | 4–10% |
-| MICRO_MEDIO | 30K–100K | 3–8% |
-| MICRO_ALTO | 100K–500K | 2–6% |
-| MID_BAJO | 500K–1M | 1.5–5% |
-| MID_ALTO | 1M–5M | 1–4% |
-| MACRO_BAJO | 5M–10M | 0.5–2% |
-| MACRO_ALTO | 10M+ | 0.3–1% |
-
----
-
-## Estructura del monorepo
+### Monorepo Structure
 
 ```
 lawebcore/
 ├── apps/
-│   ├── web/              # React 19 + Vite + shadcn/ui — Vercel
-│   │   └── src/
-│   │       ├── features/ # auth, campaigns, clients, lens, influencers...
-│   │       ├── components/ # Shared UI
-│   │       └── lib/ # API clients, utils
-│   └── api/              # FastAPI backend — Railway
+│   ├── web/                   # React 19 — Vercel
+│   │   └── src/features/     # auth, campaigns, clients, lens, influencers...
+│   └── api/                  # FastAPI — Railway
 │       └── app/
-│           ├── api/v1/   # 40+ endpoints
-│           ├── core/     # security, metrics, rate_limiter
-│           ├── models/   # SQLAlchemy ORM
-│           ├── services/ # AI service, proposal generator
-│           └── workers/  # ARQ worker (discovery_run_task, cron)
+│           ├── api/v1/       # 40+ endpoints
+│           ├── core/         # security, metrics, rate_limiter, budget_fuse
+│           ├── models/       # SQLAlchemy ORM
+│           ├── workers/       # ARQ worker
+│           └── tests/         # pytest (139 tests passing)
 ├── packages/
-│   ├── discovery/         # ★ LENS Discovery Module
+│   ├── discovery/            # ★ LENS module
 │   │   └── discovery/
-│   │       ├── orchestrator.py     # State machine (START→BRIEF→SEARCHING→DONE)
-│   │       ├── brief_parser.py     # Brief → BriefStructured (DeepSeek)
-│   │       ├── profile_generator.py # ELITE system (DeepSeek)
-│   │       ├── candidate_analyzer.py # AI scoring (DeepSeek)
-│   │       ├── query_builder.py    # Brief → DiscoveryPlan
-│   │       ├── memory.py          # Conversation persistence
-│   │       ├── scoring/
-│   │       │   ├── lens_score.py  # Unified 0-100 score
-│   │       │   └── niche.py       # Niche relevance
-│   │       └── tools/
-│   │           ├── apify_client.py     # 4 actores + Redis cache
-│   │           ├── geo_boost.py        # Geographic + tier scoring
-│   │           └── multi_actor_instagram.py # Fallback chain
-│   ├── shared-core/      # Config, DB, Supabase REST
-│   └── shared-ai/        # DeepSeek client, fastembed embeddings
-├── supabase/
-│   ├── migrations/       # 30+ SQL migrations
-│   ├── schema.sql        # Schema consolidado
-│   └── seed*.sql         # Seed data
-└── docs/                 # LAWEBCORE_PROYECTO_COMPLETO.md, MASTER_PROMPT_CLAUDE_CODE_FABLE_5.md
+│   │       ├── orchestrator.py    # State machine
+│   │       ├── brief_parser.py    # DeepSeek brief parsing
+│   │       ├── profile_generator.py # ELITE system
+│   │       ├── candidate_analyzer.py # AI scoring
+│   │       └── tools/hikerapi_client.py
+│   ├── shared-core/          # Config, DB, Supabase REST
+│   └── shared-ai/            # DeepSeek client, fastembed
+└── supabase/
+    ├── migrations/           # 110+ migraciones SQL
+    └── seed*.sql             # Seed data
 ```
 
 ---
 
-## Quickstart (desarrollo local)
+## Quickstart — Desarrollo Local
 
-### 1. Prerrequisitos
+### Prerrequisitos
 - Node >= 20, pnpm >= 9
 - Python >= 3.12
-- Docker (para Postgres + Redis locales)
+- Docker
 
-### 2. Levantar servicios locales
+### 1. Instalar y levantar servicios
 ```bash
+git clone https://github.com/ungardev/lawebcore.git && cd lawebcore
+pnpm install
 docker compose up -d
 ```
 
-### 3. Backend (FastAPI)
+### 2. Backend
 ```bash
 cd apps/api
 pip install -e ".[dev]"
-cp ../../.env.example .env
+cp ../../.env.example .env   # configurar DATABASE_URL y API keys
 uvicorn app.main:app --reload --port 8000
 # Docs: http://localhost:8000/api/docs
 ```
 
-### 4. Frontend (React)
+### 3. Frontend
 ```bash
 cd apps/web
-pnpm install
 pnpm dev
+# http://localhost:5173
+```
+
+### 4. Verificar
+```bash
+curl http://localhost:8000/api/v1/health
+# {"status":"ok","service":"lawebcore-api","version":"0.1.0"}
+```
+
+### 5. Tests
+```bash
+# Backend
+cd apps/api && pytest --ignore=tests/test_budget_fuse.py
+
+# Frontend
+cd apps/web && pnpm test --passWithNoTests
 ```
 
 ---
 
-## Variables de entorno
+## Variables de Entorno
 
 | Variable | Descripción |
-|---|---|
+|----------|-------------|
 | `DATABASE_URL` | Connection string asyncpg (Railway Postgres) |
 | `ARQ_REDIS_URL` | Redis para ARQ workers |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Supabase |
 | `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` | DeepSeek-V3 |
-| `APIFY_API_KEY` | Source principal de datos |
-| `ENABLE_AI_ANALYZER` | Flag para activar scoring AI |
-| `METRICOOL_ACCESS_TOKEN` | Métricas de redes propias |
+| `HIKERAPI_API_KEY` | Source de datos (discovery/enrichment) |
 | `ADMIN_TOKEN` | JWT secret |
+| `API_ENV` | `development` / `production` |
+
+> Ver `.env.example` en `apps/api/` para la configuración completa.
+
+---
+
+## Sistema de Migraciones
+
+Railway tiene **DOS mecanismos** que NO deben confundirse:
+
+| Mecanismo | Ejecuta | Se ejecuta automáticamente? |
+|-----------|---------|------------------------------|
+| `apply_migrations.py` | Solo `schema.sql` | ✅ Solo al primer deploy |
+| `memory.py::migrate_*()` | `ALTER TABLE ADD COLUMN` | ✅ Cada startup de Railway |
+| **`supabase/migrations/*.sql`** | Migraciones numeradas | ❌ **Manual — vía SQL Editor Railway** |
+
+**Importante:** Cada vez que se agregue una tabla o ENUM, ejecutar la migración manualmente contra Railway PostgreSQL.
+
+---
+
+## Documentación Clave
+
+| Documento | Qué describe |
+|-----------|-------------|
+| [docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md](docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md) | Estado completo LENS — Hitos 30-35 |
+| [docs/PROMPT_CLAUDE_CODE_ANALYSIS.md](docs/PROMPT_CLAUDE_CODE_ANALYSIS.md) | Índice de auditorías y análisis |
+| [docs/FIXES_FRONTEND_LENS_C0-C2_27-08-26.md](docs/FIXES_FRONTEND_LENS_C0-C2_27-08-26.md) | Fixes de acoplamiento frontend |
+| [docs/DISCOVERY_ARCHITECTURE.md](docs/DISCOVERY_ARCHITECTURE.md) | Arquitectura del módulo Discovery |
+| [docs/13a_data_contract_discovery.md](docs/13a_data_contract_discovery.md) | Contrato de datos entre componentes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura general del sistema |
+
+---
+
+## Hitos Completados (LENS — Hitos 30-35)
+
+| Hito | Descripción | Fecha |
+|------|-------------|-------|
+| **Hito 30** | Observabilidad: RunEvent, DropLedger, FunnelTracker, 6 statuses nuevos | Ago 2026 |
+| **Hito 31** | Normalización datos, dual-name elimination, zero patterns | Ago 2026 |
+| **Hito 32** | 9 sub-tiers LWFA, deduplicación handle, UPSERT social accounts | Ago 2026 |
+| **Hito 33** | Config constants centralizadas | Ago 2026 |
+| **Hito 34** | JSON object response_format, regex extraction eliminada, DeepSeek-v3 | Ago 2026 |
+| **Hito 35** | 8 fixes regresión backend + frontend C-0/C-1/C-2 coupling | Ago 2026 |
 
 ---
 
 ## Deploy
 
-### Railway (API + workers + Redis)
-- URL: `https://lawebcore-production.up.railway.app`
-- Conectar el repo en [railway.app](https://railway.app)
-- Servicio `api` → `apps/api/Dockerfile`
+### Railway (API + workers)
+URL: `https://lawebcore-production.up.railway.app`
+- Auto-deploys on push to `main`
+- Dockerfile: `apps/api/Dockerfile`
 - Redis como add-on
 
 ### Vercel (Frontend)
-- URL: `https://lawebcore.vercel.app`
-- Conectar el repo en [vercel.com](https://vercel.com)
+URL: `https://lawebcore.vercel.app`
+- Auto-deploys on push to `main`
 - Root directory: `apps/web`
-
----
-
-## Costos operacionales (Optimizados Agosto 2026)
-
-### Por campaign (sin cache): ~$3.30
-| Step | Costo |
-|------|-------|
-| Keyword search | ~$1.30 |
-| Hashtag posts | ~$1.43 |
-| Profile enrichment (80) | ~$0.21 |
-| Engagement analytics | ~$0.36 |
-
-### Por campaign (con cache Redis): **~$0.30**
-| Step | Costo |
-|------|-------|
-| Keyword search | ~$0.05 |
-| Hashtag posts | ~$0.05 |
-| Profile enrichment (25) | ~$0.05 |
-| Engagement analytics | ~$0.15 |
-
-### Presupuesto mensual: $250 USD ($200 APIs + $50 infra)
-
----
-
-## Roadmap
-
-| Sprint | Fecha | Entregable |
-|---|---|---|
-| **Sprint 1** ✅ | Jul 20 | Pipeline 4 capas Apify + LWFA Scoring |
-| **Sprint 2** ✅ | Ago 4 | Sistema ELITE + Anti-bot + Redis cache + Fixes |
-| **Sprint 3** | Ago 11 | TikTok Research API + Outreach automation |
-| **Sprint 4** | Ago 18 | Multi-bu/multi-tenant + BI dashboard |
-
----
-
-## Documentación clave
-
-| Documento | Qué describe |
-|---|---|
-| [docs/LAWEBCORE_PROYECTO_COMPLETO.md](docs/LAWEBCORE_PROYECTO_COMPLETO.md) | Análisis exhaustivo del proyecto completo |
-| [docs/MASTER_PROMPT_CLAUDE_CODE_FABLE_5.md](docs/MASTER_PROMPT_CLAUDE_CODE_FABLE_5.md) | Prompt para análisis de oportunidades de mejora con Fable 5 |
-| [docs/DISCOVERY_ARCHITECTURE.md](docs/DISCOVERY_ARCHITECTURE.md) | Arquitectura completa del módulo Discovery |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Arquitectura general del sistema |
-
----
-
-## Decisiones técnicas
-
-- **Source único de datos:** Apify (no Meta Graph API, no Excel, no mockup)
-- **LLM:** DeepSeek-V3 únicamente (no OpenAI, no Anthropic)
-- **Embeddings:** fastembed `all-MiniLM-L6-v2` via pgvector
-- **Plataforma inicial:** Instagram únicamente (TikTok diferido Sprint 3)
-- **Costo por campaign:** ~$0.30 con cache Redis
-- **Benchmark ER VE:** 4-7% promedio (más alto que otros mercados latam)
-
----
-
-## URLs de Producción
-
-| Servicio | URL |
-|----------|-----|
-| API | `https://lawebcore-production.up.railway.app` |
-| Frontend | `https://lawebcore.vercel.app` |
-| Health | `https://lawebcore-production.up.railway.app/api/v1/health` |
-| Metrics | `https://lawebcore-production.up.railway.app/metrics` |
 
 ---
 
 ## Licencia
 
-Propietario - La Web Figital Agency. Todos los derechos reservados.
+Propietario — La Web Figital Agency. Todos los derechos reservados.
