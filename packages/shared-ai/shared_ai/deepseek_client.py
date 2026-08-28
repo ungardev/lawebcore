@@ -40,12 +40,31 @@ class DeepSeekClient:
 
     def _build_client(self) -> Any:
         from langchain_openai import ChatOpenAI
+        # HITO 36 — MODO THINKING EXPLÍCITAMENTE DESACTIVADO.
+        #
+        # `deepseek-v4-flash` trae el modo thinking ACTIVADO por defecto, con
+        # effort=high (docs: api-docs.deepseek.com/guides/thinking_mode).
+        # Eso cambia tres cosas respecto de `deepseek-chat`, y ninguna avisa:
+        #
+        #   1. `temperature` se ignora. La doc lo dice literal: "setting these
+        #      parameters will not trigger an error but will also have no effect".
+        #   2. El chain-of-thought se factura como tokens de salida
+        #      ($0.66-1.32 / 1M) en CADA llamada.
+        #   3. `max_tokens` tiene que cubrir razonamiento + respuesta. Con
+        #      max_tokens=2500 y effort=high, el JSON puede truncarse.
+        #
+        # Para parseo de brief y scoring queremos salida estructurada, barata y
+        # reproducible: no razonamiento. Si algún día una tarea se beneficia del
+        # thinking, se activa en ESA llamada, no globalmente.
         return ChatOpenAI(
             model=self.model,
             temperature=self.temperature,
             api_key=self.api_key,
             base_url="https://api.deepseek.com",
-            extra_body={"cache": {"mode": "enabled"}},
+            extra_body={
+                "cache": {"mode": "enabled"},
+                "thinking": {"type": "disabled"},
+            },
         )
 
     async def _call_with_retry(self, client: Any, messages: list[dict], **kwargs) -> LLMResponse:
