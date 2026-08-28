@@ -85,7 +85,8 @@ Lanz §7 define 5 acciones de alineación. Aquí el estado actual:
 |--------------|--------|-----------|
 | `DEEPSEEK_MODEL=deepseek-v4-flash` en código | ✅ Hecho | `config.py:55`, `.env.example:32` (actualizado a `deepseek-v4-flash` el 27-ago-2026) |
 | `DEEPSEEK_MODEL` en Railway | ✅ Hecho | Railway actualizado a `deepseek-v4-flash` (27-ago-2026). Antes `deepseek-chat` (retired, discontinuado 24-jul-2026) |
-| `response_format` usado en scoring | ⚠️ Parcial | Solo en `candidate_analyzer.py:326`; 3 otros call sites usan regex |
+| `response_format` usado en scoring | ✅ Hecho | `candidate_analyzer.py:326` + `brief_parser.py` (2 sitios) + `complete_json()` — todos con `response_format={"type":"json_object"}` (Hito 36) |
+| **Pricing peak/valley ×2** | 🟡 Docs | DeepSeek-V4-Flash precio ×2 en UTC 01:00-04:00 y 06:00-10:00 (lunes a viernes). Para Venezuela (UTC-4): 21:00-00:00 y 02:00-06. Ejecutar pruebas en off-peak. |
 | Modelo de RAG no se reutiliza | ✅ Confirmado | Discovery no usa embeddings; Lanz §5.2 aplica |
 | `api_costs` registra model name | ❌ No | Solo provider; sin model column |
 

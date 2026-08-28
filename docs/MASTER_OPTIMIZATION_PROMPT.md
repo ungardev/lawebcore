@@ -179,7 +179,7 @@ class DataProvider(ABC):
 
 1. **Single LLM call per brief** — Combine brief parsing + niche detection + initial candidate ranking into ONE DeepSeek call with a well-structured prompt that returns both `BriefStructured` JSON AND top 5 candidate handles.
 
-2. **Use `deepseek-v4-flash` for all calls** — Reserve `deepseek-reasoner` (R1) for complex multi-step reasoning only (1% of calls).
+2. **Use `deepseek-v4-flash` for all calls** — Reserve `deepseek-reasoner` (R1) for complex multi-step reasoning only (1% of calls). **Nota de pricing:** DeepSeek-V4-Flash tiene precio ×2 en horario pico UTC 01:00-04:00 y 06:00-10:00 (lunes a viernes). Para Venezuela (UTC-4) eso es 21:00-00:00 y 02:00-06:00. Las corridas de prueba nocturnas caen en tarifa peak ($0.44/1M input, $1.32/1M output). Ejecutar pruebas en horario off-peak para ahorrar.
 
 3. **Prompt compression** — Strip whitespace, use Spanish abbreviations, reuse system prompt across calls. Cache the compressed prompt.
 

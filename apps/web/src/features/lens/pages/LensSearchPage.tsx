@@ -24,7 +24,7 @@ export function LensSearchPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { run, candidates, isLoading, error, createRun, pollRun, loadRun, cancelPoll, saveCandidate, dismissCandidate } = useDiscoveryRun();
-  const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 65, audience_countries: '', platforms: [] as Platform[] });
+  const [form, setForm] = useState({ product_name: '', industry: '', niches: '', audience_gender: 'all', audience_age_min: 18, audience_age_max: 65, audience_countries: '', platforms: [] as Platform[], discovery_mode: 'explore' as 'auto' | 'explore' | 'analyze' });
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const { selectedHandles, clear: clearSelection } = useSelectionStore();
   const selectionMode = run?.status === 'explored';
@@ -48,7 +48,7 @@ export function LensSearchPage() {
         audience_age_max: form.audience_age_max,
         audience_countries: form.audience_countries ? form.audience_countries.split(',').map((item) => item.trim()).filter(Boolean) : [],
         platforms: form.platforms.length > 0 ? form.platforms : undefined,
-        discovery_mode: 'explore' as const,
+        discovery_mode: form.discovery_mode,
       };
       const newRun = await createRun(brief);
       toast.success('Búsqueda iniciada');
@@ -56,7 +56,9 @@ export function LensSearchPage() {
       toast.success('Búsqueda completada');
     } catch (searchError) {
       if (searchError instanceof Error && searchError.message === 'SEARCH_CANCELLED') return;
-      toast.error('Error al ejecutar la búsqueda');
+      const detail =
+        (searchError as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail ? `No se pudo iniciar: ${detail}` : 'Error al ejecutar la búsqueda');
     }
   };
 
@@ -116,6 +118,16 @@ export function LensSearchPage() {
             <Field label="Género de audiencia"><Select value={form.audience_gender} onValueChange={(value) => setForm((previous) => ({ ...previous, audience_gender: value }))}><SelectTrigger><SelectValue placeholder="Selecciona un género" /></SelectTrigger><SelectContent><SelectItem value="all">Todos</SelectItem><SelectItem value="female">Femenino</SelectItem><SelectItem value="male">Masculino</SelectItem></SelectContent></Select></Field>
             <div><Label className="flex items-center justify-between text-xs font-medium">Rango de edad <span className="font-mono text-muted-foreground">{form.audience_age_min}–{form.audience_age_max}</span></Label><div className="mt-3 grid gap-3 sm:grid-cols-2"><div><span className="mb-1.5 block text-[10px] text-muted-foreground">Mínima</span><Slider min={13} max={64} value={form.audience_age_min} onChange={(event) => setForm((previous) => ({ ...previous, audience_age_min: Math.min(Number(event.target.value), previous.audience_age_max - 1) }))} aria-label="Edad mínima" /></div><div><span className="mb-1.5 block text-[10px] text-muted-foreground">Máxima</span><Slider min={14} max={65} value={form.audience_age_max} onChange={(event) => setForm((previous) => ({ ...previous, audience_age_max: Math.max(Number(event.target.value), previous.audience_age_min + 1) }))} aria-label="Edad máxima" /></div></div></div>
             <div><Label className="text-xs font-medium">Plataformas</Label><div className="mt-2 flex flex-wrap gap-2">{PLATFORMS.map((platform) => <Button key={platform} type="button" variant={form.platforms.includes(platform) ? 'default' : 'outline'} size="sm" onClick={() => setPlatform(platform)} className="capitalize" aria-pressed={form.platforms.includes(platform)}>{platform}</Button>)}</div></div>
+            <Field label="Modo de discovery">
+              <Select value={form.discovery_mode} onValueChange={(value) => setForm((previous) => ({ ...previous, discovery_mode: value as 'auto' | 'explore' | 'analyze' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto — full pipeline con enriquecimiento</SelectItem>
+                  <SelectItem value="explore">Explore — solo descubrimiento (sin enrichment)</SelectItem>
+                  <SelectItem value="analyze">Analyze — enriquecer handles seleccionados</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
             <Button onClick={handleSearch} disabled={isLoading} className="mt-2 w-full gap-2">{isLoading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" aria-hidden="true" /> : <Play className="h-4 w-4" aria-hidden="true" />}{isLoading ? 'Ejecutando discovery…' : 'Ejecutar búsqueda'}</Button>
           </div>
         </Card>
