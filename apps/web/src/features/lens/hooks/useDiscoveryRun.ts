@@ -2,6 +2,16 @@ import { useCallback, useRef, useState } from 'react';
 import { lensApi } from '../api/lensApi';
 import type { DiscoveryCandidate, DiscoveryRun, Platform } from '../types/discovery';
 
+/**
+ * Estados en los que un run ya terminó y el polling debe detenerse.
+ * Incluye los 6 valores añadidos por el Hito 30 (migración 110).
+ * Debe mantenerse en sincronía con TERMINAL_STATUSES de LensSearchPage.tsx.
+ */
+const POLL_TERMINAL_STATUSES: readonly string[] = [
+  'completed', 'failed', 'partial', 'explored',
+  'delivered', 'degraded', 'empty', 'inconsistent', 'aborted_budget', 'cancelled',
+];
+
 export function useDiscoveryRun() {
   const [run, setRun] = useState<DiscoveryRun | null>(null);
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
@@ -55,7 +65,7 @@ export function useDiscoveryRun() {
       if (cancelledRef.current) {
         return { run: null, candidates: [] };
       }
-      if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial' || currentRun.status === 'explored') {
+      if (POLL_TERMINAL_STATUSES.includes(currentRun.status)) {
         return { run: currentRun, candidates: currentCandidates };
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
