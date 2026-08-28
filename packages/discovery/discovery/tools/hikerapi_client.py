@@ -170,6 +170,7 @@ class HikerAPIClient:
                     status=status,
                     response_body=response.text[:500],
                     hint="Verify x-access-key header is correct and key is active",
+                    exc_info=True,
                 )
                 return None, status
             response.raise_for_status()
@@ -188,10 +189,11 @@ class HikerAPIClient:
                 path=path,
                 status=e.response.status_code,
                 response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
+                exc_info=True,
             )
             return None, e.response.status_code
         except Exception as e:
-            logger.error("hikerapi_request_error", path=path, error=str(e))
+            logger.error("hikerapi_request_error", path=path, error=str(e), exc_info=True)
             return None, None
 
     async def _get(
@@ -265,6 +267,7 @@ class HikerAPIClient:
                     status=response.status_code,
                     response_body=response.text[:500],
                     hint="Verify x-access-key header is correct and key is active",
+                    exc_info=True,
                 )
                 raise SourceUnavailable(
                     f"{response.status_code} {response.text[:200]}",
@@ -303,13 +306,14 @@ class HikerAPIClient:
                 path=path,
                 status=status,
                 response_body=e.response.text[:500] if hasattr(e.response, "text") else "",
+                exc_info=True,
             )
             return None
         except httpx.TimeoutException as e:
             await breaker.record_failure()
             raise TransientSourceError(f"Timeout after {self.TIMEOUT}s — {e}", provider="hikerapi")
         except (httpx.HTTPError, ValueError) as e:
-            logger.error("hikerapi_request_error", path=path, error=str(e))
+            logger.error("hikerapi_request_error", path=path, error=str(e), exc_info=True)
             return None
 
     async def search_hashtag(

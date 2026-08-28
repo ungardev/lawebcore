@@ -185,7 +185,7 @@ class AIService:
             cost_usd = result.cost_usd or 0.0
             latency_ms = result.latency_ms or 0
         except Exception as e:
-            logger.error("llm_call_failed", error=str(e))
+            logger.error("llm_call_failed", error=str(e), exc_info=True)
             answer_text = (
                 "Disculpa, tuve un problema al procesar tu consulta con el modelo de IA. "
                 "El equipo tecnico ha sido notificado. "
@@ -217,7 +217,7 @@ class AIService:
                 },
             )
         except Exception as e:
-            logger.error("persist_assistant_message_failed", error=str(e))
+            logger.error("persist_assistant_message_failed", error=str(e), exc_info=True)
             await db.rollback()
         else:
             await db.commit()
@@ -315,7 +315,7 @@ class AIService:
             ])
             generated_text = response.content if hasattr(response, "content") else str(response)
         except Exception as e:
-            logger.error("generate_llm_failed", error=str(e), prompt_code=prompt_code)
+            logger.error("generate_llm_failed", error=str(e), prompt_code=prompt_code, exc_info=True)
             raise
 
         # Persist as AI-generated insight if post_mortem

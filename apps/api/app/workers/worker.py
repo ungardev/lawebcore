@@ -448,6 +448,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     balance_usd=balance,
                     estimated_cost_usd=round(estimated_cost, 4),
                     estimated_calls=estimated_calls,
+                    error=f"balance=${balance} < estimated=${round(estimated_cost, 4)}",
                 )
                 raise SourceUnavailable(
                     f"Saldo insuficiente: ${balance:.2f} disponibles y se necesitan "
@@ -710,7 +711,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             suggested_items = []
 
             if isinstance(step1_result, Exception):
-                logger.error("step1_hashtag_failed", error=str(step1_result))
+                logger.error("step1_hashtag_failed", error=str(step1_result), exc_info=True)
                 print(f"[STEP1] FAILED: {step1_result}", flush=True)
             else:
                 hashtag_items = step1_result
@@ -718,7 +719,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 logger.info("step1_hashtag_done", hashtag_posts=len(hashtag_items), source="hikerapi")
 
             if isinstance(step2_result, Exception):
-                logger.error("step2_keyword_failed", error=str(step2_result))
+                logger.error("step2_keyword_failed", error=str(step2_result), exc_info=True)
                 print(f"[STEP2] FAILED: {step2_result}", flush=True)
             else:
                 keyword_items = step2_result
@@ -726,14 +727,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 logger.info("step2_keyword_done", keyword_users=len(keyword_items), source="hikerapi")
 
             if isinstance(step1_recent_result, Exception):
-                logger.error("step1_recent_failed", error=str(step1_recent_result))
+                logger.error("step1_recent_failed", error=str(step1_recent_result), exc_info=True)
             else:
                 hashtag_recent_items = step1_recent_result
                 print(f"[STEP1_RECENT] {len(hashtag_recent_items)} posts from recent hashtag search", flush=True)
                 logger.info("step1_recent_done", hashtag_recent_posts=len(hashtag_recent_items))
 
             if isinstance(step2p5_result, Exception):
-                logger.error("step2p5_reels_failed", error=str(step2p5_result))
+                logger.error("step2p5_reels_failed", error=str(step2p5_result), exc_info=True)
             else:
                 reels_items = step2p5_result
                 print(f"[STEP2p5_REELS] {len(reels_items)} creators from reels search", flush=True)
@@ -815,14 +816,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     _replay_miss_count_for_run += 1
 
             if isinstance(step3_result, Exception):
-                logger.error("step3_topsearch_failed", error=str(step3_result))
+                logger.error("step3_topsearch_failed", error=str(step3_result), exc_info=True)
             else:
                 topsearch_items = step3_result
                 print(f"[STEP3] {len(topsearch_items)} accounts from topsearch", flush=True)
                 logger.info("step3_topsearch_done", topsearch_accounts=len(topsearch_items))
 
             if isinstance(step4_result, Exception):
-                logger.error("step4_suggested_failed", error=str(step4_result))
+                logger.error("step4_suggested_failed", error=str(step4_result), exc_info=True)
             else:
                 suggested_items = step4_result
                 print(f"[STEP4] {len(suggested_items)} accounts from suggested", flush=True)
@@ -1998,6 +1999,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             provider=e.provider,
             status_code=e.status_code,
             error=e.message,
+            exc_info=True,
         )
         error_msg = (
             f"Fuente de datos no disponible ({e.provider}, HTTP {e.status_code}): {e.message}. "

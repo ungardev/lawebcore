@@ -1,0 +1,93 @@
+diff --git a/apps/web/src/features/lens/hooks/useDiscoveryRun.ts b/apps/web/src/features/lens/hooks/useDiscoveryRun.ts
+index 158aaac..075dec2 100644
+--- a/apps/web/src/features/lens/hooks/useDiscoveryRun.ts
++++ b/apps/web/src/features/lens/hooks/useDiscoveryRun.ts
+@@ -2,6 +2,16 @@ import { useCallback, useRef, useState } from 'react';
+ import { lensApi } from '../api/lensApi';
+ import type { DiscoveryCandidate, DiscoveryRun, Platform } from '../types/discovery';
+ 
++/**
++ * Estados en los que un run ya terminó y el polling debe detenerse.
++ * Incluye los 6 valores añadidos por el Hito 30 (migración 110).
++ * Debe mantenerse en sincronía con TERMINAL_STATUSES de LensSearchPage.tsx.
++ */
++const POLL_TERMINAL_STATUSES: readonly string[] = [
++  'completed', 'failed', 'partial', 'explored',
++  'delivered', 'degraded', 'empty', 'inconsistent', 'aborted_budget', 'cancelled',
++];
++
+ export function useDiscoveryRun() {
+   const [run, setRun] = useState<DiscoveryRun | null>(null);
+   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
+@@ -55,7 +65,13 @@ export function useDiscoveryRun() {
+       if (cancelledRef.current) {
+         return { run: null, candidates: [] };
+       }
+-      if (currentRun.status === 'completed' || currentRun.status === 'failed' || currentRun.status === 'partial' || currentRun.status === 'explored') {
++      // HITO 36: el ENUM pasó de 7 a 13 valores (migración 110). El worker
++      // termina en `delivered` / `degraded` / `empty` / `inconsistent` /
++      // `aborted_budget`, ninguno de los cuales estaba en esta lista: el
++      // polling seguía 200 intentos (10 min, 200 requests) y luego lanzaba
++      // "Timeout esperando resultados" sobre un run que había terminado bien.
++      // Esta lista debe coincidir con TERMINAL_STATUSES de LensSearchPage.
++      if (POLL_TERMINAL_STATUSES.includes(currentRun.status)) {
+         return { run: currentRun, candidates: currentCandidates };
+       }
+       await new Promise((resolve) => setTimeout(resolve, intervalMs));
+diff --git a/apps/web/src/features/lens/pages/LensSearchPage.tsx b/apps/web/src/features/lens/pages/LensSearchPage.tsx
+index b2ad7cd..365564b 100644
+--- a/apps/web/src/features/lens/pages/LensSearchPage.tsx
++++ b/apps/web/src/features/lens/pages/LensSearchPage.tsx
+@@ -56,7 +56,12 @@ export function LensSearchPage() {
+       toast.success('Búsqueda completada');
+     } catch (searchError) {
+       if (searchError instanceof Error && searchError.message === 'SEARCH_CANCELLED') return;
+-      toast.error('Error al ejecutar la búsqueda');
++      // HITO 36: el backend valida `product_name` y `niches` y devuelve 400
++      // con el campo exacto que falta. El toast genérico se lo tragaba y el
++      // usuario no sabía qué corregir.
++      const detail =
++        (searchError as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
++      toast.error(detail ? `No se pudo iniciar: ${detail}` : 'Error al ejecutar la búsqueda');
+     }
+   };
+ 
+diff --git a/packages/shared-ai/shared_ai/deepseek_client.py b/packages/shared-ai/shared_ai/deepseek_client.py
+index f80b489..c0abaf9 100644
+--- a/packages/shared-ai/shared_ai/deepseek_client.py
++++ b/packages/shared-ai/shared_ai/deepseek_client.py
+@@ -40,12 +40,33 @@ class DeepSeekClient:
+ 
+     def _build_client(self) -> Any:
+         from langchain_openai import ChatOpenAI
++        # HITO 36 — MODO THINKING EXPLÍCITAMENTE DESACTIVADO.
++        #
++        # `deepseek-v4-flash` trae el modo thinking ACTIVADO por defecto, con
++        # effort=high (docs: api-docs.deepseek.com/guides/thinking_mode).
++        # Eso cambia tres cosas respecto de `deepseek-chat`, y ninguna avisa:
++        #
++        #   1. `temperature` se ignora. La doc lo dice literal: "setting these
++        #      parameters will not trigger an error but will also have no
++        #      effect". Nuestro scoring asume temperature=0.2 para ser estable.
++        #   2. El chain-of-thought se factura como tokens de salida
++        #      ($0.66-1.32 / 1M) en CADA llamada.
++        #   3. `max_tokens` tiene que cubrir razonamiento + respuesta. Con
++        #      max_tokens=2500 y effort=high, el JSON puede truncarse — la doc
++        #      de JSON Output advierte exactamente de eso.
++        #
++        # Para parseo de brief y scoring queremos salida estructurada, barata y
++        # reproducible: no razonamiento. Si algún día una tarea se beneficia del
++        # thinking, se activa en ESA llamada, no globalmente.
+         return ChatOpenAI(
+             model=self.model,
+             temperature=self.temperature,
+             api_key=self.api_key,
+             base_url="https://api.deepseek.com",
+-            extra_body={"cache": {"mode": "enabled"}},
++            extra_body={
++                "cache": {"mode": "enabled"},
++                "thinking": {"type": "disabled"},
++            },
+         )
+ 
+     async def _call_with_retry(self, client: Any, messages: list[dict], **kwargs) -> LLMResponse:
