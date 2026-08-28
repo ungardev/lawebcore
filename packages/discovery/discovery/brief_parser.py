@@ -188,6 +188,7 @@ class BriefParserAgent:
             system=BRIEF_PARSER_SYSTEM_PROMPT,
             temperature=0.3,
             max_tokens=300,
+            response_format={"type": "json_object"},
         )
 
         _parse_cache[cache_key] = response.content
@@ -357,6 +358,7 @@ class BriefParserAgent:
             system=_DOCUMENT_PARSER_SYSTEM_PROMPT,
             temperature=0.2,
             max_tokens=800,
+            response_format={"type": "json_object"},
         )
 
         logger.info(

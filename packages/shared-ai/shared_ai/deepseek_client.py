@@ -160,7 +160,12 @@ class DeepSeekClient:
                 return match.group(1)
             return None
 
-        result = await self.complete(prompt, system, temperature=temperature, max_tokens=max_tokens)
+        result = await self.complete(
+            prompt, system,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_format={"type": "json_object"},
+        )
         content = result.content
 
         for attempt in range(3):
