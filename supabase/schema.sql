@@ -789,7 +789,9 @@ CREATE TABLE discovery_runs (
   status TEXT NOT NULL DEFAULT 'pending'
       CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'partial', 'explored', 'delivered', 'degraded', 'empty', 'inconsistent', 'aborted_budget', 'queued')),
   total_candidates INTEGER DEFAULT 0, accepted INTEGER DEFAULT 0,
+  estimated_cost_usd NUMERIC(10, 4),
   actual_cost_usd NUMERIC(10, 4),
+  budget_usd NUMERIC(12, 2),
   started_at TIMESTAMPTZ, completed_at TIMESTAMPTZ, error TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -815,6 +817,8 @@ CREATE TABLE discovery_candidates (
   niche_relevance NUMERIC(5, 2), geo_relevance NUMERIC(5, 2),
   audience_relevance NUMERIC(5, 2), content_quality NUMERIC(5, 2),
   rationale TEXT,
+  brand_fit INTEGER,
+  ai_rationale TEXT,
   status TEXT NOT NULL DEFAULT 'new'
       CHECK (status IN ('new', 'saved', 'dismissed', 'contacted', 'replied', 'won', 'lost')),
   saved_as_influencer_id UUID REFERENCES influencers(id) ON DELETE SET NULL,
@@ -865,6 +869,44 @@ CREATE TABLE discovery_messages (
 CREATE INDEX idx_discovery_messages_conversation ON discovery_messages(conversation_id);
 CREATE INDEX idx_discovery_messages_created_at ON discovery_messages(created_at);
 
+CREATE TABLE discovery_run_events (
+    id            BIGSERIAL PRIMARY KEY,
+    run_id        UUID NOT NULL REFERENCES discovery_runs(id) ON DELETE CASCADE,
+    ts            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    event         TEXT NOT NULL,
+    stage         TEXT,
+    reason_code   TEXT,
+    username      TEXT,
+    payload       JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX idx_run_events_run ON discovery_run_events(run_id);
+CREATE INDEX idx_run_events_reason ON discovery_run_events(reason_code) WHERE reason_code IS NOT NULL;
+CREATE INDEX idx_run_events_event ON discovery_run_events(event);
+
+CREATE TABLE budget_transactions (
+    id                  UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+    run_id              UUID REFERENCES discovery_runs(id) ON DELETE SET NULL,
+    provider            TEXT NOT NULL,
+    operation           TEXT NOT NULL,
+    amount_usd          NUMERIC(12, 6) NOT NULL,
+    request_count       INTEGER NOT NULL DEFAULT 1,
+    balance_after_usd   NUMERIC(12, 6),
+    metadata            JSONB DEFAULT '{}'::jsonb,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_budget_tx_provider ON budget_transactions(provider, created_at DESC);
+CREATE INDEX idx_budget_tx_run ON budget_transactions(run_id) WHERE run_id IS NOT NULL;
+CREATE INDEX idx_budget_tx_month ON budget_transactions(date_trunc('month', created_at), provider);
+CREATE OR REPLACE FUNCTION budget_tx_prevent_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+    RAISE EXCEPTION 'budget_transactions es inmutable: DELETE y UPDATE no permitidos. Solo INSERT.';
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER budget_tx_immutable
+    BEFORE UPDATE OR DELETE ON budget_transactions
+    FOR EACH ROW EXECUTE FUNCTION budget_tx_prevent_modification();
+
 CREATE TABLE api_costs (
   id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
   provider TEXT NOT NULL, operation TEXT, entity_id UUID,
@@ -875,6 +917,34 @@ CREATE TABLE api_costs (
 CREATE INDEX idx_api_costs_provider ON api_costs(provider, occurred_at DESC);
 CREATE INDEX idx_api_costs_entity ON api_costs(entity_id) WHERE entity_id IS NOT NULL;
 CREATE INDEX idx_api_costs_month ON api_costs(public.date_trunc_month_immutable(occurred_at), provider);
+
+CREATE TABLE discovery_profiles (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    fingerprint TEXT NOT NULL UNIQUE,
+    vertical_slug TEXT NOT NULL,
+    languages JSONB NOT NULL DEFAULT '["es"]'::jsonb,
+    countries JSONB NOT NULL DEFAULT '[]'::jsonb,
+    hashtags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    niche_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    geo_indicators JSONB NOT NULL DEFAULT '[]'::jsonb,
+    buy_intent_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    source TEXT NOT NULL DEFAULT 'llm'
+        CHECK (source IN ('seed', 'llm', 'fallback', 'manual')),
+    quality_score NUMERIC,
+    times_used INTEGER NOT NULL DEFAULT 0,
+    commerce_signal_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    creator_signal_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    exclusion_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_discovery_profiles_vertical ON discovery_profiles(vertical_slug);
+CREATE INDEX idx_discovery_profiles_fingerprint ON discovery_profiles(fingerprint);
+CREATE INDEX idx_discovery_profiles_commerce_signal ON discovery_profiles USING GIN (commerce_signal_keywords);
+CREATE INDEX idx_discovery_profiles_creator_signal ON discovery_profiles USING GIN (creator_signal_keywords);
+CREATE INDEX idx_discovery_profiles_exclusion ON discovery_profiles USING GIN (exclusion_keywords);
+ALTER TABLE discovery_profiles DISABLE ROW LEVEL SECURITY;
 
 CREATE TABLE integration_credentials (
   id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
