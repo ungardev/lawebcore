@@ -1,17 +1,18 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 7 — Estado al 27-ago-2026 · Lanz v2.0 · BUG #1/#2 Corregidos · Docs Actualizados
+## Iteración 8 — Estado al 28-ago-2026 · Hito 36 Completo · 17 Logger Fixes · E2E Pendiente Lunes
 
 > **De:** MiniMax M2.7/M3
-> **Fecha:** 27 de agosto de 2026
+> **Fecha:** 28 de agosto de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base actual (en repositorio):** `8baa49e` (Lanz v2.0 docs + BUG #1 + #2 fix)
-> **Último commit deployado en Railway:** `8baa49e` ✅ (pending deploy — BUG #1/#2 fix)
+> **Commit base actual (en repositorio):** `035aafc` (17 logger.error exc_info fixes)
+> **Último commit deployado en Railway:** `035aafc` ✅ — Deploy verde 28-ago-2026 22:03 UTC
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
-> **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` — 23 hallazgos nuevos, 5 fases de acción
+> **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` + `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` (superseding)
 > **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅
 > **Deduplicación manual ejecutada:** `paola_cocina_` (4→1 registros)
 > **ENUM discovery_run_status en Railway:** 13 valores (7 legacy + 6 Hito 30)
-> **HikerAPI balance:** ~$38 USD
+> **HikerAPI balance:** ~$36.86 USD (post E2E test ~$1.14)
+> **E2E Test:** Pendiente — Lunes 31-ago-2026 · `scripts/test_lens_mascotas_ve.py`
 
 ---
 
@@ -31,17 +32,23 @@
 | Railway PostgreSQL — ENUM | ✅ 13 valores (7 legacy + 6 Hito 30) |
 | Railway PostgreSQL — `discovery_run_events` | ✅ Tabla creada + 3 índices |
 | Railway PostgreSQL — índice único `influencers` | ✅ Índice creado + duplicado resuelto |
-| Railway API — código | ✅ `8baa49e` desplegado en Railway (contiene BUG #1 y #2 fixes) |
+| Railway API — código | ✅ `035aafc` desplegado en Railway — Deploy verde 28-ago-2026 22:03 UTC |
+| Railway Deploy Log | ✅ `[inf] Starting worker for 5 functions` · `[inf] Pool created successfully` |
 | Frontend TypeScript — C-0 (Pydantic enum 13 valores) | ✅ `schemas.py` desplegado |
 | Frontend TypeScript — C-1 (STATUS_CONFIG, hasResults) | ✅ `29d7ba6` desplegado |
 | Frontend TypeScript — C-2 (9 sub-tiers + null) | ✅ `types/index.ts` desplegado |
 | CI — Ruff lint | ✅ Verde (63 noqa comments añadidos) |
 | CI — Mypy typecheck | ⚠️ Deshabilitado temporalmente (424 errores strict pre-existentes) |
 | CI — Pytest | ✅ 139 tests pass (test_budget_fuse.py ignorado) |
+| DeepSeek thinking mode | ✅ Disabled (`30e5e06`) — temperature funciona, max_tokens suficiente |
+| pollRun terminal statuses | ✅ 10 valores en `POLL_TERMINAL_STATUSES` (`2e9b567`) |
+| discovery_query writer | ✅ Taggeado en los 7 pasos de fetch (`65e998c`) |
+| BudgetExhausted handler | ✅ Outer handler con ABORTED_BUDGET status (`65e998c`) |
+| Logger exc_info | ✅ 17 logger.error con exc_info=True (`035aafc`) |
 
 ### Sistema Completamente Operativo
 
-El pipeline está desplegado y funcional **tras corregir BUG #1 y #2** en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway ahora usan `deepseek-v4-flash` ✅.
+El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B fixes**. BUG #1 y #2 corregidos en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway usan `deepseek-v4-flash` ✅. El sistema puede ejecutar búsquedas end-to-end desde la UI — **validación E2E pendiente el Lunes**.
 
 ---
 
@@ -60,6 +67,14 @@ El pipeline está desplegado y funcional **tras corregir BUG #1 y #2** en `1bdac
 | 9 | 27-ago | Iteración 8 | `e5e17b6` | Skip test_budget_fuse.py + CI packages install | ✅ CI 100% verde ✅ |
 | 10 | 27-ago | Iteración 9 | `1bdacc3` | BUG #1 (enrichment key mismatch) + BUG #2 (snapshot column names) | ✅ Fix applied |
 | 11 | 27-ago | Iteración 10 | `8baa49e` | Lanz v2.0 audit doc + PLAN_MAIN update + PROMPT_CLAUDE_CODE_ANALYSIS entry #24 | ✅ Docs super actualizadas |
+| 12 | 28-ago | Hito 36 | `30e5e06` | DeepSeek thinking mode disabled — temperature vuelve a funcionar | ✅ |
+| 13 | 28-ago | Hito 36 | `2e9b567` | pollRun reconoce 10 estados terminales (delivered/degraded/empty/inconsistent/aborted_budget) | ✅ |
+| 14 | 28-ago | Hito 36 | `bdb4e6b` | response_format json_object en candidate_analyzer + brief_parser | ✅ |
+| 15 | 28-ago | Hito 36 | `89caf71` | discovery_mode selector en UI + error detail visible | ✅ |
+| 16 | 28-ago | Hito 36 | `c79f375` | DeepSeek client unification — deepseek-v4-flash, conversation history, V4-Flash pricing | ✅ |
+| 17 | 28-ago | M3-Agente A | `ae0789c` | schema.sql sync — 3 tables + 4 columns added | ✅ |
+| 18 | 28-ago | M3-Agente B | `65e998c` | Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 — budget_aborted, determine_final_status reconnect | ✅ |
+| 19 | 28-ago | Logger Fixes | `035aafc` | 17 logger.error con exc_info=True (worker.py 8 + ai_service.py 3 + hikerapi_client.py 6) | ✅ |
 
 ---
 
@@ -343,17 +358,21 @@ CI
 - [x] Registros `schema_migrations` insertados para 108, 109, 110
 - [x] Duplicado `paola_cocina_` resuelto (4→1)
 
-### ✅ Deploy CI + Railway (completado 27-ago-2026)
+### ✅ Deploy CI + Railway (completado 28-ago-2026)
 
-- [x] Railway deploy del código con C-0/C-1/C-2
+- [x] Railway deploy verde — `035aafc` — 28-ago-2026 22:03 UTC
+- [x] Worker startup: 5 funciones registradas, pool creado
+- [x] Migrations idempotentes confirmadas (columnas ya existen)
 - [x] CI verde: Backend + Frontend + DB migrations ✅
 
-### ⏳ Validación E2E (pendiente — ~$1.14 HikerAPI)
+### ⏳ Validación E2E (pendiente — Lunes 31-ago-2026 · ~$1.14 HikerAPI)
 
 - [ ] Corrida de validación `test_lens_mascotas_ve.py`
 - [ ] `discovery_run_events` popula `reason_code` con distribución >1 valor
 - [ ] Candidatos muestran `followers` real (no 0)
 - [ ] `flush_drop_ledger()` popula `discovery_run_events`
+- [ ] `ai_rationale` no es NULL en ningún candidato
+- [ ] Polling se detiene solo al llegar a estado terminal (sin "Timeout" error)
 
 ---
 
@@ -426,11 +445,60 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 | Documento | Descripción |
 |-----------|-------------|
 | `docs/La Web Figital - Informe de Alineación Técnica LENS.md` | Auditoría Santiago Lanz (v1.2) — fuente del plan |
+| `docs/Auditoria_Lanz_v2_2026-08-27.md` | Lanz v2.0 — 23 hallazgos nuevos, 5 fases (superseded by v2.1) |
+| `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` | Lanz v2.1 — estado post-fixes completo |
+| `docs/LENS_ANALISIS_MODELO_Y_UI_2026-08-28.md` | Análisis Hito 36 — thinking mode, UI errors, Gemini migration |
 | `docs/LANZ_VERIFICACIONES_2026-08-25.md` | Resultados V0-V4 de verificaciones Lanz |
 | `docs/FIXES_FRONTEND_LENS_C0-C2_27-08-26.md` | Análisis Fable 5 Iteración 2 |
 | `docs/VERIFICACION_CODIGO_LENS_HITOS_30-35_25-08-26.md` | Auditoría Fable 5 sobre Hitos 30-35 |
 | `docs/PROMPT_CLAUDE_CODE_ANALYSIS.md` | Índice histórico de auditorías |
 | `docs/13a_data_contract_discovery.md` | Contrato de datos Discovery |
+| `docs/E2E_TEST_PLAN_2026-08-28.md` | Plan de prueba UI Lunes 31-ago-2026 — 4 criterios |
+| `docs/hito36.patch` | Parche Hito 36 — applied in commits `30e5e06`..`89caf71` |
+
+---
+
+## SECCIÓN 13 — Hito 36 + M3-Agentes: Fixes Aplicados 28-ago-2026
+
+### Hito 36 (5 commits: `30e5e06` → `89caf71`)
+
+| Commit | Fix | Impacto |
+|--------|-----|---------|
+| `30e5e06` | DeepSeek thinking mode disabled | `temperature` funciona, `max_tokens=2500` suficiente para JSON |
+| `2e9b567` | `POLL_TERMINAL_STATUSES` = 10 valores | Polling se detiene en delivered/degraded/empty/inconsistent/aborted_budget |
+| `bdb4e6b` | `response_format={"type":"json_object"}` en candidate_analyzer + brief_parser | JSON garantizado sin regex fallback |
+| `89caf71` | discovery_mode selector + error detail visible | Usuario ve errores específicos del backend |
+| `c79f375` | DeepSeek client unification | deepseek-v4-flash, conversation history, V4-Flash pricing correcto |
+
+**Hallazgo central de Hito 36:** DeepSeek-V4-Flash trae `thinking mode` activado por defecto — ignorando `temperature`, facturando CoT como output tokens, y consumiendo `max_tokens`. Fix: `thinking: {type: "disabled"}` en `extra_body`.
+
+### M3-Agente A — Schema Sync (`ae0789c`)
+
+Tablas y columnas agregadas a `schema.sql`:
+- `discovery_run_events` (de migración 108)
+- `budget_transactions` (de migración 107)
+- `discovery_profiles` (de migraciones 29/30/102/105)
+- `discovery_runs.estimated_cost_usd` + `budget_usd`
+- `discovery_candidates.brand_fit` + `ai_rationale`
+
+### M3-Agente B — Lanz §7 FASE 0.4/2.1/2.2/2.4/2.5/3.1 (`65e998c`)
+
+| Fix | Descripción |
+|-----|-------------|
+| main.py:84 | `railway_pg` import arreglado — NameError en shutdown eliminado |
+| `determine_final_status()` | Reconectada — reemplaza lógica inline en worker.py:1785-1790 |
+| `budget_aborted` flag | Creado en worker — set cuando BudgetExhausted es detectado |
+| Cleanup passes | `except Exception: pass` → `logger.warning(...)` en L1952/L1957 |
+| `or 0` chains | Removidos en `_raw_to_candidate_dict` — None cuando falta dato |
+| `discovery_query` writer | Los 7 pasos de fetch taggean items con source query |
+
+### Logger Fixes — 17 logger.error con exc_info=True (`035aafc`)
+
+| Archivo | Count | Líneas |
+|---------|-------|--------|
+| `worker.py` | 8 | 445, 713, 721, 729, 736, 818, 825, 1995 |
+| `ai_service.py` | 3 | 188, 220, 318 |
+| `hikerapi_client.py` | 6 | 167, 186, 194, 262, 301, 312 |
 
 ---
 
@@ -451,7 +519,7 @@ CI no tenía `shared-core`, `shared-ai` ni `discovery` instalados, causando `Mod
 
 ---
 
-*Documento actualizado: 27 de agosto de 2026 por MiniMax M2.7/M3*
-*Basado en: Informe Lanz v1.2 + Lanz v2.0 + Ejecución migraciones Railway + Fixes CI + Deploy Railway*
-*Commit base: `8baa49e` — BUG #1/#2 corregidos ✅ · Lanz v2.0 audit ✅ · Docs actualizadas ✅*
-*Estado: DB completa ✅ · Pipeline funcional ✅ (BUG #1/#2 fixed) · `deepseek-v4-flash` en código + Railway ✅ · CI verde ✅*
+*Documento actualizado: 28 de agosto de 2026 por MiniMax M2.7/M3*
+*Basado en: Informe Lanz v1.2 + Lanz v2.0 + Hito 36 + M3-Agentes A/B/C + 17 logger fixes*
+*Commit base: `035aafc` — Hito 36 completo ✅ · M3 A/B/C ✅ · 17 logger exc_info ✅ · Deploy verde ✅*
+*Estado: Pipeline funcional ✅ · E2E pendiente Lunes 31-ago-2026 · FASE 1-4 Lanz v2.0 pendientes*

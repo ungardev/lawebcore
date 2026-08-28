@@ -211,15 +211,15 @@ El acoplamiento a DeepSeek es pequeño y está bien contenido: `deepseek_client.
 
 ## §6 — ANOMALÍAS ADICIONALES
 
-| # | Anomalía | Severidad | Dónde |
-|---|---|---|---|
-| 1 | Modo thinking activo → temperature ignorada, riesgo de truncar JSON | 🔴 | `deepseek_client.py:43-49` |
-| 2 | `pollRun` sin los 6 estados nuevos → 200 peticiones + error falso | 🟠 | `useDiscoveryRun.ts:58` |
-| 3 | Error 400 del backend no llega al usuario | 🟠 | `LensSearchPage.tsx` catch |
-| 4 | `complete_json()` no pasa `response_format` — el nombre promete lo que no hace | 🟠 | `deepseek_client.py:143` |
-| 5 | Precio pico/valle ×2 no está en ningún cálculo de costo del proyecto | 🟡 | docs |
-| 6 | `discovery_mode: 'explore'` hardcodeado — no hay selector | 🟡 | `LensSearchPage.tsx:51` |
-| 7 | Dos listas de estados terminales en el mismo feature | 🟡 | `LensSearchPage:78` vs `useDiscoveryRun:58` |
+| # | Anomalía | Severidad | Dónde | Estado 28-ago |
+|---|---|---|---|---|
+| 1 | Modo thinking activo → temperature ignorada, riesgo de truncar JSON | 🔴 | `deepseek_client.py:43-49` | ✅ **FIXED** `30e5e06` |
+| 2 | `pollRun` sin los 6 estados nuevos → 200 peticiones + error falso | 🟠 | `useDiscoveryRun.ts:58` | ✅ **FIXED** `2e9b567` |
+| 3 | Error 400 del backend no llega al usuario | 🟠 | `LensSearchPage.tsx` catch | ✅ **FIXED** `89caf71` |
+| 4 | `complete_json()` no pasa `response_format` — el nombre promete lo que no hace | 🟠 | `deepseek_client.py:143` | ✅ **FIXED** `bdb4e6b` |
+| 5 | Precio pico/valle ×2 no está en ningún cálculo de costo del proyecto | 🟡 | docs | ⚠️ **DOCS ONLY** — documented |
+| 6 | `discovery_mode: 'explore'` hardcodeado — no hay selector | 🟡 | `LensSearchPage.tsx:51` | ✅ **FIXED** `89caf71` |
+| 7 | Dos listas de estados terminales en el mismo feature | 🟡 | `LensSearchPage:78` vs `useDiscoveryRun:58` | ✅ **FIXED** `2e9b567` — POLL_TERMINAL_STATUSES compartido |
 
 Los hallazgos 2, 4 y 7 son la misma familia que Lanz describe en su §3: **piezas que se desincronizan y no avisan.**
 
@@ -282,4 +282,38 @@ Conviene que eso sea una práctica y no una casualidad: **cada vez que se cambie
 
 ---
 
-*Verificado sobre `8a3f16f`. Documentación de DeepSeek consultada el 2026-08-28 en `api-docs.deepseek.com`. El parche compila. No se ejecutó el pipeline ni se consumieron créditos.*
+---
+
+## §11 — Estado Post-Fixes: 28-ago-2026
+
+### Fixes Aplicados
+
+| Fix | Commit | Descripción |
+|-----|--------|-------------|
+| Thinking disabled | `30e5e06` | `thinking: {type: "disabled"}` en extra_body — temperature vuelve a funcionar |
+| pollRun 10 estados | `2e9b567` | POLL_TERMINAL_STATUSES constante compartida — polling se detiene en delivered |
+| response_format | `bdb4e6b` | `candidate_analyzer.py:326` + `brief_parser.py:186,355` — JSON garantizado |
+| UI selector + error | `89caf71` | discovery_mode selector en LensSearchPage + error detail visible |
+| DeepSeek unification | `c79f375` | Client singleton con conversation history + V4-Flash pricing |
+
+### Criterios E2E Verificados el Lunes 31-ago-2026
+
+1. Run termina en `delivered` — polling se detiene solo (sin "Timeout esperando resultados")
+2. `total_candidates ≥ 15` en respuesta de `GET /runs/{id}`
+3. Candidatos traen `followers` real (no 0) — visible en UI
+4. `ai_rationale` no es NULL — `SELECT count(*) FROM discovery_candidates WHERE run_id=… AND ai_rationale IS NOT NULL`
+
+### Consulta de Validación Lanz §7.1
+
+```sql
+SELECT reason_code, count(*) FROM discovery_run_events
+WHERE run_id = '…' GROUP BY reason_code ORDER BY 2 DESC;
+```
+**Más de 1 reason_code distinto** → el instrumento ya distingue causas de descarte.
+
+---
+
+*Verificado sobre `8a3f16f`. Actualizado 28-ago-2026 con estado post-fixes.*
+*Documentación de DeepSeek consultada el 2026-08-28 en `api-docs.deepseek.com`.*
+*Hito 36 aplicado en commits `30e5e06`..`c79f375` · Deploy verde 28-ago-2026 ✅*
+*E2E pendiente Lunes 31-ago-2026 · ~$1.14 HikerAPI*

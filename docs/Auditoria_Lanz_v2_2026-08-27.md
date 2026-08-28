@@ -436,6 +436,58 @@ Las siguientes preguntas requieren acceso a producción y no se pueden responder
 
 ---
 
+---
+
+## §9 — Estado Post-Fixes: 28-ago-2026
+
+> Esta sección documenta el estado de cada hallazgo tras los fixes aplicados del 28-ago-2026 (Hito 36 + M3-Agentes A/B/C + logger fixes).
+
+### Hallazgos Actualizados
+
+| # | Hallazgo | Severidad | Estado al 28-ago |
+|---|----------|-----------|-----------------|
+| 1 | BUG #1: enrichment key mismatch — 0 candidatos | 🔴 CRÍTICO | ✅ **CORREGIDO** — `1bdacc3` |
+| 2 | BUG #2: columnas inválidas en metrics_snapshot | 🔴 CRÍTICO | ✅ **CORREGIDO** — `1bdacc3` |
+| 3 | Migraciones 108/109 no automáticas | 🟡 CRÍTICO | ✅ **CORREGIDO** — aplicadas manualmente 26-ago + schema.sql sync `ae0789c` |
+| 4 | 27 broad exception handlers en hot path | 🟡 CRÍTICO | 🟡 **PARCIAL** — cleanup passes fixed (1952/1957), 17 hot path pending FASE 2 |
+| 5 | 21 `or 0` chains en worker.py | 🟡 CRÍTICO | ✅ **CORREGIDO** — `65e998c` en `_raw_to_candidate_dict` |
+| 6 | 6/7 dual-name patterns en search steps | 🟡 CRÍTICO | ❌ **PENDIENTE** — FASE 1.1 |
+| 7 | `discovery_query` nunca escrito | 🟡 CRÍTICO | ✅ **CORREGIDO** — `65e998c` writer en los 7 pasos |
+| 8 | Sin política de frescura | 🟠 MEDIO | ❌ **PENDIENTE** — FASE 3.2 |
+| 9 | `determine_final_status()` dead code | 🟠 MEDIO | ✅ **CORREGIDO** — `65e998c` reconnect en worker.py:1785 |
+| 10 | `budget_aborted` flag no existe | 🟠 MEDIO | ✅ **CORREGIDO** — `65e998c` outer handler |
+| 11 | `response_format` solo en 1/4 call sites LLM | 🟠 MEDIO | ✅ **CORREGIDO** — Hito 36 `bdb4e6b` (candidate_analyzer + brief_parser) |
+| 12 | Test suite no cubre paths críticos | 🟠 MEDIO | ❌ **PENDIENTE** |
+| 13 | `schema.sql` desactualizado | 🟠 MEDIO | ✅ **CORREGIDO** — `ae0789c` |
+| 14 | `apply_migrations.py` single-shot | 🟠 MEDIO | ❌ **PENDIENTE** |
+| 15 | `main.py:84` railway_pg undefined | 🟠 MEDIO | ✅ **CORREGIDO** — `65e998c` import fix |
+| 16 | `media_count` or chain | 🟡 MEDIA | ❌ **PENDIENTE** |
+| 17 | `FunnelTracker()` dead | 🟡 MEDIA | ❌ **PENDIENTE** — FASE 2.6 |
+| 18 | `is_discoverable` columna muerta | 🟡 MEDIA | ❌ **PENDIENTE** — FASE 3.5 |
+| 19 | `influencers.enriched_at` sin leer | 🟡 MEDIA | ❌ **PENDIENTE** — FASE 3.2 |
+| 20 | Railway DEEPSEEK_MODEL `deepseek-chat` (retired) | 🟠 MEDIO | ✅ **CORREGIDO** — `deepseek-v4-flash` ✅ |
+| 21 | `api_costs` sin model name | 🟢 BAJA | ❌ **PENDIENTE** — FASE 4.6 |
+| 22 | `discovery.router` double-mounted | 🟢 BAJA | ❌ **PENDIENTE** |
+| 23 | `ai_prompts` defaults stale | 🟢 BAJA | ❌ **PENDIENTE** |
+
+### Commits del 28-ago-2026 Aplicados
+
+| Commit | Descripción |
+|--------|-------------|
+| `30e5e06` | DeepSeek thinking mode disabled |
+| `2e9b567` | pollRun 10 estados terminales |
+| `bdb4e6b` | response_format json_object en candidate_analyzer + brief_parser |
+| `89caf71` | discovery_mode selector + error detail visible |
+| `c79f375` | DeepSeek client unification |
+| `ae0789c` | schema.sql sync — 3 tables + 4 columns |
+| `65e998c` | Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 |
+| `035aafc` | 17 logger.error con exc_info=True |
+
+**Estado al 28-ago-2026:** Sistema funcional para E2E. FASE 1-4 de Lanz v2.0 aún pendientes.
+
+---
+
 *Documento creado: 27 de agosto de 2026 por MiniMax M2.7/M3*
+*Actualizado: 28 de agosto de 2026 — Sección §9 Post-Fixes añadida*
 *Basado en: Lanz v1.2 (Santiago Lanz, 24-ago-2026) + investigación exhaustiva de 3 agentes + verificación de 47 archivos*
-*Estado: BUG #1 y #2 corregidos en commit `1bdacc3`. FASE 1-5 pendientes.*
+*Estado: BUG #1 y #2 corregidos `1bdacc3` · Hito 36 completo `30e5e06..89caf71` · M3 A/B/C `ae0789c/65e998c` · Logger fixes `035aafc` · E2E pendiente Lunes*

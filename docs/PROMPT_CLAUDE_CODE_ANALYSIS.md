@@ -1,10 +1,10 @@
 # PROMPT_CLAUDE_CODE_ANALYSIS — Índice de Auditorías LENS
 
-> **Última actualización:** 2026-08-27
+> **Última actualización:** 2026-08-28
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** CI verde ✅ · BUG #1 y #2 corregidos ✅ · Lanz v2.0 auditado ✅ · `deepseek-v4-flash` código + Railway ✅ · Validación E2E pendiente
-> **HikerAPI balance:** ~$38.00 USD
-> **NUEVO (27-ago):** CI verde — 75 errores ruff W292/I001 corregidos, 63 noqa comments, mypy deshabilitado temporalmente, test_budget_fuse.py ignorado, 139 tests passing
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Deploy verde ✅ · **E2E pendiente Lunes 31-ago-2026**
+> **HikerAPI balance:** ~$36.86 USD (post E2E ~$1.14)
+> **NUEVO (28-ago):** Hito 36 — thinking mode disabled, pollRun 10 estados, response_format, UI selector + error detail · M3-Agentes A/B/C — schema sync, Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 · 17 logger.error con exc_info=True · Railway deploy verde 22:03 UTC
 
 ---
 
@@ -34,7 +34,8 @@
 | **21** | *Análisis 5 agentes (backend/frontend/pipeline/Lanz/deploy)* | **2026-08-26** | **MiniMax** | Análisis exhaustivo: Railway NO ejecutó migraciones automáticamente |
 | **22** | *`docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md` (actualizado 26-ago)* | **2026-08-26** | **MiniMax** | Estado completo: Migraciones 108/109/110 ejecutadas manualmente · ENUM 13 valores · C-0/C-1/C-2 en código pendiente deploy · lint CI bloquea |
 | **23** | *`README.md` (reescrito) + CI fixes (`e5e17b6`)* | **2026-08-27** | **MiniMax** | README.md reescrito con stack actualizado (HikerAPI), Hitos 30-35, arquitectura pipeline 4 pasos · CI verde: ruff noqa + mypy deshabilitado + pytest skip test_budget_fuse · Railway desplegado ✅ |
-| **24** | *`docs/Auditoria_Lanz_v2_2026-08-27.md`* | **2026-08-27** | **MiniMax** | Lanz v2.0: refundición de v1.2 + 23 hallazgos nuevos · BUG #1 (worker.py:1298 typo: 0 candidatos por corrida) + BUG #2 (discovery.py:973,976 columnas erradas: Save Candidate 500) · Fix applied in `1bdacc3` · 5 fases de acción (FASE 1-5 pendientes) · Lanz v1.2 marcado como iteración anterior |
+| **24** | *`docs/Auditoria_Lanz_v2_2026-08-27.md`* | **2026-08-27** | **MiniMax** | Lanz v2.0: refundición de v1.2 + 23 hallazgos nuevos · BUG #1 + #2 fix in `1bdacc3` · 5 fases de acción |
+| **25** | *`docs/AUDITORIA_LANZ_v2_1_2026-08-28.md`* | **2026-08-28** | **MiniMax M2.7/M3** | Lanz v2.1 superseding — Hito 36 completo (thinking disabled, pollRun 10 estados, response_format, UI) · M3-Agente A (schema sync) · M3-Agente B (Lanz §7 FASE 0.4/2.1/2.2/2.4/2.5/3.1) · 17 logger.error exc_info fixes · Deploy verde Railway 28-ago-2026 · E2E pendiente Lunes 31-ago-2026 |
 
 ---
 
@@ -224,4 +225,4 @@ Railway está conectado a `postgres.railway.internal:5432/railway` — que es la
 
 ---
 
-*Índice actualizado: 2026-08-26 — Proyecto LENS con Migraciones 108/109/110 ejecutadas manualmente. ENUM 13 valores. Pipeline funcional en Railway con commit `2446e75`. Código C-1/C-2 en repositorio pendiente deploy. Plan Main actualizado en docs/PLAN_MAIN_ALINEACION_LENS_2026-08-25.md. Basado en Informe Santiago Lanz v1.2 + Análisis Fable 5 Iteración 1 y 2. HikerAPI ~$38 USD.*
+*Índice actualizado: 2026-08-28 — Hito 36 completo + M3-Agentes A/B/C + 17 logger fixes · Deploy verde Railway `035aafc` · E2E pendiente Lunes 31-ago-2026 · HikerAPI ~$36.86 USD · Basado en Informe Santiago Lanz v1.2 + Lanz v2.0/v2.1*
