@@ -243,7 +243,7 @@ Presupuesto: {{budget}}
 Audiencia objetivo: {{audience}}
 
 Estructura: 1) Contexto, 2) Objetivo y KPIs, 3) Audiencia, 4) Mensajes clave, 5) Mecanica, 6) Timeline sugerido, 7) Entregables esperados.',
-   'deepseek', 'deepseek-chat', 0.7),
+   'deepseek', 'deepseek-v4-flash', 0.7),
 
   ('post_mortem_v1', 1, 'Post-Mortem de Campana',
    'Genera el post-mortem ejecutivo de una campana a partir de sus KPIs',
@@ -258,7 +258,7 @@ Insights: {{insights}}
 Formato ganador: {{winning_format}}
 
 Estructura: 1) Resumen ejecutivo (3 lineas), 2) Resultado vs objetivo, 3) Top 3 wins, 4) Top 3 aprendizados, 5) Recomendaciones para la proxima.',
-   'deepseek', 'deepseek-chat', 0.5),
+   'deepseek', 'deepseek-v4-flash', 0.5),
 
   ('rag_system_v1', 1, 'RAG - Asistente La Web Core',
    'Prompt del sistema para el asistente IA conversacional con RAG',
@@ -267,5 +267,5 @@ Estructura: 1) Resumen ejecutivo (3 lineas), 2) Resultado vs objetivo, 3) Top 3 
 Historial: {{history}}
 Pregunta del usuario: {{question}}
 Fragmentos relevantes recuperados: {{chunks}}',
-   'deepseek', 'deepseek-chat', 0.4)
+   'deepseek', 'deepseek-v4-flash', 0.4)
  ON CONFLICT (code, version) DO NOTHING;

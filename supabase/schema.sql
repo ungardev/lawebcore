@@ -498,7 +498,7 @@ CREATE TABLE ai_prompts (
   code TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 1,
   name TEXT NOT NULL, description TEXT,
   system_prompt TEXT NOT NULL, user_template TEXT NOT NULL,
-  model_provider TEXT NOT NULL DEFAULT 'deepseek', model_name TEXT NOT NULL DEFAULT 'deepseek-chat',
+  model_provider TEXT NOT NULL DEFAULT 'deepseek', model_name TEXT NOT NULL DEFAULT 'deepseek-v4-flash',
   temperature NUMERIC(3, 2) NOT NULL DEFAULT 0.7,
   max_tokens INTEGER NOT NULL DEFAULT 2000,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,

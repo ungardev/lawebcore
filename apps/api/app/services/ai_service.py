@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 import structlog
 from langchain_openai import ChatOpenAI
-from shared_ai import embed_text
+from shared_ai import deepseek_client, embed_text
 from shared_core import settings
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: TC002
@@ -118,7 +118,25 @@ class AIService:
                 logger.warning("vector_search_failed", error=str(e))
         await db.rollback()
 
-        # 4. Build prompt and call LLM
+        # 4. Load conversation history (last 6 messages)
+        conversation_history: list[dict[str, str]] = []
+        try:
+            history_rows = await db.execute(
+                text("""
+                    SELECT role, content FROM ai_messages
+                    WHERE conversation_id = :cid
+                    ORDER BY created_at DESC
+                    LIMIT 6
+                """),
+                {"cid": str(conv_id)},
+            )
+            rows = history_rows.mappings().all()
+            conversation_history = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
+        except Exception as e:
+            logger.warning("load_conversation_history_failed", error=str(e))
+        await db.rollback()
+
+        # 5. Build prompt and call LLM
         _SYSTEM_PROMPT_FALLBACK = (  # noqa: N806
             "Eres el asistente estratégico de La Web Figital Agency — la agencia de influencer marketing "
             "#1 en Venezuela, con 12 años ejecutando campañas en Latam.\n\n"
@@ -136,7 +154,17 @@ class AIService:
             "7. Para decisiones de campaña, siempre da contexto de mercado (no solo números)."
         )
         system_prompt = await self._load_system_prompt("rag_system_v1", _SYSTEM_PROMPT_FALLBACK, db)
+
+        history_text = ""
+        if conversation_history:
+            history_lines = [
+                f"{'Usuario' if msg['role'] == 'user' else 'Asistente'}: {msg['content']}"
+                for msg in conversation_history
+            ]
+            history_text = "\n".join(history_lines) + "\n\n"
+
         user_prompt = (
+            f"{history_text}"
             f"Contexto recuperado de la base de conocimiento:\n\n{context_text}\n\n"
             f"---\n\nPregunta del usuario: {message}\n\n"
             "Responde basándote EXCLUSIVAMENTE en el contexto de arriba. "
@@ -145,27 +173,17 @@ class AIService:
         )
 
         try:
-            llm = ChatOpenAI(
-                model=settings.DEEPSEEK_MODEL,
+            result = await deepseek_client.complete(
+                prompt=user_prompt,
+                system=system_prompt,
                 temperature=0.4,
-                api_key=settings.DEEPSEEK_API_KEY,
-                base_url="https://api.deepseek.com",
+                max_tokens=2000,
             )
-            response = await llm.ainvoke([{"role": "system", "content": system_prompt},
-                                           {"role": "user", "content": user_prompt}])
-            answer_text = response.content if hasattr(response, "content") else str(response)
-            tokens_input = 0
-            tokens_output = 0
-            cost_usd = 0.0
-            latency_ms = 0
-            if hasattr(response, "usage_metadata"):
-                usage = response.usage_metadata
-                tokens_input = usage.get("input_tokens", 0)
-                tokens_output = usage.get("output_tokens", 0)
-                total = usage.get("total_tokens", 0)
-                if total == 0:
-                    total = tokens_input + tokens_output
-                cost_usd = (tokens_input * 0.14e-6) + (tokens_output * 0.28e-6)
+            answer_text = result.content
+            tokens_input = result.tokens_input or 0
+            tokens_output = result.tokens_output or 0
+            cost_usd = result.cost_usd or 0.0
+            latency_ms = result.latency_ms or 0
         except Exception as e:
             logger.error("llm_call_failed", error=str(e))
             answer_text = (

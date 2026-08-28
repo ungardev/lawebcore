@@ -64,7 +64,8 @@ class DeepSeekClient:
                 )
                 cost_usd = None
                 if tokens_input is not None and tokens_output is not None:
-                    cost_usd = (tokens_input * 0.0013 / 1000) + (tokens_output * 0.0039 / 1000)
+                    # DeepSeek-V4-Flash peak pricing (2026-08): $0.44/1M input, $1.32/1M output
+                    cost_usd = (tokens_input * 0.44 / 1_000_000) + (tokens_output * 1.32 / 1_000_000)
                 return LLMResponse(
                     content=content,
                     model=self.model,
