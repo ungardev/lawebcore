@@ -10,7 +10,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from prometheus_client import make_asgi_app
-from shared_core import close_db, init_db, settings
+from shared_core import close_db, init_db, railway_pg, settings
 from sqlalchemy import text
 
 from app.api.v1 import api_router

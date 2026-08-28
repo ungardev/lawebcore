@@ -40,6 +40,7 @@ from shared_core.observability import (
     FunnelTracker,
     RunEvent,
     RunStatus,
+    determine_final_status,
     drop_profile,
     flush_drop_ledger,
 )
@@ -272,7 +273,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
     STEP 3: Profile enrichment (single sync call — up to 80 profiles)
     STEP 4: Scoring con geo_score + lens_score + cross_ref
     """
-    from discovery.exceptions import ReplayMiss, SourceUnavailable
+    from discovery.exceptions import BudgetExhausted, ReplayMiss, SourceUnavailable
     global _replay_miss_count_for_run
     _replay_miss_count_for_run = 0
     try:
@@ -299,7 +300,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             print(f"[discovery_run_task] ABORT: Run {run_id} not found", flush=True)
             return {"error": f"Run {run_id} not found"}
 
-        from discovery.exceptions import BudgetExhausted, SourceUnavailable
         from discovery.tools.hikerapi_circuit_breaker import HikerAPICircuitBreaker
 
         from app.core.budget_fuse import BudgetFuse
@@ -311,6 +311,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             cost_per_call_usd=settings.HIKERAPI_COST_PER_CALL_USD,
         )
         circuit_breaker = HikerAPICircuitBreaker(provider="hikerapi")
+        budget_aborted = False
 
         try:
             await budget_fuse.assert_budget_available(run_id, provider="hikerapi")
@@ -384,7 +385,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "follower_count": c.get("followers") or raw.get("followersCount", 0),
                     "followersCount": c.get("followers") or raw.get("followersCount", 0),
                     "following_count": c.get("following") or raw.get("followingCount", 0),
-                    "followsCount": c.get("following") or raw.get("followsCount", 0),
+                    "followsCount": c.get("following") or raw.get("followingCount", 0),
                     "posts_count": c.get("posts_count") or raw.get("postsCount", 0),
                     "postsCount": c.get("posts_count") or raw.get("postsCount", 0),
                     "is_business": raw.get("isBusinessAccount", False) or raw.get("is_business", False),
@@ -393,6 +394,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "verified": raw.get("verified", False),
                     "pk": raw.get("pk"),
                     "is_private": raw.get("is_private", False),
+                    "_discovery_query": "analyze_mode",
                 }
             logger.info(
                 "step_analyze_mode_loaded_parent_candidates",
@@ -534,6 +536,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "pk": p.get("pk"),
                     "locationName": p.get("_source_city", ""),
                     "_source_location": p.get("_source_location", ""),
+                    "_discovery_query": f"location:{p.get('_source_city', '')}",
                 }
 
             location_items = list(location_profiles.values())
@@ -553,6 +556,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             for tag in plan.hashtag_queries[:settings.DISCOVERY_HASHTAG_TOP_LIMIT]:
                 try:
                     items = await instagram_source.search_hashtag(tag, limit=MAX_POSTS_PER_HASHTAG)
+                    for item in items:
+                        item["_discovery_query"] = f"hashtag:{tag}"
                     results.extend(items)
                 except SourceUnavailable:
                     raise
@@ -566,6 +571,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             for tag in plan.hashtag_queries[:settings.DISCOVERY_HASHTAG_RECENT_LIMIT]:
                 try:
                     items = await instagram_source.search_hashtag_recent(tag, limit=20)
+                    for item in items:
+                        item["_discovery_query"] = f"hashtag_recent:{tag}"
                     results.extend(items)
                 except SourceUnavailable:
                     raise
@@ -581,6 +588,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             for kw in plan.keyword_queries[:settings.DISCOVERY_KEYWORD_LIMIT]:
                 try:
                     items = await instagram_source.search_keyword(kw, limit=10)
+                    for item in items:
+                        item["_discovery_query"] = f"keyword:{kw}"
                     results.extend(items)
                 except SourceUnavailable:
                     raise
@@ -591,6 +600,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         combined_kw = f"{kw} {geo}"
                         try:
                             items = await instagram_source.search_keyword(combined_kw, limit=10)
+                            for item in items:
+                                item["_discovery_query"] = f"keyword_geo:{combined_kw}"
                             results.extend(items)
                         except SourceUnavailable:
                             raise
@@ -604,6 +615,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             for kw in plan.keyword_queries[:settings.DISCOVERY_TOP_SEARCH_LIMIT]:
                 try:
                     items = await instagram_source.search_top_accounts(kw, limit=10)
+                    for item in items:
+                        item["_discovery_query"] = f"topsearch:{kw}"
                     results.extend(items)
                 except SourceUnavailable:
                     raise
@@ -618,6 +631,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             for handle in seeds:
                 try:
                     items = await instagram_source.suggested_profiles(handle, limit=10)
+                    for item in items:
+                        item["_discovery_query"] = f"suggested:{handle}"
                     results.extend(items)
                     await asyncio.sleep(0.5)
                 except SourceUnavailable:
@@ -641,6 +656,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                             if isinstance(media, dict) and media.get("username"):
                                 normalized = instagram_source._normalize_user(media) if hasattr(instagram_source, "_normalize_user") else media
                                 normalized["_source_reels"] = kw
+                                normalized["_discovery_query"] = f"reels:{kw}"
                                 results.append(normalized)
                 except SourceUnavailable:
                     raise
@@ -723,6 +739,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 print(f"[STEP2p5_REELS] {len(reels_items)} creators from reels search", flush=True)
                 logger.info("step2p5_reels_done", reels_creators=len(reels_items))
 
+            hashtag_query_map = {item.get("username") or item.get("ownerUsername", ""): item.get("_discovery_query", "hashtag:unknown") for item in hashtag_items}
             for item in hashtag_items:
                 handle = item.get("username") or item.get("ownerUsername", "")
                 if not handle:
@@ -752,8 +769,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "location": item.get("locationName", "") or "",
                     "pk": item.get("pk"),
                     "is_private": item.get("is_private", False),
+                    "_discovery_query": hashtag_query_map.get(handle, ""),
                 }
 
+            keyword_query_map = {item.get("username", ""): item.get("_discovery_query", "keyword:unknown") for item in keyword_items if item.get("username")}
             for item in keyword_items:
                 handle = item.get("username", "")
                 if not handle:
@@ -781,6 +800,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "verified": item.get("verified", False),
                     "pk": item.get("pk"),
                     "is_private": item.get("is_private", False),
+                    "_discovery_query": keyword_query_map.get(handle, ""),
                 }
 
             step3_result, step4_result = await asyncio.gather(
@@ -808,6 +828,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 print(f"[STEP4] {len(suggested_items)} accounts from suggested", flush=True)
                 logger.info("step4_suggested_done", suggested_accounts=len(suggested_items))
 
+            topsearch_query_map = {item.get("username", ""): item.get("_discovery_query", "topsearch:unknown") for item in topsearch_items if item.get("username")}
             for item in topsearch_items:
                 handle = item.get("username", "")
                 if not handle:
@@ -835,8 +856,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "verified": item.get("verified", False),
                     "pk": item.get("pk"),
                     "locationName": item.get("locationName", "") or "",
+                    "_discovery_query": topsearch_query_map.get(handle, ""),
                 }
 
+            suggested_query_map = {item.get("username", ""): item.get("_discovery_query", "suggested:unknown") for item in suggested_items if item.get("username")}
             for item in suggested_items:
                 handle = item.get("username", "")
                 if not handle:
@@ -864,8 +887,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "verified": item.get("verified", False),
                     "pk": item.get("pk"),
                     "locationName": item.get("locationName", "") or "",
+                    "_discovery_query": suggested_query_map.get(handle, ""),
                 }
 
+            hashtag_recent_query_map = {item.get("username", "") or item.get("ownerUsername", ""): item.get("_discovery_query", "hashtag_recent:unknown") for item in hashtag_recent_items}
             for item in hashtag_recent_items:
                 handle = item.get("username", "") or item.get("ownerUsername", "")
                 if not handle:
@@ -894,8 +919,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "locationName": item.get("locationName", "") or "",
                     "location": item.get("locationName", "") or "",
                     "pk": item.get("pk"),
+                    "_discovery_query": hashtag_recent_query_map.get(handle, ""),
                 }
 
+            reels_query_map = {item.get("username", ""): item.get("_discovery_query", "reels:unknown") for item in reels_items if item.get("username")}
             for item in reels_items:
                 handle = item.get("username", "")
                 if not handle:
@@ -923,6 +950,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "verified": item.get("verified", False),
                     "pk": item.get("pk"),
                     "locationName": item.get("locationName", "") or "",
+                    "_discovery_query": reels_query_map.get(handle, ""),
                 }
 
         unique_handles = list(profiles.keys())
@@ -1153,6 +1181,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         _replay_miss_count_for_run += 1
                     if isinstance(res, BudgetExhausted):
                         budget_capped += 1
+                        budget_aborted = True
                 if budget_capped:
                     step3_degraded = True
                     step3_error = (
@@ -1582,6 +1611,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "rationale": build_rationale(p, tier, followers, er, target_country=target_country),
                 "tier": tier,
                 "is_tienda": is_tienda,
+                "discovery_query": p.get("_discovery_query", ""),
                 "status": "new",
                 "raw_payload": {
                     "lens_score": round(score_val, 2),
@@ -1782,12 +1812,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
 
-        if total == 0:
-            final_status = RunStatus.INCONSISTENT.value if step3_degraded else RunStatus.EMPTY.value
-        elif is_explore_mode:
-            final_status = RunStatus.DELIVERED.value
-        else:
-            final_status = RunStatus.DEGRADED.value if step3_degraded else RunStatus.DELIVERED.value
+        final_status = determine_final_status(
+            total_candidates=total,
+            funnel_invariant_ok=True,
+            step3_degraded=step3_degraded,
+            budget_aborted=budget_aborted,
+            has_exception=False,
+        ).value
 
         logger.info(RunEvent.RUN_FINISHED.value, run_id=run_id, status=final_status, candidates=total)
 
@@ -1929,6 +1960,37 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         structlog.contextvars.clear_contextvars()
         return {"run_id": run_id, "candidates": total}
 
+    except BudgetExhausted as e:
+        budget_aborted = True
+        logger.warning(
+            "discovery_run_budget_exhausted",
+            run_id=run_id,
+            current_usd=e.current_usd,
+            budget_usd=e.budget_usd,
+        )
+        error_msg = (
+            f"Presupuesto agotado: ${e.current_usd:.4f} de ${e.budget_usd:.2f}. "
+            "Recarga en hikerapi.com/billing."
+        )
+        await _run_set_status(run_id, RunStatus.ABORTED_BUDGET.value, error=error_msg)
+        try:
+            await _save_progress_message(
+                run_id,
+                f"🔴 Presupuesto agotado: ${e.current_usd:.4f} de ${e.budget_usd:.2f}. "
+                f"Recarga en hikerapi.com/billing.",
+            )
+        except Exception as exc:
+            logger.warning("cleanup_save_progress_failed", run_id=run_id, error=str(exc))
+        try:
+            tracker = get_discovery_cost_tracker()
+            await tracker.flush(run_id)
+        except Exception as exc:
+            logger.warning("cleanup_cost_tracker_flush_failed", run_id=run_id, error=str(exc))
+        await budget_fuse.reset_run_counter(run_id)
+        lens_active_runs.dec()
+        structlog.contextvars.clear_contextvars()
+        return {"run_id": run_id, "error": error_msg, "candidates": 0}
+
     except SourceUnavailable as e:
         logger.error(
             "discovery_run_source_unavailable",
@@ -1941,7 +2003,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             f"Fuente de datos no disponible ({e.provider}, HTTP {e.status_code}): {e.message}. "
             "Revisa: hikerapi.com/billing"
         )
-        await _run_set_status(run_id, RunStatus.FAILED.value, error=error_msg)
+        if e.status_code == 402 or budget_aborted:
+            final_status = RunStatus.ABORTED_BUDGET.value
+        else:
+            final_status = RunStatus.FAILED.value
+        await _run_set_status(run_id, final_status, error=error_msg)
         try:  # noqa: SIM105
             await _save_progress_message(
                 run_id,
@@ -1949,13 +2015,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 f"Detalles: {e.message}. "
                 f"Recarga créditos en hikerapi.com/billing y vuelve a intentarlo.",
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "cleanup_save_progress_failed",
+                run_id=run_id,
+                error=str(e),
+            )
         try:
             tracker = get_discovery_cost_tracker()
             await tracker.flush(run_id)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "cleanup_cost_tracker_flush_failed",
+                run_id=run_id,
+                error=str(e),
+            )
         await budget_fuse.reset_run_counter(run_id)
         lens_active_runs.dec()
         structlog.contextvars.clear_contextvars()
@@ -2010,11 +2084,11 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
         has_followers = "followersCount" in raw and raw.get("followersCount")
 
         if from_profile or has_followers:
-            followers = raw.get("followersCount", 0) or 0
-            following = raw.get("followsCount", 0) or 0
-            posts_count = raw.get("postsCount", 0) or 0
-            verified = raw.get("isVerified", False) or raw.get("verified", False)
-            business = raw.get("isBusinessAccount", False)
+            followers = raw.get("followersCount")
+            following = raw.get("followsCount")
+            posts_count = raw.get("postsCount")
+            verified = raw.get("isVerified") or raw.get("verified")
+            business = raw.get("isBusinessAccount")
 
             credibility = 50
             if verified:
@@ -2023,12 +2097,12 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
                 credibility += 15
             credibility = min(credibility, 100)
 
-            likes = raw.get("likesCount", 0) or 0
-            comments = raw.get("commentsCount", 0) or 0
-            engagement_rate = 0.0
-            if likes > 0 and followers > 0:
+            likes = raw.get("likesCount")
+            comments = raw.get("commentsCount")
+            engagement_rate = None
+            if likes and followers and likes > 0 and followers > 0:
                 engagement_rate = round((likes + comments) / max(followers, 1), 6)
-            elif posts_count > 0:
+            elif posts_count and posts_count > 0 and likes:
                 engagement_rate = round((likes + comments) / max(posts_count, 1), 6)
 
             country = ""
@@ -2096,9 +2170,9 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
         return {
             "handle": author.get("uniqueId", raw.get("handle", "")),
             "full_name": author.get("nickname", ""),
-            "followers": stats.get("followerCount", 0),
-            "posts_count": stats.get("videoCount", 0),
-            "avg_views": raw.get("videoView", 0),
+            "followers": stats.get("followerCount"),
+            "posts_count": stats.get("videoCount"),
+            "avg_views": raw.get("videoView"),
             "engagement_rate": 0.05,
             "country": raw.get("region", "VE"),
             "url": raw.get("shareUrl", ""),
@@ -2111,8 +2185,8 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
             "full_name": snippet.get("channelTitle", ""),
             "bio": snippet.get("description", ""),
             "avatar_url": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
-            "followers": int(stats.get("subscriberCount", 0)),
-            "posts_count": int(stats.get("videoCount", 0)),
+            "followers": int(stats["subscriberCount"]) if stats.get("subscriberCount") else None,
+            "posts_count": int(stats["videoCount"]) if stats.get("videoCount") else None,
             "engagement_rate": 0.02,
             "url": f"https://youtube.com/channel/{raw.get('id', '')}",
         }
