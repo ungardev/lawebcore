@@ -73,7 +73,7 @@ El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B
 | 15 | 28-ago | Hito 36 | `89caf71` | discovery_mode selector en UI + error detail visible | ✅ |
 | 16 | 28-ago | Hito 36 | `c79f375` | DeepSeek client unification — deepseek-v4-flash, conversation history, V4-Flash pricing | ✅ |
 | 17 | 28-ago | M3-Agente A | `ae0789c` | schema.sql sync — 3 tables + 4 columns added | ✅ |
-| 18 | 28-ago | M3-Agente B | `65e998c` | Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 — budget_aborted, determine_final_status reconnect | ✅ |
+| 18 | 28-ago | M3-Agente B | `65e998c` | Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 — budget_aborted, determine_final_status reconnect | ✅ (nota: FASE 2.2 wiring a True literal — fix aplicado en `ce148e1`) |
 | 19 | 28-ago | Logger Fixes | `035aafc` | 17 logger.error con exc_info=True (worker.py 8 + ai_service.py 3 + hikerapi_client.py 6) | ✅ |
 
 ---
@@ -491,6 +491,8 @@ Tablas y columnas agregadas a `schema.sql`:
 | Cleanup passes | `except Exception: pass` → `logger.warning(...)` en L1952/L1957 |
 | `or 0` chains | Removidos en `_raw_to_candidate_dict` — None cuando falta dato |
 | `discovery_query` writer | Los 7 pasos de fetch taggean items con source query |
+
+**⚠️ CORRECCIÓN POST-CLAUDE CODE (28-ago-2026 23:47):** El commit `65e998c` marcó FASE 2.2 como aplicada, pero `funnel_invariant_ok` quedó cableado a `True` literal en worker.py:1818. El invariante NUNCA se computaba — INCONSISTENT era inalcanzable por construcción. **Fix aplicado en `ce148e1`:** `funnel_ok = (len(step1_handles) - len(profiles)) == drop_ledger.total()` ahora computa de verdad. FunnelTracker también usado de verdad (sin noqa). |
 
 ### Logger Fixes — 17 logger.error con exc_info=True (`035aafc`)
 

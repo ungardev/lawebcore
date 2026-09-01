@@ -117,6 +117,7 @@
 | 2 | BUG #2: columnas inválidas metrics_snapshot | 🔴 CRÍTICO | ✅ FIXED `1bdacc3` |
 | 3 | Migraciones 108/109 no automáticas | 🟡 CRÍTICO | ✅ FIXED + schema sync `ae0789c` |
 | 4 | 27 broad exception handlers hot path | 🟡 CRÍTICO | 🟡 PARTIAL — cleanup fixed, rest pending FASE 2 |
+| **2.2** | **Invariante cableado a True literal** | 🟠 MEDIA | ✅ **CORREGIDO** `ce148e1` — computado de verdad con ledger |
 | 5 | 21 `or 0` chains | 🟡 CRÍTICO | ✅ FIXED `65e998c` |
 | 6 | 6/7 dual-name patterns search steps | 🟡 CRÍTICO | ❌ PENDIENTE FASE 1.1 |
 | 7 | `discovery_query` nunca escrito | 🟡 CRÍTICO | ✅ FIXED `65e998c` |
@@ -129,7 +130,7 @@
 | 14 | `apply_migrations.py` single-shot | 🟠 MEDIO | ❌ PENDIENTE |
 | 15 | `main.py:84` railway_pg undefined | 🟠 MEDIO | ✅ FIXED `65e998c` |
 | 16 | `media_count` or chain | 🟡 MEDIA | ❌ PENDIENTE |
-| 17 | `FunnelTracker()` dead | 🟡 MEDIA | ❌ PENDIENTE FASE 2.6 |
+| 17 | `FunnelTracker()` dead | 🟡 MEDIA | ✅ **CORREGIDO** `ce148e1` — usado con stages discovered/deduped/prefiltered/enriched/scored/delivered |
 | 18 | `is_discoverable` columna muerta | 🟡 MEDIA | ❌ PENDIENTE FASE 3.5 |
 | 19 | `influencers.enriched_at` sin leer | 🟡 MEDIA | ❌ PENDIENTE FASE 3.2 |
 | 20 | Railway DEEPSEEK_MODEL retired | 🟠 MEDIO | ✅ FIXED `deepseek-v4-flash` ✅ |
@@ -150,8 +151,9 @@
 1.4 Test: `test_enriched_merge_preserves_follower_count_snake_case`
 
 ### FASE 2 — Fail Loudly (~$0)
-2.1 Reemplazar 17 broad `except Exception` hot path con excepts específicos
-2.4 `FunnelTracker()` — usar o eliminar
+2.1 Reemplazar 17 broad `except Exception` hot path con excepts específicos ✅ ( частично — cleanup fixed, rest pending)
+2.2 **Invariante computado de verdad** ✅ — `funnel_ok = (len(step1_handles) - len(profiles)) == ledger.total()`
+2.4 `FunnelTracker()` ✅ — usado con stages en los 6 puntos del pipeline
 2.5 Eliminar `or 0` chains restantes (fuera de _raw_to_candidate_dict)
 
 ### FASE 3 — Mastery Path (~$0)
@@ -195,6 +197,8 @@
 | `ae0789c` | 28-ago | M3-Agente A: schema.sql sync |
 | `65e998c` | 28-ago | M3-Agente B: Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 |
 | `035aafc` | 28-ago | 17 logger.error exc_info=True |
+| `ce148e1` | 28-ago | Docs: Iteración 8 — Hito 36 + M3 A/B/C |
+| `ce148e2` | 28-ago | **fix(lens): compute funnel_invariant_ok from real ledger + use FunnelTracker** |
 
 ---
 

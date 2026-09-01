@@ -288,7 +288,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         logger.info(RunEvent.RUN_STARTED.value, run_id=run_id)
 
         drop_ledger = DropLedger()
-        funnel = FunnelTracker()  # noqa: F841
+        funnel = FunnelTracker()
 
         run = await railway_pg.select_one(
             table="discovery_runs",
@@ -957,6 +957,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         unique_handles = list(profiles.keys())
         print(f"[DIAG] steps 1-5 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
         logger.info("steps_1_to_5_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), hashtag_recent=len(hashtag_recent_items), keyword_users=len(keyword_items), reels_creators=len(reels_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items))
+        funnel.discovered = len(step1_handles)
+        funnel.deduped = len(profiles)
 
         await _save_progress_message(
             run_id,
@@ -1088,12 +1090,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             after=len(handles_to_enrich),
             top_score=prefilter_handles[0][1] if prefilter_handles else None,
         )
+        funnel.prefiltered = len(handles_to_enrich)
 
         # HITO 24: en modo explorar, construimos un dict de rough scores
         # para usarlo como match_score sin necesidad de enrichment.
         rough_score_map: dict[str, float] = {h: s for h, s in prefilter_handles}
 
         enriched_profiles: list[dict] = []
+        funnel.enriched = 0
         step3_degraded = False
         step3_error: str | None = None
         hikerapi_enrich_semaphore = asyncio.Semaphore(5)
@@ -1199,6 +1203,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     p for p in enrichment_results
                     if isinstance(p, dict) and p.get("username")
                 ]
+                funnel.enriched = len(enriched_profiles)
                 logger.info(
                     "step3_hikerapi_enrichment_done",
                     enriched=len(enriched_profiles),
@@ -1699,6 +1704,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             min_match_score=min_match_score,
         )
         print(f"[SCORING] {len(scored)} scored → {len(passed_score)} score≥{min_match_score} → {len(qualified)} qualified (tienda_excluded={exclude_stores})", flush=True)
+        funnel.scored = len(scored)
 
         target_n = 80
         to_analyze = _rerank_diversified(qualified, target_n)
@@ -1810,18 +1816,29 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 c["status"] = "saved"
         inserted_count = await _deduplicate_and_insert_candidates(qualified, run_id)
         total = inserted_count
+        funnel.delivered = total
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
 
+        funnel_ok = (len(step1_handles) - len(profiles)) == drop_ledger.total()
+        logger.info(
+            "funnel_invariant_check",
+            run_id=run_id,
+            funnel_ok=funnel_ok,
+            discovered=len(step1_handles),
+            deduped=len(profiles),
+            ledger_drops=drop_ledger.total(),
+        )
         final_status = determine_final_status(
             total_candidates=total,
-            funnel_invariant_ok=True,
+            funnel_invariant_ok=funnel_ok,
             step3_degraded=step3_degraded,
             budget_aborted=budget_aborted,
             has_exception=False,
         ).value
 
         logger.info(RunEvent.RUN_FINISHED.value, run_id=run_id, status=final_status, candidates=total)
+        logger.info("funnel_summary", run_id=run_id, **funnel.summary())
 
         await _run_update(run_id, {
             "status": final_status,

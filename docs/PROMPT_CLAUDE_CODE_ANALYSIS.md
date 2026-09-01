@@ -1,6 +1,6 @@
 # PROMPT_CLAUDE_CODE_ANALYSIS — Índice de Auditorías LENS
 
-> **Última actualización:** 2026-08-28
+> **Última actualización:** 2026-08-28 23:47
 > **Repositorio:** https://github.com/ungardev/lawebcore
 > **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Deploy verde ✅ · **E2E pendiente Lunes 31-ago-2026**
 > **HikerAPI balance:** ~$36.86 USD (post E2E ~$1.14)
@@ -36,6 +36,8 @@
 | **23** | *`README.md` (reescrito) + CI fixes (`e5e17b6`)* | **2026-08-27** | **MiniMax** | README.md reescrito con stack actualizado (HikerAPI), Hitos 30-35, arquitectura pipeline 4 pasos · CI verde: ruff noqa + mypy deshabilitado + pytest skip test_budget_fuse · Railway desplegado ✅ |
 | **24** | *`docs/Auditoria_Lanz_v2_2026-08-27.md`* | **2026-08-27** | **MiniMax** | Lanz v2.0: refundición de v1.2 + 23 hallazgos nuevos · BUG #1 + #2 fix in `1bdacc3` · 5 fases de acción |
 | **25** | *`docs/AUDITORIA_LANZ_v2_1_2026-08-28.md`* | **2026-08-28** | **MiniMax M2.7/M3** | Lanz v2.1 superseding — Hito 36 completo (thinking disabled, pollRun 10 estados, response_format, UI) · M3-Agente A (schema sync) · M3-Agente B (Lanz §7 FASE 0.4/2.1/2.2/2.4/2.5/3.1) · 17 logger.error exc_info fixes · Deploy verde Railway 28-ago-2026 · E2E pendiente Lunes 31-ago-2026 |
+| **26** | *`docs/VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md`* | **2026-08-28** | **Claude Fable 5** | Verificación Lanz v2.0 vs código real en `ce148e1` — detecta que FASE 2.2 marcada aplicada pero `funnel_invariant_ok=True` cableado (INCONSISTENT inalcanzable) · FunnelTracker dead · A-5 respondido (TIER_MIN_FOLLOWERS=500, no usado como filtro) · Nota de procedencia: auditoría dice "Lanz v2.0" pero es refundición MiniMax |
+| **27** | *`ce148e1` + `ce148e2`* | **2026-08-28** | **MiniMax M2.7/M3** | Fix funnel_invariant_ok: `funnel_ok = (len(step1_handles) - len(profiles)) == ledger.total()` — invariante ahora computada de verdad · FunnelTracker usado con 6 stages (discovered/deduped/prefiltered/enriched/scored/delivered) · Docs corregidas: FASE 2.2 ahora marcada como fix real |
 
 ---
 
