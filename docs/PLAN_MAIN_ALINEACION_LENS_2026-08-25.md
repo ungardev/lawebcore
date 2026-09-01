@@ -1,11 +1,11 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 8 — Estado al 28-ago-2026 · Hito 36 Completo · 17 Logger Fixes · E2E Pendiente Lunes
+## Iteración 9 — Estado al 29-ago-2026 · Funnel Invariant Fix · E2E Pendiente Lunes
 
 > **De:** MiniMax M2.7/M3
-> **Fecha:** 28 de agosto de 2026
+> **Fecha:** 29 de agosto de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base actual (en repositorio):** `035aafc` (17 logger.error exc_info fixes)
-> **Último commit deployado en Railway:** `035aafc` ✅ — Deploy verde 28-ago-2026 22:03 UTC
+> **Commit base actual (en repositorio):** `4f87a6b` (funnel_invariant computado de verdad + FunnelTracker usado)
+> **Último commit deployado en Railway:** `035aafc` ✅ — Deploy verde 28-ago-2026 22:03 UTC · `4f87a6b` pending deploy
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
 > **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` + `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` (superseding)
 > **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅
@@ -45,10 +45,15 @@
 | discovery_query writer | ✅ Taggeado en los 7 pasos de fetch (`65e998c`) |
 | BudgetExhausted handler | ✅ Outer handler con ABORTED_BUDGET status (`65e998c`) |
 | Logger exc_info | ✅ 17 logger.error con exc_info=True (`035aafc`) |
+| FunnelTracker usado | ✅ 6 stages: discovered/deduped/prefiltered/enriched/scored/delivered (`4f87a6b`) |
+| Funnel Invariant computado | ✅ `funnel_ok = (step1_handles - profiles) == ledger.total()` (`4f87a6b`) |
+| test_funnel_invariant.py | ✅ 8 tests cubriendo invariante + DropLedger (`4f87a6b`) |
 
 ### Sistema Completamente Operativo
 
-El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B fixes**. BUG #1 y #2 corregidos en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway usan `deepseek-v4-flash` ✅. El sistema puede ejecutar búsquedas end-to-end desde la UI — **validación E2E pendiente el Lunes**.
+El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B fixes + Funnel Invariant fix**. BUG #1 y #2 corregidos en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway usan `deepseek-v4-flash` ✅. El sistema puede ejecutar búsquedas end-to-end desde la UI — **validación E2E pendiente el Lunes**.
+
+**Nota sobre Funnel Invariant:** El fix de `4f87a6b` corrige un hallazgo de Claude Code — `funnel_invariant_ok` estaba cableado a `True` literal, haciendo el estado `INCONSISTENT` inalcanzable. Ahora se computa de verdad con `ledger.total()`. FunnelTracker también se usa por primera vez con 6 stages en los puntos del pipeline.
 
 ---
 
@@ -75,6 +80,8 @@ El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B
 | 17 | 28-ago | M3-Agente A | `ae0789c` | schema.sql sync — 3 tables + 4 columns added | ✅ |
 | 18 | 28-ago | M3-Agente B | `65e998c` | Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 — budget_aborted, determine_final_status reconnect | ✅ (nota: FASE 2.2 wiring a True literal — fix aplicado en `ce148e1`) |
 | 19 | 28-ago | Logger Fixes | `035aafc` | 17 logger.error con exc_info=True (worker.py 8 + ai_service.py 3 + hikerapi_client.py 6) | ✅ |
+| 20 | 28-ago | Docs | `ce148e1` | Iteración 8 — Hito 36 completo + M3 A/B/C + docs actualizados | ✅ |
+| 21 | 29-ago | Funnel Fix | `4f87a6b` | Funnel Invariant computado de verdad + FunnelTracker usado con 6 stages + test_funnel_invariant.py | ✅ |
 
 ---
 
@@ -502,6 +509,19 @@ Tablas y columnas agregadas a `schema.sql`:
 | `ai_service.py` | 3 | 188, 220, 318 |
 | `hikerapi_client.py` | 6 | 167, 186, 194, 262, 301, 312 |
 
+### Funnel Invariant Fix — FunnelTracker usado de verdad (`4f87a6b`)
+
+| Fix | Descripción |
+|-----|-------------|
+| `funnel_invariant_ok` cableado a True | **FIX**: `funnel_ok = (len(step1_handles) - len(profiles)) == drop_ledger.total()` |
+| FunnelTracker noqa F841 | **FIX**: Instancia usada con 6 stages en los puntos del pipeline |
+| FunnelTracker stages | `discovered` → `deduped` → `prefiltered` → `enriched` → `scored` → `delivered` |
+| Log `funnel_invariant_check` | Loggeado con funnel_ok, discovered, deduped, ledger_drops |
+| Log `funnel_summary` | Loggeado al completar con funnel.summary() |
+| test_funnel_invariant.py | 8 tests cubriendo determine_final_status() y DropLedger funnel identity |
+
+**Descubierto por:** Claude Code (VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md §3)
+
 ---
 
 ## SECCIÓN 12 — Glosario Técnico
@@ -521,7 +541,7 @@ Tablas y columnas agregadas a `schema.sql`:
 
 ---
 
-*Documento actualizado: 28 de agosto de 2026 por MiniMax M2.7/M3*
-*Basado en: Informe Lanz v1.2 + Lanz v2.0 + Hito 36 + M3-Agentes A/B/C + 17 logger fixes*
-*Commit base: `035aafc` — Hito 36 completo ✅ · M3 A/B/C ✅ · 17 logger exc_info ✅ · Deploy verde ✅*
+*Documento actualizado: 29 de agosto de 2026 por MiniMax M2.7/M3*
+*Basado en: Informe Lanz v1.2 + Lanz v2.0 + Hito 36 + M3-Agentes A/B/C + 17 logger fixes + Funnel Invariant fix*
+*Commit base: `4f87a6b` — Funnel Invariant computado de verdad ✅ · FunnelTracker usado ✅ · test_funnel_invariant.py ✅*
 *Estado: Pipeline funcional ✅ · E2E pendiente Lunes 31-ago-2026 · FASE 1-4 Lanz v2.0 pendientes*

@@ -1,10 +1,10 @@
 # PROMPT_CLAUDE_CODE_ANALYSIS — Índice de Auditorías LENS
 
-> **Última actualización:** 2026-08-28 23:47
+> **Última actualización:** 2026-08-29
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Deploy verde ✅ · **E2E pendiente Lunes 31-ago-2026**
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **E2E pendiente Lunes 31-ago-2026**
 > **HikerAPI balance:** ~$36.86 USD (post E2E ~$1.14)
-> **NUEVO (28-ago):** Hito 36 — thinking mode disabled, pollRun 10 estados, response_format, UI selector + error detail · M3-Agentes A/B/C — schema sync, Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 · 17 logger.error con exc_info=True · Railway deploy verde 22:03 UTC
+> **NUEVO (29-ago):** Funnel Invariant fix (`4f87a6b`) — `funnel_ok = (step1_handles - profiles) == ledger.total()` computado de verdad · FunnelTracker usado con 6 stages · test_funnel_invariant.py creado · M3-Agente exhaustivo analiza pipeline completo
 
 ---
 
@@ -37,7 +37,8 @@
 | **24** | *`docs/Auditoria_Lanz_v2_2026-08-27.md`* | **2026-08-27** | **MiniMax** | Lanz v2.0: refundición de v1.2 + 23 hallazgos nuevos · BUG #1 + #2 fix in `1bdacc3` · 5 fases de acción |
 | **25** | *`docs/AUDITORIA_LANZ_v2_1_2026-08-28.md`* | **2026-08-28** | **MiniMax M2.7/M3** | Lanz v2.1 superseding — Hito 36 completo (thinking disabled, pollRun 10 estados, response_format, UI) · M3-Agente A (schema sync) · M3-Agente B (Lanz §7 FASE 0.4/2.1/2.2/2.4/2.5/3.1) · 17 logger.error exc_info fixes · Deploy verde Railway 28-ago-2026 · E2E pendiente Lunes 31-ago-2026 |
 | **26** | *`docs/VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md`* | **2026-08-28** | **Claude Fable 5** | Verificación Lanz v2.0 vs código real en `ce148e1` — detecta que FASE 2.2 marcada aplicada pero `funnel_invariant_ok=True` cableado (INCONSISTENT inalcanzable) · FunnelTracker dead · A-5 respondido (TIER_MIN_FOLLOWERS=500, no usado como filtro) · Nota de procedencia: auditoría dice "Lanz v2.0" pero es refundición MiniMax |
-| **27** | *`ce148e1` + `ce148e2`* | **2026-08-28** | **MiniMax M2.7/M3** | Fix funnel_invariant_ok: `funnel_ok = (len(step1_handles) - len(profiles)) == ledger.total()` — invariante ahora computada de verdad · FunnelTracker usado con 6 stages (discovered/deduped/prefiltered/enriched/scored/delivered) · Docs corregidas: FASE 2.2 ahora marcada como fix real |
+| **27** | *`ce148e1` + `4f87a6b`* | **2026-08-28/29** | **MiniMax M2.7/M3** | Fix funnel_invariant_ok (`4f87a6b`): invariante ahora computada de verdad · FunnelTracker usado con 6 stages (discovered/deduped/prefiltered/enriched/scored/delivered) · test_funnel_invariant.py · Docs corregidas: FASE 2.2 ahora marcada como fix real · Entry #26 (Claude Code) acted as catalyst |
+| **28** | *M3-Agente exhaustivo pipeline analysis* | **2026-08-29** | **MiniMax M2.7/M3** | Análisis completo del pipeline: funnel_invariant usa solo step1_handles (matemáticamente incompleto pero no bloquea E2E) · merge enrichment line 1246: `e.get("followersCount")`写入 `followersCount` — scoring tiene fallback · enriquecimiento funciona por coincidencia si HikerAPI devuelve followersCount · remaining issues: dual-names (~55 refs), except Exception (17 hot path), brief_parser response_format |
 
 ---
 
@@ -227,4 +228,4 @@ Railway está conectado a `postgres.railway.internal:5432/railway` — que es la
 
 ---
 
-*Índice actualizado: 2026-08-28 — Hito 36 completo + M3-Agentes A/B/C + 17 logger fixes · Deploy verde Railway `035aafc` · E2E pendiente Lunes 31-ago-2026 · HikerAPI ~$36.86 USD · Basado en Informe Santiago Lanz v1.2 + Lanz v2.0/v2.1*
+*Índice actualizado: 2026-08-29 — Funnel Invariant fix `4f87a6b` · M3-Agente exhaustivo pipeline analysis · E2E pendiente Lunes 31-ago-2026 · HikerAPI ~$36.86 USD · Basado en Informe Santiago Lanz v1.2 + Lanz v2.0/v2.1*

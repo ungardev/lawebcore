@@ -103,6 +103,10 @@ El script usa:
 
 ## §6 — Si el Test Falla
 
+### Nota sobre Funnel Invariant (29-ago-2026)
+
+**Si el run termina en `INCONSISTENT`**, esto **NO es un fracaso** — es el instrumento funcionando. Significa que la identidad del embudo (discovered - deduped = drops registrados) no cuadra y el sistema lo dijo en voz alta. El fix `4f87a6b` hace que `INCONSISTENT` sea alcanzable por primera vez.
+
 ### Falla en criterio #1 (timeout/polling)
 - Verificar `POLL_TERMINAL_STATUSES` en `useDiscoveryRun.ts` — ¿tiene 10 valores?
 - Verificar que el worker termina en `delivered` y no en otro estado
@@ -115,7 +119,7 @@ El script usa:
 
 ### Falla en criterio #3 (followers = 0)
 - Correr query: `SELECT handle, followers FROM discovery_candidates WHERE run_id='…' ORDER BY followers LIMIT 10`
-- Si todos 0 → BUG #1 puede no estar corregido en Railway (verificar deploy)
+- Si todos 0 → **Nota sobre el merge de enrichment:** El merge en worker.py:1246 lee `e.get("followersCount")` (camelCase). Si HikerAPI devuelve `followersCount`, el pipeline funciona por el fallback en scoring (line 1333: `p.get("followersCount")`). Si HikerAPI devuelve `follower_count`, el scoring lee None y cae a 0 → todos droppeados.
 
 ### Falla en criterio #4 (ai_rationale NULL)
 - Verificar que `candidate_analyzer.py` no está cayendo a `_fallback_scores()`

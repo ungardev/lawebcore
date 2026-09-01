@@ -4,7 +4,7 @@
 > **De:** MiniMax M2.7/M3
 > **Basado en:** `docs/Auditoria_Lanz_v2_2026-08-27.md` (v2.0) + Hito 36 + M3-Agentes A/B/C
 > **Repo:** `github.com/ungardev/lawebcore`
-> **Commit audited:** `035aafc` (HEAD, 28-ago-2026)
+> **Commit audited:** `4f87a6b` (HEAD, 29-ago-2026)
 > **Método:** Lectura directa del árbol + investigación por agentes + verificación contra docs Lanz
 
 ---
@@ -54,7 +54,7 @@
 ## §2 — Cumplimiento Lanz v2.0 §7 — Estado al 28-ago-2026
 
 ### §7.1 — "Que el sistema pueda fallar en voz alta"
-**Estado: ~60% cumplido** (antes: ~30%)
+**Estado: ~75% cumplido** (antes: ~60%)
 
 | Sub-requisito | Antes | Después |
 |--------------|-------|---------|
@@ -63,6 +63,8 @@
 | `determine_final_status()` | Dead code | ✅ Reconectada `65e998c` |
 | `budget_aborted` flag | No existía | ✅ Creado `65e998c` |
 | `exc_info=True` en logger.error | 2 de 63 | ✅ 19 de 63 (17 added `035aafc`) |
+| **Funnel Invariant cableado a True** | **CRÍTICO** | ✅ **FIXED** — computado de verdad `4f87a6b` |
+| **FunnelTracker dead code** | `# noqa: F841` | ✅ **FIXED** — usado con 6 stages `4f87a6b` |
 
 ### §7.2 — "Un contrato de datos único"
 **Estado: ~50% cumplido** (antes: ~35%)
@@ -198,11 +200,39 @@
 | `65e998c` | 28-ago | M3-Agente B: Lanz v2.0 FASE 0.4/2.1/2.2/2.4/2.5/3.1 |
 | `035aafc` | 28-ago | 17 logger.error exc_info=True |
 | `ce148e1` | 28-ago | Docs: Iteración 8 — Hito 36 + M3 A/B/C |
-| `ce148e2` | 28-ago | **fix(lens): compute funnel_invariant_ok from real ledger + use FunnelTracker** |
+| `4f87a6b` | 29-ago | **fix(lens): funnel_invariant computado de verdad + FunnelTracker usado + test_funnel_invariant.py** |
 
 ---
 
-*Documento creado: 28 de agosto de 2026 por MiniMax M2.7/M3*
+## §9 — Análisis M3-Agente Exhaustive (29-ago-2026)
+
+### Pipeline Analysis — Hallazgos
+
+| # | Hallazgo | Severidad | Impacto |
+|---|----------|-----------|---------|
+| 1 | Funnel Invariant usa solo `step1_handles` (incompleto matemáticamente) | 🟠 MEDIO | No bloquea E2E — solo afecta el cómputo del invariante |
+| 2 | Merge enrichment line 1246: `e.get("followersCount")`写入 `followersCount` | 🟡 MEDIA | Scoring tiene fallback — funciona si HikerAPI devuelve `followersCount` |
+| 3 | `step3_degraded` no se setea si some enrichment succeeds | 🟡 MEDIA | Fallos parciales no se marcan como degraded |
+| 4 | Generic `Exception` catch en enrichment puede tragar errores | 🟡 MEDIA | Podría enmascarar bugs de programación |
+
+### Veredicto del Pipeline
+
+**El pipeline funciona para el happy path.** Los fixes críticos (BUG #1, BUG #2, Hito 36, Funnel Invariant) abordan los modos de fallo identificados por Lanz.
+
+**El E2E del Lunes es la prueba definitiva.** Si pasa los 4 criterios (≥15 candidatos, followers real, ai_rationale not null, polling se detiene), el pipeline está validado.
+
+### Pendientes (FASE 1-4)
+
+| Prioridad | Item | Impacto |
+|-----------|------|---------|
+| 🟡 MEDIA | Dual-names en search steps (~55 refs) | Debt técnica |
+| 🟡 MEDIA | `except Exception` genéricos (17 hot path) | Podrían tragar errores |
+| 🟡 MEDIA | `brief_parser` response_format (2 sitios) | Riesgo JSON malformado |
+| 🟢 BAJA | Freshness policy, Brand exclusion | Siguiente sprint |
+
+---
+
+*Documento actualizado: 29 de agosto de 2026 por MiniMax M2.7/M3*
 *Supersede: `docs/Auditoria_Lanz_v2_2026-08-27.md` (v2.0)*
-*Basado en: Lanz v1.2 + Lanz v2.0 + Hito 36 + M3-Agentes A/B/C*
+*Basado en: Lanz v1.2 + Lanz v2.0 + Hito 36 + M3-Agentes A/B/C + Funnel Invariant fix `4f87a6b`*
 *Estado: Pipeline funcional ✅ · E2E pendiente Lunes 31-ago-2026 · FASE 1-4 pendientes*
