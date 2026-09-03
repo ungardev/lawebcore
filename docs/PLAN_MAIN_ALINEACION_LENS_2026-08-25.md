@@ -1,18 +1,16 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 9 — Estado al 29-ago-2026 · Funnel Invariant Fix · E2E Pendiente Lunes
+## Iteración 10 — Estado al 03-sep-2026 · Claude Code Fable 5 Audit Completa
 
 > **De:** MiniMax M2.7/M3
-> **Fecha:** 29 de agosto de 2026
+> **Fecha:** 03 de septiembre de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit base actual (en repositorio):** `4f87a6b` (funnel_invariant computado de verdad + FunnelTracker usado)
-> **Último commit deployado en Railway:** `035aafc` ✅ — Deploy verde 28-ago-2026 22:03 UTC · `4f87a6b` pending deploy
+> **Commit HEAD:** `07326f5` — Deploy verde Railway 03-sep-2026 14:12 UTC
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
-> **Lanz v2.0:** `docs/Auditoria_Lanz_v2_2026-08-27.md` + `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` (superseding)
-> **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅
-> **Deduplicación manual ejecutada:** `paola_cocina_` (4→1 registros)
+> **Lanz v2.1:** `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` + `docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md` (nuevo)
+> **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅ · 111 ✅
 > **ENUM discovery_run_status en Railway:** 13 valores (7 legacy + 6 Hito 30)
-> **HikerAPI balance:** ~$36.86 USD (post E2E test ~$1.14)
-> **E2E Test:** Pendiente — Lunes 31-ago-2026 · `scripts/test_lens_mascotas_ve.py`
+> **HikerAPI balance:** ~$36.86 USD
+> **E2E Test:** Pendiente — necesita ejecutarse con `scripts/test_lens_mascotas_ve.py`
 
 ---
 
@@ -31,8 +29,8 @@
 |-----------|--------|
 | Railway PostgreSQL — ENUM | ✅ 13 valores (7 legacy + 6 Hito 30) |
 | Railway PostgreSQL — `discovery_run_events` | ✅ Tabla creada + 3 índices |
-| Railway PostgreSQL — índice único `influencers` | ✅ Índice creado + duplicado resuelto |
-| Railway API — código | ✅ `035aafc` desplegado en Railway — Deploy verde 28-ago-2026 22:03 UTC |
+| Railway PostgreSQL — `discovery_query` column | ✅ Migration 111 aplicada 03-sep |
+| Railway API — código | ✅ `07326f5` desplegado — Deploy verde 03-sep-2026 14:12 UTC |
 | Railway Deploy Log | ✅ `[inf] Starting worker for 5 functions` · `[inf] Pool created successfully` |
 | Frontend TypeScript — C-0 (Pydantic enum 13 valores) | ✅ `schemas.py` desplegado |
 | Frontend TypeScript — C-1 (STATUS_CONFIG, hasResults) | ✅ `29d7ba6` desplegado |
@@ -42,12 +40,17 @@
 | CI — Pytest | ✅ 139 tests pass (test_budget_fuse.py ignorado) |
 | DeepSeek thinking mode | ✅ Disabled (`30e5e06`) — temperature funciona, max_tokens suficiente |
 | pollRun terminal statuses | ✅ 10 valores en `POLL_TERMINAL_STATUSES` (`2e9b567`) |
-| discovery_query writer | ✅ Taggeado en los 7 pasos de fetch (`65e998c`) |
+| discovery_query writer | ✅ Taggeado en los 12 pasos de fetch (`65e998c`) |
+| discovery_query — columna | ✅ Columna existe en DB (migration 111) |
 | BudgetExhausted handler | ✅ Outer handler con ABORTED_BUDGET status (`65e998c`) |
 | Logger exc_info | ✅ 17 logger.error con exc_info=True (`035aafc`) |
 | FunnelTracker usado | ✅ 6 stages: discovered/deduped/prefiltered/enriched/scored/delivered (`4f87a6b`) |
-| Funnel Invariant computado | ✅ `funnel_ok = (step1_handles - profiles) == ledger.total()` (`4f87a6b`) |
+| Funnel Invariant computado | ⚠️ MATEMÁTICAMENTE ROTO — `step1_handles` solo hashtags, no todos los steps |
+| Funnel Invariant — diagnosis | ❌ Siempre False — necesita fix urgente |
+| Scoring — followers | ⚠️ BUG: lee `followersCount` primero en vez de `follower_count` |
 | test_funnel_invariant.py | ✅ 8 tests cubriendo invariante + DropLedger (`4f87a6b`) |
+| test_dual_names_guard.py | ✅ Regression guard para dual-names (`f7c3410`) |
+| Claude Code Fable 5 — hallazgos | ❌ 3 P0 pendientes: invariante, scoring, discovery_query endpoint |
 
 ### Sistema Completamente Operativo
 
@@ -82,6 +85,9 @@ El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B
 | 19 | 28-ago | Logger Fixes | `035aafc` | 17 logger.error con exc_info=True (worker.py 8 + ai_service.py 3 + hikerapi_client.py 6) | ✅ |
 | 20 | 28-ago | Docs | `ce148e1` | Iteración 8 — Hito 36 completo + M3 A/B/C + docs actualizados | ✅ |
 | 21 | 29-ago | Funnel Fix | `4f87a6b` | Funnel Invariant computado de verdad + FunnelTracker usado con 6 stages + test_funnel_invariant.py | ✅ |
+| 22 | 29-ago | Claude Code Fable 5 | `f7c3410` | H-2 fix: discovery_query column + test_dual_names_guard.py | ✅ |
+| 23 | 03-sep | Análisis Fable 5 + Docs | `07326f5` | Entry #29 en PROMPT_CLAUDE_CODE_ANALYSIS | ✅ |
+| 24 | 03-sep | Auditoría Completa | — | AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md creado + PLAN_MAIN actualizado | ✅ |
 
 ---
 
