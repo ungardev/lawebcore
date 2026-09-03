@@ -2,9 +2,9 @@
 
 > **Última actualización:** 2026-08-29
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **E2E pendiente Lunes 31-ago-2026**
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · Claude Code Fable 5 fixes ✅ · **E2E pendiente Lunes 31-ago-2026**
 > **HikerAPI balance:** ~$36.86 USD (post E2E ~$1.14)
-> **NUEVO (29-ago):** Funnel Invariant fix (`4f87a6b`) — `funnel_ok = (step1_handles - profiles) == ledger.total()` computado de verdad · FunnelTracker usado con 6 stages · test_funnel_invariant.py creado · M3-Agente exhaustivo analiza pipeline completo
+> **NUEVO (29-ago):** Claude Code Fable 5 (`f7c3410`) — H-2 fix: discovery_query column agregada a discovery_candidates · test_dual_names_guard.py creado · H-1 (FunnelTracker) verificado como YA CORRECTO · FASE 4.1 response_format verificado como YA CORRECTO
 
 ---
 
@@ -39,6 +39,7 @@
 | **26** | *`docs/VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md`* | **2026-08-28** | **Claude Fable 5** | Verificación Lanz v2.0 vs código real en `ce148e1` — detecta que FASE 2.2 marcada aplicada pero `funnel_invariant_ok=True` cableado (INCONSISTENT inalcanzable) · FunnelTracker dead · A-5 respondido (TIER_MIN_FOLLOWERS=500, no usado como filtro) · Nota de procedencia: auditoría dice "Lanz v2.0" pero es refundición MiniMax |
 | **27** | *`ce148e1` + `4f87a6b`* | **2026-08-28/29** | **MiniMax M2.7/M3** | Fix funnel_invariant_ok (`4f87a6b`): invariante ahora computada de verdad · FunnelTracker usado con 6 stages (discovered/deduped/prefiltered/enriched/scored/delivered) · test_funnel_invariant.py · Docs corregidas: FASE 2.2 ahora marcada como fix real · Entry #26 (Claude Code) acted as catalyst |
 | **28** | *M3-Agente exhaustivo pipeline analysis* | **2026-08-29** | **MiniMax M2.7/M3** | Análisis completo del pipeline: funnel_invariant usa solo step1_handles (matemáticamente incompleto pero no bloquea E2E) · merge enrichment line 1246: `e.get("followersCount")`写入 `followersCount` — scoring tiene fallback · enriquecimiento funciona por coincidencia si HikerAPI devuelve followersCount · remaining issues: dual-names (~55 refs), except Exception (17 hot path), brief_parser response_format |
+| **29** | *`docs/AUDITORIA_FABLE5_LENS_4f87a6b_29-08-26.md`* | **2026-08-29** | **Claude Code Fable 5** | Auditoría contra Lanz v2.1: H-1 (FunnelTracker 3 stages) — NO ES BUG en `4f87a6b` (ya estaban correctas) · H-2 (_discovery_query → discovery_query en 4to caso dual-name) — **FIXED** `f7c3410`: migration 111 agrega columna · FASE 4.1 response_format — YA ESTABA FIXED · test_dual_names_guard.py creado para FASE 1.1 |
 
 ---
 
