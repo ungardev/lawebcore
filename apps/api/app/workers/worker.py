@@ -995,9 +995,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             scored: list[tuple[str, float]] = []
             bot_flags: dict[str, int] = {}
             for handle, p in profiles.items():
-                followers = p.get("followersCount") if "followersCount" in p else p.get("follower_count")
-                following = p.get("followsCount") if "followsCount" in p else p.get("following_count")
-                posts_count = p.get("postsCount") if "postsCount" in p else p.get("posts_count")
+                followers = p.get("follower_count") if "follower_count" in p else p.get("followersCount")
+                following = p.get("following_count") if "following_count" in p else p.get("followsCount")
+                posts_count = p.get("posts_count") if "posts_count" in p else p.get("postsCount")
 
                 if followers is None:
                     followers = 0
@@ -1300,8 +1300,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         exclude_handles = set(h.lower() for h in (plan.exclude_handles or []))
         if exclude_handles:
             original_count = len(profiles)
+            excluded_count = 0
+            for handle in list(profiles.keys()):
+                if handle.lower() in exclude_handles:
+                    drop_profile(handle, DropReason.EXCLUDED_BRAND_OWN, stage="scoring", ledger=drop_ledger)
+                    excluded_count += 1
             profiles = {k: v for k, v in profiles.items() if k.lower() not in exclude_handles}
-            print(f"[discovery_run_task] STEP 4: Excluded {original_count - len(profiles)} handles, scoring {len(profiles)} remaining", flush=True)
+            print(f"[discovery_run_task] STEP 4: Excluded {excluded_count} handles via brand safety, scoring {len(profiles)} remaining", flush=True)
 
         _cross_ref_handles = step1_handles & step2_handles
         hashtag_appearances: dict[str, int] = {}
@@ -1820,13 +1825,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         print(f"[discovery_run_task] DONE run_id={run_id} total_candidates={total}", flush=True)
 
-        funnel_ok = (len(step1_handles) - len(profiles)) == drop_ledger.total()
+        funnel_ok = funnel.deduped == total + drop_ledger.total()
         logger.info(
             "funnel_invariant_check",
             run_id=run_id,
             funnel_ok=funnel_ok,
-            discovered=len(step1_handles),
-            deduped=len(profiles),
+            deduped=funnel.deduped,
+            delivered=total,
             ledger_drops=drop_ledger.total(),
         )
         final_status = determine_final_status(

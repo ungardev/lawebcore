@@ -1,13 +1,24 @@
-"""Funnel Invariant Test — Regression test for Claude Code finding.
+"""Funnel Invariant Test — Regression test for Hito 30 + Claude Code Fable 5 P0 fixes.
 
-Ref: docs/VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md §3
+Ref:
+- docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md
+- docs/VERIFICACION_LANZ_V2_vs_CODIGO_28-08-26.md §3
 
 El invariante del embudo es la pieza central del Hito 30: la propiedad que hace
 al sistema autoauditable. Si un perfil sale del pipeline sin pasar por drop_profile(),
 la identidad del embudo no cuadra y la corrida debe quedar INCONSISTENT.
 
-Antes del fix (ce148e2), funnel_invariant_ok estaba cableado a True literal,
-haciendo INCONSISTENT inalcanzable por construcción.
+FÓRMULA DEL INVARIANTE (03-sep-2026):
+    funnel.deduped == total + drop_ledger.total()
+
+La fórmula anterior (discovered - deduped == drops) era incorrecta porque:
+- discovered (step1_handles) solo representaba hashtags, no todas las fuentes
+- La fórmula correcta usa deduped (perfiles post-dedup de todas las fuentes)
+  como entrada, delivered (total) como salida, y drops como lo descartado
+
+Antes del fix (ce148e2), funnel_invariant_ok estaba cableado a True literal.
+Antes del fix P0-1 (452d7e9), la fórmula usaba step1_handles - profiles = drops
+(siempre daba negativo porque step1 < profiles).
 """
 
 import pytest
@@ -85,21 +96,27 @@ class TestFunnelInvariant:
 
 
 class TestDropLedgerFunnelIdentity:
-    """Tests para la identidad del embudo: discovered - deduped == ledger.total()."""
+    """Tests para la identidad del embudo con la fórmula correcta.
+
+    Fórmula: deduped == delivered + drops
+    - deduped: perfiles que entraron a la fase de scoring (post-dedup de todas las fuentes)
+    - delivered: candidatos persistidos en DB (total)
+    - drops: perfiles descartados por drop_profile() en cualquier stage
+    """
 
     def test_identity_holds_no_drops(self):
-        """Sin drops, discovered == deduped."""
+        """Sin drops, deduped == delivered."""
         ledger = DropLedger()
-        discovered = 100
         deduped = 100
-        invariant_ok = (discovered - deduped) == ledger.total()
+        delivered = 100
+        invariant_ok = deduped == delivered + ledger.total()
         assert invariant_ok is True
 
     def test_identity_with_drops(self):
-        """Con drops registrados, la identidad discovered - deduped == drops."""
+        """Con drops registrados, la identidad deduped == delivered + drops."""
         ledger = DropLedger()
-        discovered = 100
-        deduped = 85
+        deduped = 100
+        delivered = 85
         ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
         ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
         ledger.record(DropReason.GEO_MISMATCH)
@@ -116,26 +133,62 @@ class TestDropLedgerFunnelIdentity:
         ledger.record(DropReason.BOT_PATTERN)
         ledger.record(DropReason.BOT_PATTERN)
         assert ledger.total() == 15
-        invariant_ok = (discovered - deduped) == ledger.total()
+        invariant_ok = deduped == delivered + ledger.total()
         assert invariant_ok is True
 
-    def test_inconsistent_when_untracked_drop(self):
-        """Si hay 5 drops sin registrar, la identidad falla → INCONSISTENT.
+    def test_inconsistent_when_brand_safety_leak(self):
+        """Si brand safety excluye perfiles sin drop_profile(), la identidad falla.
 
-        Este es el caso que el fix de ce148e2 previene: un perfil que sale del
-        pipeline sin pasar por drop_profile() hace que discovered - deduped != ledger.total().
+        Este es el caso P0-4 de Claude Code Fable 5: el mecanismo de brand safety
+        (exclude_handles de Nestlé) excluía perfiles con un dict comprehension
+        sin registrar los drops. La identidad falla porque deduped > delivered + drops.
+        """
+        ledger = DropLedger()
+        deduped = 100
+        delivered = 85
+        ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
+        ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
+        ledger.record(DropReason.GEO_MISMATCH)
+        ledger.record(DropReason.GEO_MISMATCH)
+        ledger.record(DropReason.GEO_MISMATCH)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        ledger.record(DropReason.BOT_PATTERN)
+        assert ledger.total() == 15
+        invariant_ok = deduped == delivered + ledger.total()
+        assert invariant_ok is True
+
+        brand_leak = 5
+        invariant_ok_with_leak = deduped == (delivered + brand_leak) + ledger.total()
+        assert invariant_ok_with_leak is False
+
+    def test_inconsistent_when_untracked_drop(self):
+        """Si hay drops sin registrar, la identidad falla → INCONSISTENT.
+
+        Este es el caso que el fix de ce148e2 + P0-1 previene: un perfil que sale
+        del pipeline sin pasar por drop_profile() hace que deduped != delivered + drops.
         """
         ledger = DropLedger()
         ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
         ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
-        discovered = 100
-        deduped = 85
+        deduped = 100
+        delivered = 85
         untracked_drops = 5
-        invariant_ok = (discovered - deduped) == ledger.total()
-        assert invariant_ok is False
+        invariant_ok = deduped == delivered + ledger.total()
+        assert invariant_ok is True
+
+        invariant_ok_with_leak = deduped == delivered + untracked_drops + ledger.total()
+        assert invariant_ok_with_leak is False
         result = determine_final_status(
             total_candidates=0,
-            funnel_invariant_ok=invariant_ok,
+            funnel_invariant_ok=invariant_ok_with_leak,
             step3_degraded=False,
             budget_aborted=False,
             has_exception=False,
@@ -146,12 +199,30 @@ class TestDropLedgerFunnelIdentity:
         """INCONSISTENT solo se devuelve cuando total_candidates == 0."""
         ledger = DropLedger()
         ledger.record(DropReason.MISSING_FOLLOWER_FIELD)
-        discovered = 100
-        deduped = 85
-        invariant_ok = (discovered - deduped) == ledger.total()
+        deduped = 100
+        delivered = 85
+        invariant_ok = deduped == delivered + ledger.total()
         result = determine_final_status(
             total_candidates=15,
             funnel_invariant_ok=False,
+            step3_degraded=False,
+            budget_aborted=False,
+            has_exception=False,
+        )
+        assert result == RunStatus.DELIVERED
+
+    def test_delivered_when_invariant_ok_with_drops(self):
+        """Con drops registrados y identidad correcta, DELIVERED aunque delivered < deduped."""
+        ledger = DropLedger()
+        ledger.record(DropReason.BELOW_MIN_FOLLOWERS)
+        ledger.record(DropReason.GEO_MISMATCH)
+        deduped = 100
+        delivered = 85
+        invariant_ok = deduped == delivered + ledger.total()
+        assert invariant_ok is True
+        result = determine_final_status(
+            total_candidates=delivered,
+            funnel_invariant_ok=invariant_ok,
             step3_degraded=False,
             budget_aborted=False,
             has_exception=False,

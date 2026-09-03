@@ -2,10 +2,10 @@
 
 > **Última actualización:** 2026-09-03
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · Claude Code Fable 5 fixes ✅ · **3 P0 pendientes de fix urgente**
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · E2E pendiente
 > **HikerAPI balance:** ~$36.86 USD
 > **E2E Test:** Pendiente — ejecutar `scripts/test_lens_mascotas_ve.py`
-> **NUEVO (03-sep):** Auditoría completa Fable 5 + análisis honesto MiniMax — 3 P0 críticos encontrados: invariante matemáticamente roto (siempre False), scoring lee followersCount (IMPERCISO) antes de follower_count (PRECISO), discovery_query endpoint no lee _discovery_query del worker. docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md creado.
+> **NUEVO (03-sep):** Claude Code Fable 5 aceptó invitación y auditó invariant: fórmula correcta = `deduped == delivered + drops` · P0-1 (invariante) + P0-2 (scoring) + P0-3 (endpoint) + P0-4 (brand safety leak) TODOS APLICADOS · test_funnel_invariant.py actualizado con fórmula correcta · HikerAPI devuelve snake_case (no camelCase) — deuda interna simplificada
 
 ---
 
@@ -41,7 +41,8 @@
 | **27** | *`ce148e1` + `4f87a6b`* | **2026-08-28/29** | **MiniMax M2.7/M3** | Fix funnel_invariant_ok (`4f87a6b`): invariante ahora computada de verdad · FunnelTracker usado con 6 stages (discovered/deduped/prefiltered/enriched/scored/delivered) · test_funnel_invariant.py · Docs corregidas: FASE 2.2 ahora marcada como fix real · Entry #26 (Claude Code) acted as catalyst |
 | **28** | *M3-Agente exhaustivo pipeline analysis* | **2026-08-29** | **MiniMax M2.7/M3** | Análisis completo del pipeline: funnel_invariant usa solo step1_handles (matemáticamente incompleto pero no bloquea E2E) · merge enrichment line 1246: `e.get("followersCount")`写入 `followersCount` — scoring tiene fallback · enriquecimiento funciona por coincidencia si HikerAPI devuelve followersCount · remaining issues: dual-names (~55 refs), except Exception (17 hot path), brief_parser response_format |
 | **29** | *`docs/AUDITORIA_FABLE5_LENS_4f87a6b_29-08-26.md`* | **2026-08-29** | **Claude Code Fable 5** | Auditoría contra Lanz v2.1: H-1 (FunnelTracker 3 stages) — NO ES BUG en `4f87a6b` (ya estaban correctas) · H-2 (_discovery_query → discovery_query en 4to caso dual-name) — **FIXED** `f7c3410`: migration 111 agrega columna · FASE 4.1 response_format — YA ESTABA FIXED · test_dual_names_guard.py creado para FASE 1.1 |
-| **30** | *`docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Análisis honesto completo post-deploy Railway: 3 P0 críticos encontrados (invariante matemático, scoring impreciso, discovery_query endpoint) · Promedio cumplimiento Lanz v2.1 §7: ~67% · E2E pendiente · Railway deploy verde 03-sep-2026 · docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL creado para próxima sesión de Claude Code |
+| **30** | *`docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Análisis honesto completo post-deploy Railway: 3 P0 críticos encontrados (invariante matemático, scoring impreciso, discovery_query endpoint) · Promedio cumplimiento Lanz v2.1 §7: ~67% · E2E pendiente · Railway deploy verde 03-sep-2026 |
+| **31** | *P0 fixes aplicados (`452d7e9`)* | **2026-09-03** | **MiniMax M2.7/M3** | Todos los P0 de Claude Code Fable 5 aplicados: P0-1 (invariante: `deduped == delivered + drops`), P0-2 (scoring: follower_count primero), P0-3 (endpoint: lee `_discovery_query`), P0-4 (brand safety leak: ahora llama `drop_profile()`) · HikerAPI usa snake_case (deuda interna, no externa) · test_funnel_invariant.py actualizado con fórmula correcta · E2E listo |
 
 ---
 
