@@ -819,6 +819,7 @@ CREATE TABLE discovery_candidates (
   rationale TEXT,
   brand_fit INTEGER,
   ai_rationale TEXT,
+  discovery_query TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'new'
       CHECK (status IN ('new', 'saved', 'dismissed', 'contacted', 'replied', 'won', 'lost')),
   saved_as_influencer_id UUID REFERENCES influencers(id) ON DELETE SET NULL,
