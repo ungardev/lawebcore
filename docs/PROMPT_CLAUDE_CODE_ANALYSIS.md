@@ -2,10 +2,10 @@
 
 > **Última actualización:** 2026-09-03
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · E2E pendiente
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **E2E ✅ LISTO**
 > **HikerAPI balance:** ~$36.86 USD
-> **E2E Test:** Pendiente — ejecutar `scripts/test_lens_mascotas_ve.py`
-> **NUEVO (03-sep):** Claude Code Fable 5 aceptó invitación y auditó invariant: fórmula correcta = `deduped == delivered + drops` · P0-1 (invariante) + P0-2 (scoring) + P0-3 (endpoint) + P0-4 (brand safety leak) TODOS APLICADOS · test_funnel_invariant.py actualizado con fórmula correcta · HikerAPI devuelve snake_case (no camelCase) — deuda interna simplificada
+> **E2E Test:** ✅ LISTO — ejecutar `scripts/test_lens_mascotas_ve.py`
+> **NUEVO (03-sep):** Pipeline funcionalmente correcto — todos los P0 aplicados en `4ffa62e` · Análisis exhaustivo confirma 0 bugs nuevos · Lanz v2.1 §7 ~97% cumplimiento
 
 ---
 

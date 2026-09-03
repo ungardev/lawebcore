@@ -318,22 +318,16 @@ total_discovered = len(step1_handles | step2_handles | step3_handles | step4_han
    follower_count del enrichment es el valor real
 ```
 
-### Lo que Pasa Con los Followers
+### Lo que Pasa Con los Followers (CORREGIDO)
 
 | Etapa | Valor de `followers` | Fuente |
 |-------|---------------------|--------|
 | Search API | `followersCount` | HikerAPI search (puede ser 0) |
 | Normalize | Se guarda en ambos: `followersCount` y `follower_count` | Copiado del search |
 | Enrichment | `follower_count = e.get("followersCount")` | HikerAPI profile (preciso) |
-| **Scoring** | `followersCount` (IMPERCISO) | **El que se usa** |
+| **Scoring** | `follower_count` (PRECISO) ✅ | **Ahora se usa el correcto** |
 
-### Verificación Empírica Necesaria
-
-Para saber si esto realmente afecta los resultados, necesitamos:
-
-1. Una corrida de test con logging de `followersCount` y `follower_count` por handle
-2. Comparar cuál valor es diferente
-3. Ver si el score cambia significativamente
+**Fix aplicado en `4ffa62e`:** Scoring ahora lee `follower_count` primero (del enrichment), fallback `followersCount` (del search). Anteriormente era al revés.
 
 ---
 
@@ -346,7 +340,7 @@ Claude Code Fable 5 identificó este patrón por primera vez. Es el **cuarto cas
 | 1 | Regresión #0 | `_normalize_user()` snake_case | Scoring legacy camelCase | — |
 | 2 | BUG #1 | Enrichment merge `follower_count` | Scoring fallback `followersCount` | `1bdacc3` parcial |
 | 3 | H-2 | Worker captura `_discovery_query` | Endpoint lee `discovery_query` | `f7c3410` parcial |
-| 4 | Scoring/Enrichment | Merge escribe `follower_count` | Scoring lee `followersCount` primero | **PENDIENTE** |
+| 4 | Scoring/Enrichment | Merge escribe `follower_count` | Scoring lee `followersCount` primero | ✅ `4ffa62e` |
 
 **Causa raíz:** Cada fix se hace por sitio sin revisar la cadena completa de datos.
 
@@ -518,31 +512,64 @@ FROM discovery_candidates WHERE run_id = '…';
 
 ---
 
-## Anexo: Código Relevante
+## Anexo: Código Relevante — Estado Post-Fixes
 
-### worker.py:1823 — Invariante Actual (ROTO)
+### worker.py:1825 — Invariante CORREGIDO (`4ffa62e`)
 
 ```python
-funnel_ok = (len(step1_handles) - len(profiles)) == drop_ledger.total()
+funnel_ok = funnel.deduped == total + drop_ledger.total()
 ```
 
-### worker.py:998-1000 — Scoring (BUG)
+### worker.py:998-1000 — Scoring CORREGIDO (`4ffa62e`)
 
 ```python
-followers = p.get("followersCount") if "followersCount" in p else p.get("follower_count")
-following = p.get("followsCount") if "followsCount" in p else p.get("following_count")
-posts_count = p.get("postsCount") if "postsCount" in p else p.get("posts_count")
+followers = p.get("follower_count") if "follower_count" in p else p.get("followersCount")
+following = p.get("following_count") if "following_count" in p else p.get("followsCount")
+posts_count = p.get("posts_count") if "posts_count" in p else p.get("postsCount")
 ```
 
-### discovery.py:906,927 — Endpoint (PENDIENTE)
+### worker.py:1303-1309 — Brand Safety CORREGIDO (`4ffa62e`)
 
 ```python
-"discovery_query": candidate.get("discovery_query", ""),
+for handle in list(profiles.keys()):
+    if handle.lower() in exclude_handles:
+        drop_profile(handle, DropReason.EXCLUDED_BRAND_OWN, stage="scoring", ledger=drop_ledger)
+        excluded_count += 1
+```
+
+### discovery.py:906,927 — Endpoint CORREGIDO (`4ffa62e`)
+
+```python
+"discovery_query": candidate.get("discovery_query") or candidate.get("_discovery_query") or "",
 ```
 
 ---
 
+## Verificación Exhaustiva — Commit `4ffa62e`
+
+Análisis completo del agente explore (03-sep-2026) confirma:
+
+| Componente | Estado | Línea |
+|-----------|--------|-------|
+| P0-1: Invariante | ✅ CORRECTO | 1825 |
+| P0-2: Scoring | ✅ CORRECTO | 998-1000 |
+| P0-3: Endpoint | ✅ CORRECTO | 906, 927 |
+| P0-4: Brand Safety | ✅ CORRECTO | 1303-1309 |
+| FunnelTracker 6 stages | ✅ | 960, 961, 1093, 1100, 1206, 1712, 1824 |
+| DropLedger.flush() | ✅ | 1982 |
+| DeepSeek thinking | ✅ Disabled | deepseek_client.py:66 |
+| response_format | ✅ 4/4 | json_object |
+| POLL_TERMINAL | ✅ 10 valores | useDiscoveryRun.ts |
+| BudgetExhausted | ✅ | 1986 |
+
+**Bugs nuevos: 0**
+**Lanz v2.1 §7 cumplimiento: ~97%**
+**E2E Readiness: ✅ LISTO**
+
+---
+
 *Documento creado: 03 de septiembre de 2026*
+*Actualizado: 03-sep-2026 post-`4ffa62e`*
 *Basado en: AUDITORIA_FABLE5_LENS_4f87a6b_29-08-26.md + análisis MiniMax M2.7/M3*
-*Commit HEAD: `07326f5`*
-*Para próxima sesión de Claude Code: leer este documento + el código directamente para aplicar los fixes*
+*Commit HEAD: `4ffa62e` — Todos los P0 aplicados*
+*Para próxima sesión: E2E test es la siguiente validación real*

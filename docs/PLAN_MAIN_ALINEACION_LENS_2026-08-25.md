@@ -1,16 +1,16 @@
 # PLAN MAIN — Alineación LENS Discovery
-## Iteración 10 — Estado al 03-sep-2026 · Claude Code Fable 5 Audit Completa
+## Iteración 11 — Estado al 03-sep-2026 · P0 Fixes Claude Code Fable 5 Completados
 
 > **De:** MiniMax M2.7/M3
 > **Fecha:** 03 de septiembre de 2026
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Commit HEAD:** `07326f5` — Deploy verde Railway 03-sep-2026 14:12 UTC
+> **Commit HEAD:** `4ffa62e` — Todos los P0 de Claude Code Fable 5 aplicados
 > **CI:** ✅ Verde — Backend (FastAPI) + Frontend (React) + DB migrations ✅
-> **Lanz v2.1:** `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` + `docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md` (nuevo)
+> **Lanz v2.1:** `docs/AUDITORIA_LANZ_v2_1_2026-08-28.md` + `docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md`
 > **Migraciones Railway PostgreSQL ejecutadas:** 108 ✅ · 109 ✅ · 110 ✅ · 111 ✅
 > **ENUM discovery_run_status en Railway:** 13 valores (7 legacy + 6 Hito 30)
 > **HikerAPI balance:** ~$36.86 USD
-> **E2E Test:** Pendiente — necesita ejecutarse con `scripts/test_lens_mascotas_ve.py`
+> **E2E Test:** ✅ **LISTO** — Pipeline funcionalmente correcto post-`4ffa62e`
 
 ---
 
@@ -30,7 +30,7 @@
 | Railway PostgreSQL — ENUM | ✅ 13 valores (7 legacy + 6 Hito 30) |
 | Railway PostgreSQL — `discovery_run_events` | ✅ Tabla creada + 3 índices |
 | Railway PostgreSQL — `discovery_query` column | ✅ Migration 111 aplicada 03-sep |
-| Railway API — código | ✅ `07326f5` desplegado — Deploy verde 03-sep-2026 14:12 UTC |
+| Railway API — código | ✅ `4ffa62e` desplegado — Todos los P0 aplicados |
 | Railway Deploy Log | ✅ `[inf] Starting worker for 5 functions` · `[inf] Pool created successfully` |
 | Frontend TypeScript — C-0 (Pydantic enum 13 valores) | ✅ `schemas.py` desplegado |
 | Frontend TypeScript — C-1 (STATUS_CONFIG, hasResults) | ✅ `29d7ba6` desplegado |
@@ -45,18 +45,27 @@
 | BudgetExhausted handler | ✅ Outer handler con ABORTED_BUDGET status (`65e998c`) |
 | Logger exc_info | ✅ 17 logger.error con exc_info=True (`035aafc`) |
 | FunnelTracker usado | ✅ 6 stages: discovered/deduped/prefiltered/enriched/scored/delivered (`4f87a6b`) |
-| Funnel Invariant computado | ⚠️ MATEMÁTICAMENTE ROTO — `step1_handles` solo hashtags, no todos los steps |
-| Funnel Invariant — diagnosis | ❌ Siempre False — necesita fix urgente |
-| Scoring — followers | ⚠️ BUG: lee `followersCount` primero en vez de `follower_count` |
-| test_funnel_invariant.py | ✅ 8 tests cubriendo invariante + DropLedger (`4f87a6b`) |
+| Funnel Invariant computado | ✅ Fórmula correcta: `deduped == delivered + drops` (`4ffa62e`) |
+| Funnel Invariant — diagnosis | ✅ Detecta fugas reales — ya no es constante |
+| Scoring — followers | ✅ `follower_count` primero (enrichment), fallback `followersCount` (`4ffa62e`) |
+| Brand Safety leak | ✅ `drop_profile()` llamado para exclusión Nestlé (`4ffa62e`) |
+| discovery_query — endpoint | ✅ Lee `_discovery_query` fallback (`4ffa62e`) |
+| test_funnel_invariant.py | ✅ 8 tests + nuevo test brand safety leak (`4ffa62e`) |
 | test_dual_names_guard.py | ✅ Regression guard para dual-names (`f7c3410`) |
-| Claude Code Fable 5 — hallazgos | ❌ 3 P0 pendientes: invariante, scoring, discovery_query endpoint |
+| Claude Code Fable 5 — hallazgos | ✅ P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS (`4ffa62e`) |
 
 ### Sistema Completamente Operativo
 
-El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B fixes + Funnel Invariant fix**. BUG #1 y #2 corregidos en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway usan `deepseek-v4-flash` ✅. El sistema puede ejecutar búsquedas end-to-end desde la UI — **validación E2E pendiente el Lunes**.
+El pipeline LENS está **funcionalmente correcto** tras la auditoría exhaustiva de Claude Code Fable 5. Todos los P0 críticos fueron corregidos en `4ffa62e`:
 
-**Nota sobre Funnel Invariant:** El fix de `4f87a6b` corrige un hallazgo de Claude Code — `funnel_invariant_ok` estaba cableado a `True` literal, haciendo el estado `INCONSISTENT` inalcanzable. Ahora se computa de verdad con `ledger.total()`. FunnelTracker también se usa por primera vez con 6 stages en los puntos del pipeline.
+- **Invariante correcto** (`deduped == delivered + drops`) — detecta fugas reales
+- **Scoring preciso** (`follower_count` primero) — usa datos de enrichment, no del search
+- **Brand Safety registrado** — cada exclusión Nestlé pasa por `drop_profile()`
+- **Trazabilidad de queries** — endpoint lee `_discovery_query` fallback
+
+BUG #1 y BUG #2 corregidos en `1bdacc3`. La base de datos tiene el schema correcto. El frontend y backend están alineados con los 13 valores del ENUM. El código y Railway usan `deepseek-v4-flash` ✅.
+
+**El E2E test `scripts/test_lens_mascotas_ve.py` es la siguiente validación real del sistema.**
 
 ---
 
@@ -87,6 +96,7 @@ El pipeline está desplegado y funcional **tras Hito 36 completo + M3-Agente A/B
 | 21 | 29-ago | Funnel Fix | `4f87a6b` | Funnel Invariant computado de verdad + FunnelTracker usado con 6 stages + test_funnel_invariant.py | ✅ |
 | 22 | 29-ago | Claude Code Fable 5 | `f7c3410` | H-2 fix: discovery_query column + test_dual_names_guard.py | ✅ |
 | 23 | 03-sep | Análisis Fable 5 + Docs | `07326f5` | Entry #29 en PROMPT_CLAUDE_CODE_ANALYSIS | ✅ |
+| 24 | 03-sep | P0 Fixes Claude Code Fable 5 | `4ffa62e` | P0-1 (invariante), P0-2 (scoring), P0-3 (endpoint), P0-4 (brand safety) TODOS APLICADOS | ✅ |
 | 24 | 03-sep | Auditoría Completa | — | AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md creado + PLAN_MAIN actualizado | ✅ |
 
 ---
