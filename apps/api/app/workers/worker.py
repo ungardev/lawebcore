@@ -1236,9 +1236,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     f"✅ Enriquecí {len(enriched_profiles)} perfiles con HikerAPI...",
                 )
 
+        enriched_handles = {e.get("username", "") for e in enriched_profiles if e.get("username")}
+
         for e in enriched_profiles:
             handle = e.get("username", "")
             if not handle or handle not in profiles:
+                logger.warning("enrichment_orphan_handle", handle=handle, stage="step3_merge")
                 continue
             about_data = e.get("about")
             profiles[handle].update({
@@ -1257,6 +1260,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             })
             if about_data:
                 profiles[handle]["about"] = about_data
+
+            logger.info(
+                "enrichment_merged",
+                handle=handle,
+                follower_count=profiles[handle].get("follower_count"),
+                has_about=bool(about_data),
+                country=profiles[handle].get("country") or None,
+            )
+
+        for handle in list(profiles):
+            if handle in enriched_handles:
+                continue
+            logger.warning("enrichment_missing", handle=handle, stage="step3_merge")
+            drop_profile(handle, DropReason.ENRICHMENT_FAILED, "step3_merge", ledger=drop_ledger)
+            profiles[handle]["_enriched"] = False
 
         logger.info(
             "step3_enrichment_done",
@@ -1510,16 +1528,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 target_country=brief.audience_countries[0] if brief.audience_countries else None,
             )
 
-            former_usernames_count = about.get("former_usernames_count", 0) or 0
-            account_age_days = about.get("account_age_days", 0) or 0
+            former_usernames_count = about.get("former_usernames_count")
+            account_age_days = about.get("account_age_days")
             fraud_penalty = 1.0
-            if former_usernames_count >= 3:
+            if former_usernames_count is not None and former_usernames_count >= 3:
                 fraud_penalty = 0.80
-            elif former_usernames_count == 2 or account_age_days > 0 and account_age_days < 90:
+            elif former_usernames_count == 2 or (
+                account_age_days is not None and 0 < account_age_days < 90
+            ):
                 fraud_penalty = 0.90
             if fraud_penalty < 1.0:
                 score_val = round(score_val * fraud_penalty, 1)
-                logger.debug("fraud_penalty_applied", handle=handle, former_usernames=former_usernames_count, account_age_days=account_age_days, penalty=fraud_penalty, original_score=score_val / fraud_penalty, final_score=score_val)
+                logger.info(
+                    "fraud_penalty_applied",
+                    handle=handle,
+                    former_usernames_count=former_usernames_count,
+                    account_age_days=account_age_days,
+                    penalty=fraud_penalty,
+                    score_before=round(score_val / fraud_penalty, 1),
+                    score_after=score_val,
+                )
 
             tier = classify_tier(followers)
             real_niche = niche_relevance(p, profile_data)
@@ -1605,7 +1633,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "avg_views": None,
                 "engagement_rate": round(er, 6),
                 "audience_credibility": credibility,
-                "audience_quality": 50,
+                "audience_quality": None,
                 "audience_gender_split": {},
                 "audience_age_buckets": {},
                 "match_score": round(score_val, 2),
@@ -2152,7 +2180,7 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
                 "audience_gender_split": {},
                 "audience_age_buckets": {},
                 "audience_credibility": credibility,
-                "audience_quality": 50,
+                "audience_quality": None,
                 "raw_payload": raw,
             }
         else:
@@ -2181,21 +2209,22 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
                 "url": raw.get("url", f"https://instagram.com/{raw.get('ownerUsername', '')}"),
                 "audience_gender_split": {},
                 "audience_age_buckets": {},
-                "audience_credibility": 50,
-                "audience_quality": 50,
+                "audience_credibility": None,
+                "audience_quality": None,
                 "raw_payload": raw,
             }
     elif platform == Platform.TIKTOK:
         author = raw.get("author", {})
         stats = raw.get("stats", {})
+        region = raw.get("region")
         return {
             "handle": author.get("uniqueId", raw.get("handle", "")),
             "full_name": author.get("nickname", ""),
             "followers": stats.get("followerCount"),
             "posts_count": stats.get("videoCount"),
             "avg_views": raw.get("videoView"),
-            "engagement_rate": 0.05,
-            "country": raw.get("region", "VE"),
+            "engagement_rate": None,
+            "country": region.upper()[:2] if isinstance(region, str) and region else None,
             "url": raw.get("shareUrl", ""),
         }
     elif platform == Platform.YOUTUBE:
@@ -2208,7 +2237,7 @@ def _raw_to_candidate_dict(raw: dict, platform: Platform) -> dict:
             "avatar_url": snippet.get("thumbnails", {}).get("high", {}).get("url", ""),
             "followers": int(stats["subscriberCount"]) if stats.get("subscriberCount") else None,
             "posts_count": int(stats["videoCount"]) if stats.get("videoCount") else None,
-            "engagement_rate": 0.02,
+            "engagement_rate": None,
             "url": f"https://youtube.com/channel/{raw.get('id', '')}",
         }
     return {"handle": "unknown"}

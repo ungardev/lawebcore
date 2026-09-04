@@ -103,3 +103,18 @@ def test_enrichment_merge_includes_all_critical_fields():
         f"El merge no lee claves criticas que el normalizador provee: {missing}. "
         f"Estos datos se pierden y el scoring funciona con datos faltantes."
     )
+
+
+def test_normalizer_does_not_emit_engagement_rate():
+    """ER no viene de HikerAPI. Si algún día lo emite, el merge tiene que enterarse.
+
+    El normalizador _normalize_user() no emite engagement_rate. El ER se calcula
+    en worker.py:1438 a partir de datos de engagement reales del profile scraper.
+    Si el normalizador empezara a emitir engagement_rate, habría que revisar el
+    merge (worker.py:1244) y el cálculo en worker.py:1438 antes de consumirlo.
+    """
+    out = HikerAPIClient()._normalize_user({"username": "x"})
+    assert "engagement_rate" not in out, (
+        "El normalizador ahora emite engagement_rate: revisar el merge en worker.py:1244 "
+        "y el cálculo de ER en worker.py:1438 antes de consumirlo."
+    )

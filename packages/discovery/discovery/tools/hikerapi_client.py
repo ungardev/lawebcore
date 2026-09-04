@@ -20,6 +20,52 @@ CACHE_TTL_LOCATION = 30 * 86400
 _breaker = None
 
 
+def _coerce_former_usernames(raw: Any, user_id: Any = None) -> list[str]:
+    """Normaliza former_usernames a list[str] sea cual sea la forma que mande HikerAPI.
+
+    El contrato de /v1/user/about no está garantizado. Formas observadas o plausibles:
+
+      - list[str]            → ["viejo1", "viejo2"]
+      - list[dict]           → [{"username": "viejo1", "changed_at": ...}]
+      - str separado por comas → "viejo1,viejo2"
+      - str simple           → "viejo1"
+      - None / ausente       → []
+
+    NUNCA aplicar len() directo sobre `raw`: si es str cuenta caracteres y
+    convierte el umbral de fraude en una medición del largo del texto.
+    """
+    if raw is None:
+        return []
+
+    if isinstance(raw, str):
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        logger.warning(
+            "hikerapi_former_usernames_unexpected_type",
+            user_id=user_id,
+            received_type="str",
+            parsed_count=len(parts),
+        )
+        return parts
+
+    if isinstance(raw, list):
+        out: list[str] = []
+        for item in raw:
+            if isinstance(item, str) and item.strip():
+                out.append(item.strip())
+            elif isinstance(item, dict):
+                name = item.get("username") or item.get("name") or item.get("value")
+                if isinstance(name, str) and name.strip():
+                    out.append(name.strip())
+        return out
+
+    logger.warning(
+        "hikerapi_former_usernames_unexpected_type",
+        user_id=user_id,
+        received_type=type(raw).__name__,
+    )
+    return []
+
+
 def _get_breaker():
     global _breaker
     if _breaker is None:
@@ -656,11 +702,16 @@ class HikerAPIClient:
         if not user_data.get("pk") and not user_data.get("id"):
             logger.warning("hikerapi_user_about_no_pk", user_id=user_id)
             return None
-        former_usernames = user_data.get("former_usernames", []) or []
+        former_usernames = _coerce_former_usernames(
+            user_data.get("former_usernames"), user_id=user_id
+        )
+        account_age_days = user_data.get("account_age_days")
+        if account_age_days is None:
+            account_age_days = user_data.get("account_age")
         return {
             "former_usernames": former_usernames,
             "former_usernames_count": len(former_usernames),
-            "account_age_days": user_data.get("account_age_days") or user_data.get("account_age") or 0,
+            "account_age_days": account_age_days,
             "country": user_data.get("country") or "",
         }
 
