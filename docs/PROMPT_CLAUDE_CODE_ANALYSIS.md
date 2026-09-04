@@ -2,10 +2,10 @@
 
 > **Última actualización:** 2026-09-03
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **E2E ✅ LISTO**
-> **HikerAPI balance:** ~$36.86 USD
-> **E2E Test:** ✅ LISTO — ejecutar `scripts/test_lens_mascotas_ve.py`
-> **NUEVO (03-sep):** Pipeline funcionalmente correcto — todos los P0 aplicados en `4ffa62e` · Análisis exhaustivo confirma 0 bugs nuevos · Lanz v2.1 §7 ~97% cumplimiento
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **E2E ❌ FALLÓ** · **Run `10a59ecf`: 0 candidatos de 188 handles**
+> **HikerAPI balance:** ~$36.86 USD → ~$35.14 USD (después de run `10a59ecf`)
+> **E2E Test:** ❌ FALLÓ — run `10a59ecf` produjeron 0 candidatos
+> **NUEVO (03-sep):** Run `10a59ecf` — 188 handles encontrados, 25 enriquecidos, 100% descartados en scoring por `MISSING_FOLLOWER_FIELD` · **4 bugs críticos identificados** · Bug report completo en `docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`
 
 ---
 
@@ -43,6 +43,8 @@
 | **29** | *`docs/AUDITORIA_FABLE5_LENS_4f87a6b_29-08-26.md`* | **2026-08-29** | **Claude Code Fable 5** | Auditoría contra Lanz v2.1: H-1 (FunnelTracker 3 stages) — NO ES BUG en `4f87a6b` (ya estaban correctas) · H-2 (_discovery_query → discovery_query en 4to caso dual-name) — **FIXED** `f7c3410`: migration 111 agrega columna · FASE 4.1 response_format — YA ESTABA FIXED · test_dual_names_guard.py creado para FASE 1.1 |
 | **30** | *`docs/AUDITORIA_CLAUDE_CODE_FABLE5_FULL_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Análisis honesto completo post-deploy Railway: 3 P0 críticos encontrados (invariante matemático, scoring impreciso, discovery_query endpoint) · Promedio cumplimiento Lanz v2.1 §7: ~67% · E2E pendiente · Railway deploy verde 03-sep-2026 |
 | **31** | *P0 fixes aplicados (`452d7e9`)* | **2026-09-03** | **MiniMax M2.7/M3** | Todos los P0 de Claude Code Fable 5 aplicados: P0-1 (invariante: `deduped == delivered + drops`), P0-2 (scoring: follower_count primero), P0-3 (endpoint: lee `_discovery_query`), P0-4 (brand safety leak: ahora llama `drop_profile()`) · HikerAPI usa snake_case (deuda interna, no externa) · test_funnel_invariant.py actualizado con fórmula correcta · E2E listo |
+| **32** | *`docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Run `10a59ecf` Falló: 188 handles encontrados, 25 enriquecidos, 0 candidatos · **BUG #1 CRÍTICO**: merge enrichment `e.get("followersCount")` → `None` (debe ser `e.get("follower_count")`) · **BUG #2 CRÍTICO**: scoring descarta perfiles enriquecidos con `follower_count=0` sin fallback a rough_score · **BUG #3 CRÍTICO**: `MAX_CALLS_PER_RUN=120` demasiado bajo — solo 25/188 enriquecidos · **BUG #4 ALTO**: queries en español para HikerAPI que no retornan resultados · **BUG #5 ALTO**: tabla `budget_transactions` no existe en Railway Postgres · 4 bugs más medianos/baixos · Fix order: BUG #1, #2, #3, #4, #5 |
+| **33** | *`docs/PROMPT_CLAUDE_CODE_LENS_10a59ecf_FIXES_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Prompt completo para Claude Code con: orden de fixes (1-4 críticos + 1 manual), archivos a leer, tests a escribir, verificación post-fix, comando de commit |
 
 ---
 

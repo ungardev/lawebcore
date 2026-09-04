@@ -1243,19 +1243,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             about_data = e.get("about")
             profiles[handle].update({
                 "_enriched": True,
-                "follower_count": e.get("followersCount"),
-                "following_count": e.get("followsCount"),
-                "posts_count": e.get("postsCount"),
-                "is_business": e.get("isBusinessAccount", False),
-                "is_verified": e.get("verified", False),
+                "follower_count": e.get("follower_count"),
+                "following_count": e.get("following_count"),
+                "posts_count": e.get("posts_count"),
+                "is_business": e.get("is_business", False),
+                "is_verified": e.get("is_verified", False),
                 "bio": e.get("biography", profiles[handle].get("bio", "")),
-                "full_name": e.get("fullName", profiles[handle].get("full_name", "")),
-                "avatar_url": e.get("profilePicUrlHD") or e.get("profilePicUrl") or profiles[handle].get("avatar_url", ""),
+                "full_name": e.get("full_name", profiles[handle].get("full_name", "")),
+                "avatar_url": e.get("avatar_url") or profiles[handle].get("avatar_url", ""),
                 "country": e.get("country", ""),
                 "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
-                "location": e.get("locationName", profiles[handle].get("location", "")),
-                "latestPosts": e.get("latestPosts", []),
-                "engagement_rate": e.get("engagement_rate"),
+                "location": e.get("location_name", profiles[handle].get("location", "")),
             })
             if about_data:
                 profiles[handle]["about"] = about_data
@@ -1299,7 +1297,6 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         exclude_handles = set(h.lower() for h in (plan.exclude_handles or []))
         if exclude_handles:
-            original_count = len(profiles)
             excluded_count = 0
             for handle in list(profiles.keys()):
                 if handle.lower() in exclude_handles:

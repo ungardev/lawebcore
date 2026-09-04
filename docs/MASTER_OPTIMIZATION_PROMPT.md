@@ -676,6 +676,29 @@ For EVERY finding, use this structure:
 
 ---
 
+## ⚠️ BLOQUEADORES ACTUALES (03-sep-2026)
+
+El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles encontrados. Los bugs que impiden que el pipeline funcione están documentados en `docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`.
+
+### Bugs que DEBEN arreglarse ANTES del próximo E2E:
+
+| # | Prioridad | Bug | Archivo:Línea |
+|---|-----------|-----|---------------|
+| 1 | 🔴 CRÍTICO | Merge enrichment lee `followersCount` → `None` | `worker.py:1246` |
+| 2 | 🔴 CRÍTICO | Scoring descarta `follower_count=0` sin rough_score fallback | `worker.py:1342-1349` |
+| 3 | 🔴 CRÍTICO | `MAX_CALLS_PER_RUN=120` bajo — solo 25/188 enriquecidos | `config.py:87` |
+| 4 | 🟠 ALTO | Keywords español — HikerAPI responde a inglés | `query_builder.py` |
+| 5 | 🟠 ALTO | Tabla `budget_transactions` no existe (migración 00107) | Railway Postgres |
+
+### Orden de Fix:
+1. `worker.py:1246`: `e.get("followersCount")` → `e.get("follower_count")`
+2. `worker.py:1342-1349`: agregar fallback a rough_score para enriquecidos con 0
+3. `config.py:87`: `MAX_CALLS_PER_RUN = 200`
+4. `query_builder.py`: agregar keywords en inglés
+5. Aplicar migración `00107_budget_transactions.sql` en Railway SQL Editor
+
+---
+
 ## SUCCESS METRICS
 
 Measure improvements against these:
