@@ -60,7 +60,10 @@ TIENDA_KEYWORDS = (
 
 
 async def main():
-    api_key = os.getenv("HIKERAPI_API_KEY", "wr6l9jyb469nwtwzpk19j25o9wsjyq6b")
+    api_key = os.getenv("HIKERAPI_API_KEY", "")
+    if not api_key:
+        print("ERROR: HIKERAPI_API_KEY not set. Set the env var before running.")
+        return 1
     client = HikerAPIClient(api_key=api_key)
 
     print("=" * 60)

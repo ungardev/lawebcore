@@ -89,7 +89,10 @@ async def main():
 
     print("\n[1/5] Login via local auth...")
     login_email = os.getenv("TEST_EMAIL", "ignacio.chacon@hacemosloquenosgusta.com")
-    login_password = os.getenv("TEST_PASSWORD", "aYavBm8xwrTTLGuxtCPEEQ")
+    login_password = os.getenv("TEST_PASSWORD", "")
+    if not login_password:
+        print("ERROR: TEST_PASSWORD not set. Set the env var before running.")
+        return 1
     async with httpx.AsyncClient(base_url=API_BASE_URL, timeout=30.0) as client:
         try:
             r = await client.post("/api/v1/auth/login", json={"email": login_email, "password": login_password})

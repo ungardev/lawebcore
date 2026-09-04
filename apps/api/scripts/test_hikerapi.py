@@ -174,7 +174,7 @@ async def main():
     api_key = args.api_key or os.getenv("HIKERAPI_API_KEY")
     if not api_key:
         print("ERROR: No API key provided. Set HIKERAPI_API_KEY env var or use --api-key")
-        print("Usage: python -m scripts.test_hikerapi --api-key wr6l9jyb469nwtwzpk19j25o9wsjyq6b [--raw]")
+        print("Usage: python -m scripts.test_hikerapi --api-key $HIKERAPI_API_KEY [--raw]")
         return 1
 
     raw = args.raw
