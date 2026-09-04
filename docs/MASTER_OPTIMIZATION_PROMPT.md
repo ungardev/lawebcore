@@ -1,9 +1,10 @@
 # MASTER OPTIMIZATION PROMPT — LENS BY LAWEBCORE
-> **For:** Claude Code Opus 5 (Anthropic)
+> **For:** Claude Code Fable 5.1 (Anthropic)
 > **From:** La Web Figital Agency
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
+> **Última actualización docs:** 2026-09-04 — BUG B1 identificado, FIX 1 aplicado, TIER 1 plan definido
 
 ---
 
@@ -676,26 +677,32 @@ For EVERY finding, use this structure:
 
 ---
 
-## ⚠️ BLOQUEADORES ACTUALES (03-sep-2026)
+## ⚠️ BLOQUEADORES ACTUALES (04-sep-2026)
 
-El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles encontrados. Los bugs que impiden que el pipeline funcione están documentados en `docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`.
+El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles. Commit `a67ad72` aplicó FIX 1 (merge snake_case). Queda **BUG B1** pendiente.
 
-### Bugs que DEBEN arreglarse ANTES del próximo E2E:
+**Documentación completa:** `docs/LENS_MASTER_BUG_REPORT_04-09-26.md` | `docs/LENS_HIKERAPI_PIPELINE_AUDIT_04-09-26.md`
 
-| # | Prioridad | Bug | Archivo:Línea |
-|---|-----------|-----|---------------|
-| 1 | 🔴 CRÍTICO | Merge enrichment lee `followersCount` → `None` | `worker.py:1246` |
-| 2 | 🔴 CRÍTICO | Scoring descarta `follower_count=0` sin rough_score fallback | `worker.py:1342-1349` |
-| 3 | 🔴 CRÍTICO | `MAX_CALLS_PER_RUN=120` bajo — solo 25/188 enriquecidos | `config.py:87` |
-| 4 | 🟠 ALTO | Keywords español — HikerAPI responde a inglés | `query_builder.py` |
-| 5 | 🟠 ALTO | Tabla `budget_transactions` no existe (migración 00107) | Railway Postgres |
+### Bugs CRÍTICOS pendientes (orden de fix):
 
-### Orden de Fix:
-1. `worker.py:1246`: `e.get("followersCount")` → `e.get("follower_count")`
-2. `worker.py:1342-1349`: agregar fallback a rough_score para enriquecidos con 0
-3. `config.py:87`: `MAX_CALLS_PER_RUN = 200`
-4. `query_builder.py`: agregar keywords en inglés
-5. Aplicar migración `00107_budget_transactions.sql` en Railway SQL Editor
+| # | Prioridad | Bug | Archivo:Línea | Estado |
+|---|-----------|-----|---------------|--------|
+| **B1** | 🔴 CRÍTICO | `former_usernames` es STRING no LIST — fraude penalty en todos | `hikerapi_client.py:659` | **PENDIENTE** |
+| 1 | ✅ FIXED | Merge enrichment leía `followersCount` → `None` | `worker.py:1246` | Aplicado `a67ad72` |
+| 2 | 🟡 EVALUAR | Scoring descarta `follower_count=0` sin fallback | `worker.py:1342-1349` | Fable 5.1: no aplicar —丢弃是正确的 |
+| 3 | ⏸️ BLOQUEADO | `MAX_CALLS_PER_RUN=120` bajo | `config.py:87` | Fable 5.1: no subir hasta validar E2E |
+| 4 | ⏸️ DIFERIDO | Keywords español para HikerAPI | `query_builder.py` | Contradice filtro geográfico |
+| 5 | ✅ MANUAL | Tabla `budget_transactions` no existe | Railway Postgres | Migración 00107 aplicada |
+
+### Plan de acción (TIER 1 — $3.30/run):
+
+1. **AHORA:** Fix BUG B1 — `former_usernames` string split en `hikerapi_client.py:659`
+2. **AHORA:** Logging exhaustivo — cada handle con trace completo
+3. **AHORA:** Wire `search_followers_of()` a STEP 4 (`worker.py:634`)
+4. **AHORA:** Wire `web_profile_info()` como fallback (`worker.py:1142`)
+5. Set `HIKERAPI_INCLUDE_ABOUT=true` y `HIKERAPI_STEP0_LOCATION=true`
+6. **E2E de validación** — confirmar que entrega candidatos
+7. Solo si E2E da <30 candidatos: proceed TIER 2 (subir límites)
 
 ---
 

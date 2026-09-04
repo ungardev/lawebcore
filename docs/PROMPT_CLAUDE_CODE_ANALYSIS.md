@@ -1,11 +1,11 @@
 # PROMPT_CLAUDE_CODE_ANALYSIS — Índice de Auditorías LENS
 
-> **Última actualización:** 2026-09-03
+> **Última actualización:** 2026-09-04
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **E2E ❌ FALLÓ** · **Run `10a59ecf`: 0 candidatos de 188 handles**
-> **HikerAPI balance:** ~$36.86 USD → ~$35.14 USD (después de run `10a59ecf`)
-> **E2E Test:** ❌ FALLÓ — run `10a59ecf` produjeron 0 candidatos
-> **NUEVO (03-sep):** Run `10a59ecf` — 188 handles encontrados, 25 enriquecidos, 100% descartados en scoring por `MISSING_FOLLOWER_FIELD` · **4 bugs críticos identificados** · Bug report completo en `docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **Commit `a67ad72` FIX 1 aplicado** · **E2E ❌ PENDIENTE DE VALIDAR** · **BUG B1 CRÍTICO identificado: former_usernames string vs list**
+> **HikerAPI balance:** ~$35.14 USD (estimado post-run `10a59ecf`)
+> **E2E Test:** ❌ FALLÓ run `10a59ecf` — 188 handles → 0 candidatos · FIX 1 aplicado en `a67ad72` · BUG B1 identificado pendiente fix
+> **NUEVO (04-sep):** Master Bug Report en `docs/LENS_MASTER_BUG_REPORT_04-09-26.md` · HikerAPI Audit en `docs/LENS_HIKERAPI_PIPELINE_AUDIT_04-09-26.md` · **BUG B1 CRÍTICO:** `former_usernames` es string no list — fraude penalty en todos los perfiles · Plan TIER 1/2/3 definido · Fable 5.1 ruling: no subir límites hasta validar con E2E
 
 ---
 
@@ -45,6 +45,7 @@
 | **31** | *P0 fixes aplicados (`452d7e9`)* | **2026-09-03** | **MiniMax M2.7/M3** | Todos los P0 de Claude Code Fable 5 aplicados: P0-1 (invariante: `deduped == delivered + drops`), P0-2 (scoring: follower_count primero), P0-3 (endpoint: lee `_discovery_query`), P0-4 (brand safety leak: ahora llama `drop_profile()`) · HikerAPI usa snake_case (deuda interna, no externa) · test_funnel_invariant.py actualizado con fórmula correcta · E2E listo |
 | **32** | *`docs/LENS_BUG_REPORT_10a59ecf_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Run `10a59ecf` Falló: 188 handles encontrados, 25 enriquecidos, 0 candidatos · **BUG #1 CRÍTICO**: merge enrichment `e.get("followersCount")` → `None` (debe ser `e.get("follower_count")`) · **BUG #2 CRÍTICO**: scoring descarta perfiles enriquecidos con `follower_count=0` sin fallback a rough_score · **BUG #3 CRÍTICO**: `MAX_CALLS_PER_RUN=120` demasiado bajo — solo 25/188 enriquecidos · **BUG #4 ALTO**: queries en español para HikerAPI que no retornan resultados · **BUG #5 ALTO**: tabla `budget_transactions` no existe en Railway Postgres · 4 bugs más medianos/baixos · Fix order: BUG #1, #2, #3, #4, #5 |
 | **33** | *`docs/PROMPT_CLAUDE_CODE_LENS_10a59ecf_FIXES_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Prompt completo para Claude Code con: orden de fixes (1-4 críticos + 1 manual), archivos a leer, tests a escribir, verificación post-fix, comando de commit |
+| **34** | *`docs/LENS_MASTER_BUG_REPORT_04-09-26.md` + `docs/LENS_HIKERAPI_PIPELINE_AUDIT_04-09-26.md`* | **2026-09-04** | **MiniMax M2.7/M3** | **BUG B1 CRÍTICO identificado:** `former_usernames` es `string` (comma-separated) no `list` — `len()` cuenta chars no usernames — todos los perfiles enriquecidos marcados como fraude con `fraud_penalty=0.8` · Auditoría HikerAPI: 154 endpoints en spec, 17 en cliente, 8 activos, 6 dormidos, 6 faltantes · Plan tiers: TIER 1 (BUG B1 + dormant + logging) ~$3.30/run 15-25 candidatos, TIER 2 (límites) ~$5.80/run 60-100 candidatos · Fable 5.1 ruling: no subir límites hasta validar con E2E · Regla de oro: "mostrar candidatos > rechazar candidatos" |
 
 ---
 
