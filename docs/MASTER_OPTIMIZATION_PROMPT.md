@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-04 — BUG B1 identificado, FIX 1 aplicado, TIER 1 plan definido
+> **Última actualización docs:** 2026-09-04 — B1/B2/B3 fixed en `644c513`, credentials removed en `7ce50da`, 89 bugs catalogados, master doc Fable 5.1 creado
 
 ---
 
@@ -679,30 +679,35 @@ For EVERY finding, use this structure:
 
 ## ⚠️ BLOQUEADORES ACTUALES (04-sep-2026)
 
-El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles. Commit `a67ad72` aplicó FIX 1 (merge snake_case). Queda **BUG B1** pendiente.
+El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles. Commits `a67ad72` (FIX 1), `644c513` (B1/B2/B3 + logging), `7ce50da` (credentials removed) aplicados. **E2E post-fixes pendiente.**
 
-**Documentación completa:** `docs/LENS_MASTER_BUG_REPORT_04-09-26.md` | `docs/LENS_HIKERAPI_PIPELINE_AUDIT_04-09-26.md`
+**Documentación completa:** `docs/PROMPT_CLAUDE_CODE_FABLE_5_1_CONSOLIDACION_HIKERAPI_04-09-26.md`
 
-### Bugs CRÍTICOS pendientes (orden de fix):
+### Bugs CRÍTICOS pendientes (orden de fix — P0 primero):
 
 | # | Prioridad | Bug | Archivo:Línea | Estado |
 |---|-----------|-----|---------------|--------|
-| **B1** | 🔴 CRÍTICO | `former_usernames` es STRING no LIST — fraude penalty en todos | `hikerapi_client.py:659` | **PENDIENTE** |
-| 1 | ✅ FIXED | Merge enrichment leía `followersCount` → `None` | `worker.py:1246` | Aplicado `a67ad72` |
-| 2 | 🟡 EVALUAR | Scoring descarta `follower_count=0` sin fallback | `worker.py:1342-1349` | Fable 5.1: no aplicar —丢弃是正确的 |
-| 3 | ⏸️ BLOQUEADO | `MAX_CALLS_PER_RUN=120` bajo | `config.py:87` | Fable 5.1: no subir hasta validar E2E |
-| 4 | ⏸️ DIFERIDO | Keywords español para HikerAPI | `query_builder.py` | Contradice filtro geográfico |
-| 5 | ✅ MANUAL | Tabla `budget_transactions` no existe | Railway Postgres | Migración 00107 aplicada |
+| **B-E-2** | 🔴 CRÍTICA | `latestPosts` nunca se fetch — ER real = 0 para todos | `hikerapi_client.py:659` | **PENDIENTE** |
+| **B-E-1** | 🔴 CRÍTICA | Normalizador pierde `is_business`/`is_verified` (camelCase) | `hikerapi_client.py:846-860` | **PENDIENTE** |
+| **B-FE-7** | 🔴 CRÍTICA | `RunStatus` no tiene `EXPLORED` — polling infinito | `worker_enqueuer.py:1862-1868` | **PENDIENTE** |
+| **B-NEW-1** | 🔴 CRÍTICA | `}` en format() template — crash parse_from_document | `brief_parser.py:163` | **PENDIENTE** |
+| **B-NEW-2** | 🔴 CRÍTICA | `elite_data` column missing — DB persist broken | `profile_generator.py:543,294-307` | **PENDIENTE** |
+| **B-NEW-3** | 🔴 CRÍTICA | benchmarks LLM sin type coercion + fuera try block | `profile_generator.py:420` | **PENDIENTE** |
+| **B-NEW-4** | 🔴 CRÍTICA | HikerAPI key + test password hardcoded | 3 scripts | **REMEDIACIÓN PARCIAL** — key removed from HEAD, rotación pendiente |
+| **B-E-4** | 🟡 ALTA | TLD duplicates en tier bucketing | `worker.py:1476-1483` | **PENDIENTE** |
+| **B-FE-15** | 🟡 ALTA | Polling infinito para 6 estados terminales | `useRunPolling.ts:36-40` | **PENDIENTE** |
+| **B1** | ✅ FIXED | `former_usernames` string vs list — fraude penalty | `hikerapi_client.py:659` | Aplicado `644c513` |
+| **B2/B3** | ✅ FIXED | `country="VE"` hardcoded + `engagement_rate=0.05` | `worker.py:2188-2211` | Aplicado `644c513` |
 
-### Plan de acción (TIER 1 — $3.30/run):
+### Plan de acción (orden de merge):
 
-1. **AHORA:** Fix BUG B1 — `former_usernames` string split en `hikerapi_client.py:659`
-2. **AHORA:** Logging exhaustivo — cada handle con trace completo
-3. **AHORA:** Wire `search_followers_of()` a STEP 4 (`worker.py:634`)
-4. **AHORA:** Wire `web_profile_info()` como fallback (`worker.py:1142`)
-5. Set `HIKERAPI_INCLUDE_ABOUT=true` y `HIKERAPI_STEP0_LOCATION=true`
-6. **E2E de validación** — confirmar que entrega candidatos
-7. Solo si E2E da <30 candidatos: proceed TIER 2 (subir límites)
+1. **Posts-fetch** para ER real (B-E-2) — habilita scoring correcto
+2. **Normalizador** is_business/is_verified (B-E-1) — tier assignment correcto
+3. **RunStatus.EXPLORED** (B-FE-7) — polling termina
+4. **parse_from_document** crash (B-NEW-1) — brief parsing no crashea
+5. **E2E de validación** — confirmar ≥1 candidato
+6. **TIER 2** (límites) — solo si E2E da <30 candidatos
+7. **B-NEW-4:** rotación key cuando equipo lo indique
 
 ---
 
