@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-04 (noche) — N-1..N-4 (OpenAPI) + B-FE-7/15 (paridad FE) + D-1..D-7/R-1/R-2 (DeepSeek+RAG) + Wizard coherente con HikerAPI (nichos/hashtags). Ver `docs/FIXES_WIZARD_COHERENCIA_HIKERAPI_04-09-26.md`
+> **Última actualización docs:** 2026-09-04 (noche) — N-1..N-4 (OpenAPI) + B-FE-7/15 (paridad FE) + D-1..D-7/R-1/R-2 (DeepSeek+RAG) + Wizard coherente + **fuga de brief cerrada** (additional_context/competitor_brands/influencer_preferences ahora llegan al worker). Ver `docs/FIXES_BRIEF_FIELDS_LEAK_04-09-26.md`
 
 ---
 
