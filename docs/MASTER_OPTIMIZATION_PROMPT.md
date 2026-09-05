@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-04 (tarde) — Backend N-1..N-4 fixed (OpenAPI spec) + Frontend B-FE-7/B-FE-15 fixed (paridad de estados, wizard de un click). Ver `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md` + `docs/FIXES_FRONTEND_STATUS_PARITY_BFE7_04-09-26.md`
+> **Última actualización docs:** 2026-09-04 (noche) — N-1..N-4 (OpenAPI) + B-FE-7/15 (paridad FE) + D-1..D-7/R-1/R-2 (DeepSeek+RAG coherente). Ver `docs/FIXES_DEEPSEEK_RAG_04-09-26.md`
 
 ---
 
@@ -701,6 +701,8 @@ El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles.
 | **B-E-1** | 🔴 CRÍTICA→REVISAR | Normalizador `is_business`/`is_verified` | `hikerapi_client.py:876-911` | Verificación OpenAPI: el normalizador YA lee snake_case correcto (`is_business`, `is_verified` existen en spec). Re-auditar claim |
 | **B-FE-7/15** | 🔴→✅ FIXED | Polling infinito — FE esperaba estados legacy | `useRunPolling.ts` + `useDiscoveryConversation.ts` | FIXED 04-sep: `TERMINAL_RUN_STATUSES`/`CANDIDATE_RUN_STATUSES` alineados a `RunStatus` + test de contrato en CI + wizard de un click (`startWizardSearch`) |
 | **B-NEW-4** | 🔴 CRÍTICA | Key HikerAPI expuesta en historia git | 3 commits atrás | REMEDIACIÓN PARCIAL (HEAD limpio); rotación pendiente por Ungar |
+| **D-2** | 🟡 DECISIÓN | `ENABLE_AI_ANALYZER=false` default — STEP 5 IA no-op | `config.py:79` | Documentado + warning por run. Encender en Railway (~$0.10-0.30/run) para columnas IA + summary |
+| **D-1** | 🔴→✅ FIXED | `brief_parser` max_tokens=300 truncaba JSON del brief | `brief_parser.py` | FIXED: 1200/1500 + truncation-retry en cliente + guard test |
 | **N-5** | 🟡 P1 | Cuota real ≠ llamadas contabilizadas | Enrichment cuesta 2 requests/llamada según spec; BudgetFuse cuenta llamadas | DOCUMENTADO — pendiente conteo por endpoint |
 | **min_followers** | 🟡 DECISIÓN | Nanos 1K-5K fuera por default | `query_builder.py` tier "micro" → 5000 | CONFIRMADO filtro duro. Requiere decisión de producto (metodología LWFA dice nanos = 80-85% views) |
 | **Filtro tienda** | 🟡 CALIDAD | `"whatsapp"`/`"envíos"` excluyen creadores legítimos | `worker.py` `tienda_keywords_hard` | PENDIENTE — revisar umbral (ej: solo si is_business) |
