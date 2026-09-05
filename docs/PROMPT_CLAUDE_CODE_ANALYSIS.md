@@ -2,10 +2,10 @@
 
 > **Última actualización:** 2026-09-04
 > **Repositorio:** https://github.com/ungardev/lawebcore
-> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · **Claude Code Fable 5 P0-1/P0-2/P0-3/P0-4 TODOS APLICADOS** · **Commit `644c513` B1/B2/B3 fixed** · **Commit `7ce50da` credentials removed** · **E2E ❌ PENDIENTE DE VALIDAR**
-> **HikerAPI balance:** ~$35.14 USD restantes
-> **E2E Test:** ❌ FALLÓ run `10a59ecf` — 188 handles → 0 candidatos · B1/B2/B3 fixed en `644c513` · E2E post-fix pendiente
-> **NUEVO (04-sep):** Master doc `docs/PROMPT_CLAUDE_CODE_FABLE_5_1_CONSOLIDACION_HIKERAPI_04-09-26.md` · **89 bugs catalogados** (15 CRÍTICOS/ALTOS, 19 MEDIOS, 27 BAIXOS, 4 REFUTADOS) · 4 bugs ya fixed en `644c513` · B-NEW-4 remediation parcial (key removed from HEAD; rotación pendiente) · Plan escalonado TIER 1/2/3
+> **Hito actual:** Hito 36 completo ✅ · M3-Agente A/B/C completos ✅ · 17 logger fixes ✅ · Funnel Invariant fix ✅ · Claude Code Fable 5 P0-1..P0-4 ✅ · `644c513` B1/B2/B3 fixed ✅ · `7ce50da` credentials removed ✅ · **FIXES PRE-E2E N-1..N-4 aplicados (cliente HikerAPI alineado al OpenAPI spec)** ✅ · **E2E ❌ PENDIENTE (EXPLORAR primero, luego AUTO)**
+> **HikerAPI balance:** ~$35 USD restantes · Pre-flight ahora FUNCIONAL (`/sys/balance`)
+> **E2E Test:** ❌ FALLÓ run `10a59ecf` — 188 handles → 0 candidatos · B1/B2/B3 + N-1..N-4 fixed · E2E post-fixes pendiente
+> **NUEVO (04-sep, tarde):** Auditoría exhaustiva del pipeline contra OpenAPI spec v1.8.1 → `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md` · N-1 get_balance paths inexistentes → `/sys/balance` · N-2 modo Explorar entregaba 0 → umbral 0 · N-3 ER real vía `/gql/user/medias` (desbloquea 38.9% del score) · N-4 funnel sin dobles conteos · B-NEW-1 y B-NEW-3 fixed · 26 tests nuevos · 194 passed / 0 regresiones
 
 ---
 
@@ -47,6 +47,7 @@
 | **33** | *`docs/PROMPT_CLAUDE_CODE_LENS_10a59ecf_FIXES_03-09-26.md`* | **2026-09-03** | **MiniMax M2.7/M3** | Prompt completo para Claude Code con: orden de fixes (1-4 críticos + 1 manual), archivos a leer, tests a escribir, verificación post-fix, comando de commit |
 | **34** | *`docs/LENS_MASTER_BUG_REPORT_04-09-26.md` + `docs/LENS_HIKERAPI_PIPELINE_AUDIT_04-09-26.md`* | **2026-09-04** | **MiniMax M2.7/M3** | **BUG B1 CRÍTICO identificado:** `former_usernames` es `string` (comma-separated) no `list` — `len()` cuenta chars no usernames — todos los perfiles marcados como fraude con `fraud_penalty=0.8` · Auditoría HikerAPI: 154 endpoints, 17 en cliente, 8 activos, 6 dormidos, 6 faltantes · Plan tiers TIER 1/2/3 · Fable 5.1 ruling |
 | **35** | *`docs/PROMPT_CLAUDE_CODE_FABLE_5_1_CONSOLIDACION_HIKERAPI_04-09-26.md`* | **2026-09-04** | **MiniMax M2.7/M3** | **Master doc Fable 5.1** creado: 89 bugs catalogados (15 CRÍTICOS/ALTOS: B-E-2, B-E-1, B-FE-7, B-NEW-1/2/3/4, B-NEW-6/7/8/10/12/13; 19 MEDIOS; 27 BAIXOS; 4 REFUTADOS) · B1/B2/B3 fixed en `644c513` · B-NEW-4 credentials removed (HEAD) en `7ce50da` · Regla NULL≠0 establecida · Orden de merge: posts-fetch → normalizador → explored-status → polling · Fable 5.1 ruling: no subir caps hasta E2E ≥1 candidato |
+| **36** | *`docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md`* | **2026-09-04** | **GLM 5.3 Flash** | **Auditoría exhaustiva del pipeline contra OpenAPI spec v1.8.1 (154 paths) — VEREDICTO: pipeline AUTO entregará candidatos; 4 bugs bloqueantes fixed:** N-1 `get_balance()` usaba 3 paths inexistentes (`/v1/account` etc.) → real es `/sys/balance` → pre-flight muerto desde Hito 23, FIXED · N-2 modo Explorar entregaba 0 SIEMPRE (UserShort sin bio → rough=0 → umbral 5 los mataba), FIXED umbral 0 · N-3 ER real=0 para todos (`latestPosts` no existe en spec) → nuevo `get_user_medias()` vía `/gql/user/medias` desbloquea 38.9% del Lens Score, FIXED · N-4 funnel con dobles conteos (prefilter sin drops + score/tienda/rerank sin registro) → `enrichment_targets` única fuente, FIXED · B-NEW-1 `} }` file-upload crash FIXED · B-NEW-3 coerción benchmarks FIXED · B-NEW-2 degradada a MEDIA (try/except evita crash) · N-5 documentado (cuota 2 req/call en enrichment vs 1 call contabilizada) · min_followers=5000 confirmado como filtro duro vía query_builder (respuesta a bloqueante #2 Fable 5.1) · 26 tests nuevos, 194 passed, 0 regresiones |
 
 ---
 

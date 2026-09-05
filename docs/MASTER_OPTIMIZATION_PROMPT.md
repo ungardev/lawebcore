@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-04 — B1/B2/B3 fixed en `644c513`, credentials removed en `7ce50da`, 89 bugs catalogados, master doc Fable 5.1 creado
+> **Última actualización docs:** 2026-09-04 (tarde) — Auditoría contra OpenAPI spec v1.8.1: N-1..N-4 fixed (pre-flight `/sys/balance`, Explorar entrega, ER real vía `/gql/user/medias`, funnel sin dobles conteos). Ver `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md`
 
 ---
 
@@ -677,37 +677,40 @@ For EVERY finding, use this structure:
 
 ---
 
-## ⚠️ BLOQUEADORES ACTUALES (04-sep-2026)
+## ⚠️ BLOQUEADORES ACTUALES (04-sep-2026, post auditoría OpenAPI)
 
-El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles. Commits `a67ad72` (FIX 1), `644c513` (B1/B2/B3 + logging), `7ce50da` (credentials removed) aplicados. **E2E post-fixes pendiente.**
+El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles. Fixes aplicados: `a67ad72` (FIX 1), `644c513` (B1/B2/B3 + logging), `7ce50da` (credentials), **+ batch N-1..N-4 (alineación OpenAPI spec — ver abajo)**. **E2E post-fixes pendiente: EXPLORAR primero (~$0.24), luego AUTO (~$1.45).**
 
-**Documentación completa:** `docs/PROMPT_CLAUDE_CODE_FABLE_5_1_CONSOLIDACION_HIKERAPI_04-09-26.md`
+**Documentación completa:** `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md` | `docs/PROMPT_CLAUDE_CODE_FABLE_5_1_CONSOLIDACION_HIKERAPI_04-09-26.md`
 
-### Bugs CRÍTICOS pendientes (orden de fix — P0 primero):
+### FIXED en el batch N-1..N-4 (04-sep, verificado contra OpenAPI spec v1.8.1):
+
+| # | Fix | Detalle |
+|---|-----|---------|
+| **N-1** ✅ | Pre-flight de saldo estaba MUERTO | `get_balance()` probaba `/v1/account`, `/v1/user/balance`, `/account` — inexistentes. Real: `GET /sys/balance` → `{requests, amount}`. Run con saldo $0 quemaba discovery antes de morir con 402 |
+| **N-2** ✅ | Modo EXPLORAR entregaba 0 SIEMPRE | Perfiles sin enrichment llegan sin bio (UserShort) → rough=0 → umbral 5 los mataba. Ahora umbral 0 en Explorar (mostrar > rechazar) |
+| **N-3** ✅ | ER real = 0 para todos | `/v2/user/by/username` no devuelve posts (0 ocurrencias en spec). Nuevo `get_user_medias()` vía `/gql/user/medias` (1 req, ~$0.25/run, flag `HIKERAPI_FETCH_MEDIAS`) → desbloquea 38.9% del Lens Score + bot filter + avg_likes reales |
+| **N-4** ✅ | Funnel con dobles conteos | Prefilter no registraba drops, scoring re-dropeaba, corte top-80 invisible → invariante nunca cuadraba → status INCONSISTENT mentiroso. Ahora `enrichment_targets` única fuente |
+| **B-NEW-1** ✅ | `} }` en brief_parser | Crash de file-upload path (`.format()` ValueError). FIXED |
+| **B-NEW-3** ✅ | Benchmarks sin coerción | `"5000"` (str del LLM) → TypeError en prefilter → run FAILED. Coerción int/float FIXED |
+
+### Bugs CRÍTICOS pendientes (post batch N):
 
 | # | Prioridad | Bug | Archivo:Línea | Estado |
 |---|-----------|-----|---------------|--------|
-| **B-E-2** | 🔴 CRÍTICA | `latestPosts` nunca se fetch — ER real = 0 para todos | `hikerapi_client.py:659` | **PENDIENTE** |
-| **B-E-1** | 🔴 CRÍTICA | Normalizador pierde `is_business`/`is_verified` (camelCase) | `hikerapi_client.py:846-860` | **PENDIENTE** |
-| **B-FE-7** | 🔴 CRÍTICA | `RunStatus` no tiene `EXPLORED` — polling infinito | `worker_enqueuer.py:1862-1868` | **PENDIENTE** |
-| **B-NEW-1** | 🔴 CRÍTICA | `}` en format() template — crash parse_from_document | `brief_parser.py:163` | **PENDIENTE** |
-| **B-NEW-2** | 🔴 CRÍTICA | `elite_data` column missing — DB persist broken | `profile_generator.py:543,294-307` | **PENDIENTE** |
-| **B-NEW-3** | 🔴 CRÍTICA | benchmarks LLM sin type coercion + fuera try block | `profile_generator.py:420` | **PENDIENTE** |
-| **B-NEW-4** | 🔴 CRÍTICA | HikerAPI key + test password hardcoded | 3 scripts | **REMEDIACIÓN PARCIAL** — key removed from HEAD, rotación pendiente |
-| **B-E-4** | 🟡 ALTA | TLD duplicates en tier bucketing | `worker.py:1476-1483` | **PENDIENTE** |
-| **B-FE-15** | 🟡 ALTA | Polling infinito para 6 estados terminales | `useRunPolling.ts:36-40` | **PENDIENTE** |
-| **B1** | ✅ FIXED | `former_usernames` string vs list — fraude penalty | `hikerapi_client.py:659` | Aplicado `644c513` |
-| **B2/B3** | ✅ FIXED | `country="VE"` hardcoded + `engagement_rate=0.05` | `worker.py:2188-2211` | Aplicado `644c513` |
+| **B-E-1** | 🔴 CRÍTICA→REVISAR | Normalizador `is_business`/`is_verified` | `hikerapi_client.py:876-911` | Verificación OpenAPI: el normalizador YA lee snake_case correcto (`is_business`, `is_verified` existen en spec). Re-auditar claim |
+| **B-FE-7** | 🔴 CRÍTICA | Polling infinito para estados terminales | `useRunPolling.ts` | PENDIENTE (frontend — enum RunStatus tiene 8 estados) |
+| **B-NEW-4** | 🔴 CRÍTICA | Key HikerAPI expuesta en historia git | 3 commits atrás | REMEDIACIÓN PARCIAL (HEAD limpio); rotación pendiente por Ungar |
+| **N-5** | 🟡 P1 | Cuota real ≠ llamadas contabilizadas | Enrichment cuesta 2 requests/llamada según spec; BudgetFuse cuenta llamadas | DOCUMENTADO — pendiente conteo por endpoint |
+| **min_followers** | 🟡 DECISIÓN | Nanos 1K-5K fuera por default | `query_builder.py` tier "micro" → 5000 | CONFIRMADO filtro duro. Requiere decisión de producto (metodología LWFA dice nanos = 80-85% views) |
+| **Filtro tienda** | 🟡 CALIDAD | `"whatsapp"`/`"envíos"` excluyen creadores legítimos | `worker.py` `tienda_keywords_hard` | PENDIENTE — revisar umbral (ej: solo si is_business) |
 
-### Plan de acción (orden de merge):
+### Plan de validación (siguiente paso):
 
-1. **Posts-fetch** para ER real (B-E-2) — habilita scoring correcto
-2. **Normalizador** is_business/is_verified (B-E-1) — tier assignment correcto
-3. **RunStatus.EXPLORED** (B-FE-7) — polling termina
-4. **parse_from_document** crash (B-NEW-1) — brief parsing no crashea
-5. **E2E de validación** — confirmar ≥1 candidato
-6. **TIER 2** (límites) — solo si E2E da <30 candidatos
-7. **B-NEW-4:** rotación key cuando equipo lo indique
+1. **E2E EXPLORAR** (~$0.24) — debe entregar perfiles prefiltrados con rough scores
+2. **E2E AUTO** (~$1.45) — ER real, bot filter activo, funnel cuadrado, status honesto
+3. Logs a verificar: `preflight_balance_ok` (nuevo), `hikerapi_user_medias_done` (nuevo), `posts_fetched>0` en `enrichment_merged`, `funnel_invariant_check funnel_ok=True`, `no_engagement_data=0`
+4. Si ambos pasan → Fable 5.1 retoma TIER 2/3 con el pipeline demostradamente funcional
 
 ---
 

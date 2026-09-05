@@ -3,13 +3,13 @@
 ## Fecha: 04-sep-2026 · La Web Figital Agency
 
 > **Repositorio:** `github.com/ungardev/lawebcore`
-> **HEAD actual:** `7ce50da` (04-sep-2026) — credentials removed + B1/B2/B3 fixes applied
-> **Commit anterior:** `644c513` (04-sep-2026) — B1/B2/B3 fixes + exhaustive logging + 3 tests
-> **Commit previo:** `10a59ecf` (03-sep-2026) — 188 handles → 25 enriched → 0 candidatos
+> **HEAD actual:** batch N-1..N-4 (04-sep-2026) — cliente HikerAPI alineado a OpenAPI spec (ver `FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md`)
+> **Commits previos:** `370443c` docs · `7ce50da` credentials removed · `644c513` B1/B2/B3 + logging · `a67ad72` FIX 1
+> **Run de referencia:** `10a59ecf` (03-sep-2026) — 188 handles → 25 enriched → 0 candidatos
 > **HikerAPI docs:** https://api.hikerapi.com/docs | https://api.hikerapi.com/openapi.json
-> **HikerAPI balance:** ~$35 USD restantes
+> **HikerAPI balance:** ~$35 USD restantes · pre-flight FUNCIONAL vía `/sys/balance`
 > **Regla de oro:** "Mostrar candidatos en logs > rechazar candidatos"
-> **Auditor principal:** MiniMax M2.7/M3 + 2 explore agents (7,346 líneas leídas, 15 archivos)
+> **Auditor principal:** MiniMax M2.7/M3 + 2 explore agents + GLM 5.3 Flash (auditoría OpenAPI exhaustiva)
 
 ---
 
@@ -109,12 +109,12 @@ Brief → STEP 0 (Location Bootstrap) [GATED: HIKERAPI_STEP0_LOCATION=false]
 
 | ID | Gravedad | Descripción | Archivo:Línea | Estado | Fix |
 |----|----------|-------------|---------------|--------|-----|
-| **B-E-2** | 🔴 CRÍTICA | `latestPosts` nunca se fetch — ER real = 0 para todos | `hikerapi_client.py:659` | PENDIENTE | Implementar posts-fetch |
+| **B-E-2** | 🔴 CRÍTICA | `latestPosts` nunca se fetch — ER real = 0 para todos | `hikerapi_client.py` | ✅ **FIXED (N-3, 04-sep)** — `get_user_medias()` vía `/gql/user/medias` |
 | **B-E-1** | 🔴 CRÍTICA | Normalizador pierde `is_business`/`is_verified` (camelCase → snake_case) | `hikerapi_client.py:846-860` | PENDIENTE | Agregar campos al normalizador |
 | **B-FE-7** | 🔴 CRÍTICA | `RunStatus` no tiene `EXPLORED` — polling infinito en estado terminal | `worker_enqueuer.py:1862-1868` | PENDIENTE | Agregar EXPLORED o filtrar en UI |
-| **B-NEW-1** | 🔴 CRÍTICA | `}` en template `.format()` — crash 100% en parse_from_document | `brief_parser.py:163` | PENDIENTE | Fix format string |
+| **B-NEW-1** | 🔴 CRÍTICA | `}` en template `.format()` — crash 100% en parse_from_document | `brief_parser.py:163` | ✅ **FIXED (04-sep)** — `} }` → `}}` |
 | **B-NEW-2** | 🔴 CRÍTICA | `elite_data` column missing → DB persist broken 100% | `profile_generator.py:543,294-307` | PENDIENTE | Agregar columna + normalizar |
-| **B-NEW-3** | 🔴 CRÍTICA | benchmarks LLM sin type coercion + fuera de try block | `profile_generator.py:420` | PENDIENTE | Wrappear + coerce |
+| **B-NEW-3** | 🔴 CRÍTICA | benchmarks LLM sin type coercion + fuera de try block | `profile_generator.py:420` | ✅ **FIXED (04-sep)** — coerción int/float |
 | **B-NEW-4** | 🔴 CRÍTICA | HikerAPI key + test password hardcoded in 3 scripts | `test_run5_validation.py:63`, `test_hikerapi.py:177`, `test_purina_dogchow.py:92` | ✅ **REMEDIADO PARCIAL** (HEAD limpio; rotación pendiente) | Rotar key + guardas |
 | **B-E-4** | 🟡 ALTA | TLD duplicates: `co_`/`mx_`/`ar_`/`pe_`/`cl_` × 2 en tier bucketing | `worker.py:1476-1483` | PENDIENTE | Fix tier assignment |
 | **B-FE-15** | 🟡 ALTA | Polling infinito para 6 estados terminales reales | `useRunPolling.ts:36-40` | PENDIENTE | Filtrar estados terminales |
