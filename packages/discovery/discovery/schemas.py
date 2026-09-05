@@ -237,6 +237,24 @@ class DiscoverySearchRequest(BaseModel):
     exclude_handles: list[str] = Field(default_factory=list)
     exclude_stores: bool = Field(default=True)
     analyze_with_ai: bool = Field(default=True)
+    # FIX fuga de brief (04-sep-2026): estos campos existían en BriefStructured
+    # pero NO aquí — la construcción del run (discovery.py) solo copia campos
+    # que existen en este schema, así que el additional_context del wizard
+    # ("Solo creadoras, NO tiendas..."), los competitor_brands y las
+    # influencer_preferences de los briefs PDF se evaporaban al crear el run:
+    # el worker jamás los veía. Sin defaults discontinuos → backward compatible.
+    additional_context: str = ""
+    competitor_brands: list[str] = Field(default_factory=list)
+    influencer_preferences: dict | None = None
+    campaign_objective: str | None = None
+    campaign_name: str | None = None
+    budget_usd: float | None = None
+    budget_currency: str | None = None
+    kpis: list[str] = Field(default_factory=list)
+    campaign_dates: dict | None = None
+    key_themes: list[str] = Field(default_factory=list)
+    brief_source: str = "manual"
+    source_document: dict | None = None
     discovery_mode: str = Field(
         default="auto",
         description="Discovery mode: 'auto' = full pipeline, 'explore' = discovery only (no enrichment), 'analyze' = enrich selected handles",

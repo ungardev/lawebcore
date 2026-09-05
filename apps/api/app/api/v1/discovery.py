@@ -329,6 +329,22 @@ async def send_message(
                         exclude_handles=brief.exclude_handles if hasattr(brief, "exclude_handles") else [],
                         discovery_mode=getattr(brief, "discovery_mode", "auto"),
                         handles_to_analyze=getattr(brief, "handles_to_analyze", []),
+                        # FIX fuga de brief (04-sep-2026): sin estos campos el
+                        # additional_context del wizard ("NO tiendas..."), las
+                        # influencer_preferences de PDFs (tiers/min_er) y los
+                        # competitor_brands se perdían al crear el run.
+                        additional_context=brief.additional_context,
+                        competitor_brands=brief.competitor_brands,
+                        influencer_preferences=brief.influencer_preferences,
+                        campaign_objective=brief.campaign_objective,
+                        campaign_name=brief.campaign_name,
+                        budget_usd=brief.budget_usd,
+                        budget_currency=brief.budget_currency,
+                        kpis=brief.kpis,
+                        campaign_dates=brief.campaign_dates,
+                        key_themes=brief.key_themes,
+                        brief_source=brief.brief_source,
+                        source_document=brief.source_document,
                     ),
                     created_by=user.id,
                 )
