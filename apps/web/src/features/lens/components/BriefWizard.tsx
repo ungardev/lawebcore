@@ -2,18 +2,14 @@ import { useState, type ReactNode } from 'react'
 import { DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import {
   Camera,
-  Check,
   ChevronLeft,
   ChevronRight,
   Cpu,
   Dumbbell,
   Film,
-  Flame,
   GraduationCap,
-  Heart,
   Home,
   Loader2,
-  MapPin,
   Music2,
   PawPrint,
   Plane,
@@ -23,7 +19,7 @@ import {
   TrendingUp,
   Trophy,
   UtensilsCrossed,
-  Users,
+  X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -52,14 +48,27 @@ const INDUSTRIES = [
   { value: 'deportes', label: 'Deportes', icon: <Trophy className="h-4 w-4" /> },
 ]
 
+// FIX coherencia HikerAPI (04-sep-2026): los presets anteriores eran frases
+// mixtas EN/ES ('pet care', 'vet Venezuela', 'perrosvzla'). Cada nicho viaja
+// al worker como KEYWORD QUERY contra GET /v3/fbsearch/accounts con variantes
+// «nicho venezuela» / «nicho vzla» — preset en inglés devolvía cuentas gringas
+// que el filtro geo mataba después (llamadas API quemadas). Ahora: términos
+// en español con intención de búsqueda de CUENTAS (cómo se nombran los
+// creadores VE en su handle/bio). Los hashtags tipo 'perrosvzla' viven en el
+// paso 4 (HashtagSuggestions alineado a VE_NICHE_HASHTAGS del backend).
 const NICHE_PRESETS: Record<string, string[]> = {
-  mascotas: ['mascotas', 'perros', 'gatos', 'pet care', 'adopcion', 'rescate animal', 'mascotas Venezuela', 'perrosvzla', 'vet Venezuela'],
-  belleza: ['makeup', 'skincare', 'haircare', 'nails', 'beauty blogger', 'belleza Venezuela'],
-  food: ['foodie', 'recetas', 'cocina', 'restaurantes', 'comida saludable', 'cocina venezolana', 'comidavenezolana'],
-  moda: ['fashion', 'streetwear', 'outfits', 'estilo', 'moda Venezuela'],
-  fitness: ['gym', 'workout', 'healthy', 'running', 'fitness Venezuela'],
-  tecnologia: ['tech', 'gadgets', 'apps', 'coding', 'tech Venezuela'],
-  turismo: ['travel', 'viajes', 'hoteles', 'experiencias', 'turismo Venezuela'],
+  mascotas: ['veterinaria', 'adiestramiento canino', 'grooming', 'pet lovers', 'perros', 'gatos', 'mascotas'],
+  belleza: ['makeup artist', 'skincare', 'cabello', 'uñas', 'belleza', 'cosmetologia'],
+  food: ['foodie', 'reposteria', 'cocina', 'restaurantes', 'comida casera', 'cafes'],
+  moda: ['moda', 'outfits', 'estilo', 'boutique', 'tienda de ropa', 'streetwear'],
+  fitness: ['gym', 'entrenador personal', 'yoga', 'running', 'vida sana', 'fitness'],
+  tecnologia: ['tecnologia', 'gadgets', 'programacion', 'apps', 'reviews'],
+  turismo: ['viajes', 'turismo', 'hoteles', 'mochileros', 'destinos', 'aventura'],
+  entretenimiento: ['comediante', 'musico', 'bailarin', 'actor', 'show en vivo', 'fiesta'],
+  educacion: ['profesor', 'cursos online', 'tutorias', 'idiomas', 'estudio', 'educacion'],
+  finanzas: ['finanzas personales', 'inversiones', 'emprendimiento', 'negocios', 'trading', 'economia'],
+  hogar: ['decoracion', 'interiorismo', 'organizacion', 'bricolaje', 'plantas', 'hogar'],
+  deportes: ['futbol', 'beisbol', 'deportista', 'ciclismo', 'boxeo', 'deportes'],
 }
 
 const COUNTRIES = [
@@ -284,6 +293,17 @@ export function BriefWizard({
     }
   }
 
+  // FIX coherencia (04-sep-2026): el resumen muestra el plan de ejecución
+  // REAL del worker — límites de settings.py: DISCOVERY_KEYWORD_LIMIT=6 con
+  // 2 variantes geo por keyword, DISCOVERY_HASHTAG_TOP_LIMIT=6, RECENT=4,
+  // MAX_HANDLES_TO_ENRICH=25.
+  const nichesCount = brief.niches?.length ?? 0
+  const keywordsExecuted = Math.min(nichesCount, 6)
+  const hashtagsCount = brief.hashtags?.length ?? 0
+  const hashtagsTop = Math.min(hashtagsCount, 6)
+  const hashtagsRecent = Math.min(hashtagsCount, 4)
+  const industryLabel = INDUSTRIES.find((i) => i.value === brief.industry)?.label
+
   return (
     <div className="space-y-4">
       <div className="border-b border-divider px-5 pb-4 pt-5">
@@ -384,7 +404,13 @@ export function BriefWizard({
         {step === 2 && (
           <div className="space-y-4">
             <div>
-              <Label className="mb-1.5 block"> nichos detectados automáticamente</Label>
+              <Label className="mb-1 block">Nichos de la campaña</Label>
+              <p className="text-xs text-muted-foreground mb-3">
+                Cada nicho se convierte en búsquedas de cuentas reales de Instagram
+                («nicho», «nicho venezuela», «nicho vzla») y guía al generador de
+                hashtags con IA. Escríbelos en español — así nombran sus cuentas
+                los creadores venezolanos.
+              </p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {(brief.niches ?? []).map((n) => (
                   <span
@@ -395,16 +421,22 @@ export function BriefWizard({
                     <button
                       type="button"
                       onClick={() => removeNiche(n)}
+                      aria-label={`Quitar nicho ${n}`}
                       className="hover:bg-brand-purple/20 rounded-full p-0.5"
                     >
-                      <Check className="w-2.5 h-2.5" />
+                      <X className="w-2.5 h-2.5" />
                     </button>
                   </span>
                 ))}
+                {(brief.niches?.length ?? 0) > 0 && (
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-muted text-muted-foreground text-[10px] border border-border">
+                    ≈ {(brief.niches?.length ?? 0) * 3} búsquedas de cuentas
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <Input
-                  placeholder="Agregar nicho..."
+                  placeholder="Agregar nicho (ej: veterinaria, reposteria...)"
                   value={customNiche}
                   onChange={(e) => setCustomNiche(e.target.value)}
                   onKeyDown={(e) => {
@@ -428,7 +460,7 @@ export function BriefWizard({
             {brief.industry && NICHE_PRESETS[brief.industry] && (
               <div>
                 <Label className="mb-1.5 block text-muted-foreground">
-                  Sugeridos para {brief.industry}
+                  Sugeridos para {INDUSTRIES.find((i) => i.value === brief.industry)?.label ?? brief.industry}
                 </Label>
                 <div className="flex flex-wrap gap-1.5">
                   {NICHE_PRESETS[brief.industry]!.filter((n) => !brief.niches?.includes(n)).map(
@@ -578,9 +610,15 @@ export function BriefWizard({
         {step === 4 && (
           <div className="space-y-4">
             <div>
-              <Label className="mb-1.5 block">
-                Hashtags personalizados{brief.industry ? ` · Vertical: ${brief.industry}` : ''}
+              <Label className="mb-1 block">
+                Hashtags personalizados
+                {brief.industry ? ` · ${INDUSTRIES.find((i) => i.value === brief.industry)?.label ?? brief.industry}` : ''}
               </Label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Tus hashtags van PRIMERO: los primeros 6 se buscan en Top y los
+                primeros 4 en Recientes. El generador IA suma automáticamente
+                más hashtags del nicho y del país.
+              </p>
               <HashtagChips
                 hashtags={brief.hashtags ?? []}
                 onChange={(hashtags) => update({ hashtags })}
@@ -711,7 +749,9 @@ export function BriefWizard({
               {brief.platforms && brief.platforms.length > 0 && (
                 <div>
                   <span className="text-muted-foreground">Plataformas:</span>{' '}
-                  <span className="font-medium">{brief.platforms.join(', ')}</span>
+                  <span className="font-medium">
+                    {brief.platforms.map((p) => (p === 'instagram' ? 'Instagram' : p)).join(', ')}
+                  </span>
                 </div>
               )}
               {extractedBrief && extractedBrief.campaign_objective && (
@@ -769,6 +809,30 @@ export function BriefWizard({
                     </div>
                   )
                 })()}
+            </div>
+            <div className="rounded-md border border-divider bg-background/40 p-3 mt-1">
+              <p className="text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-brand-purple" />
+                Plan de búsqueda (ejecución real)
+              </p>
+              <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4">
+                <li>
+                  {keywordsExecuted} nichos → {keywordsExecuted * 3} búsquedas de cuentas
+                  («nicho», «nicho venezuela», «nicho vzla»)
+                  {nichesCount > 6 ? ` (+${nichesCount - 6} nichos de reserva)` : ''}
+                </li>
+                <li>
+                  {hashtagsCount > 0
+                    ? `${hashtagsCount} hashtags tuyos primero — ${hashtagsTop} en Top y ${hashtagsRecent} en Recientes`
+                    : 'La IA generará los hashtags del nicho automáticamente'}
+                  {hashtagsCount > 6 ? ` (+${hashtagsCount - 6} de reserva)` : ''}
+                </li>
+                <li>~25 perfiles enriquecidos con datos reales: seguidores, ER de posts, señales de fraude</li>
+                <li>
+                  Análisis IA de los mejores con tu contexto de campaña
+                  {industryLabel ? ` · ${industryLabel}` : ''}
+                </li>
+              </ul>
             </div>
             {brief.additional_context && (
               <p className="text-xs text-muted-foreground italic border-t pt-2 mt-2">
