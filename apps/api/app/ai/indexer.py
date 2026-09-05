@@ -109,10 +109,16 @@ async def _insert_chunks(
     if not chunks:
         return 0
     inserted = 0
+    skipped = 0
     for i in range(0, len(chunks), EMBED_BATCH):
         batch = chunks[i:i + EMBED_BATCH]
         vectors = await embed_texts(batch)
         for j, (chunk_text_val, vec) in enumerate(zip(batch, vectors)):  # noqa: B905
+            # FIX R-2: un chunk sin embedding (fallo de fastembed) NO se
+            # inserta — antes el fallback [0.0]*384 creaba filas muertas.
+            if vec is None:
+                skipped += 1
+                continue
             chunk_idx = i + j
             await db.execute(
                 text("""
@@ -134,7 +140,9 @@ async def _insert_chunks(
                     "meta": {"content_type": content_type, **metadata},
                 },
             )
-        inserted += len(batch)
+            inserted += 1
+    if skipped:
+        logger.warning("indexing_partial", source_id=str(source_id), skipped_no_embedding=skipped)
     return inserted
 
 

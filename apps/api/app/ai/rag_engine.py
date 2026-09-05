@@ -140,19 +140,17 @@ async def generate_with_context(
 
     user_prompt = USER_PROMPT_TEMPLATE.format(context=context, query=query)
 
-    messages = [
-        {"role": "system", "content": PIAR_SYSTEM_PROMPT},
-    ]
-    if conversation_history:
-        for msg in conversation_history[-6:]:
-            messages.append({"role": msg["role"], "content": msg["content"]})
-    messages.append({"role": "user", "content": user_prompt})
-
+    # FIX R-1 (04-sep-2026): el historial de conversación ahora viaja REAL al
+    # LLM. Antes se construía un array `messages` con system + historial +
+    # prompt... y se tiraba a la basura: complete() recibía solo prompt y
+    # system, así que los follow-ups ("¿y el segundo mejor?", "compara con
+    # el anterior") perdían todo el contexto y el RAG era mono-turno.
     try:
         response = await deepseek_client.complete(
             prompt=user_prompt,
             system=PIAR_SYSTEM_PROMPT,
             max_tokens=800,
+            history=conversation_history,
         )
         answer = response.content
         tokens = response.tokens_used or 0

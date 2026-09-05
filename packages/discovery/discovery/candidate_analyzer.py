@@ -57,7 +57,9 @@ REGLAS POR CADA CAMPO:
 
 - summary: Frase breve en español explicando el reasoning (2-3 oraciones). Explica por qué scoring así.
 
-Responde SOLO con un JSON array válido, sin texto adicional.
+Responde SOLO con un objeto JSON válido con una única clave "scores" cuyo
+valor es un array. Sin texto adicional. (FIX D-6: response_format=json_object
+exige un objeto raíz — un array pelado puede ser rechazado por la API.)
 Cada elemento del array debe tener: handle, content_quality, audience_quality, brand_fit, summary."""
 
 
@@ -171,11 +173,11 @@ Evalúa usando el contexto elite de abajo si está disponible.{elite_section}
 PERFILES:
 {candidates_text}
 
-Responde con un JSON array, un objeto por cada handle en orden:
-[
+Responde con un objeto JSON con una única clave "scores", un objeto por cada handle en orden:
+{{"scores": [
   {{"handle": "handle1", "content_quality": 0-100, "audience_quality": 0-100, "brand_fit": 0-100, "summary": "razonamiento en español"}},
   ...
-]"""
+]}}"""
 
 
 def _parse_batch_response(content: str) -> list[dict[str, Any]]:

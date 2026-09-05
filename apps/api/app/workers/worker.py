@@ -1851,6 +1851,16 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         # Solo correr DeepSeek en modo Auto (enrichment completo) y Analizar
         # (handles enriquecidos por el run padre).
         analyze_with_ai = getattr(brief, "analyze_with_ai", True)
+        if analyze_with_ai and not is_explore_mode and not settings.ENABLE_AI_ANALYZER:
+            # FIX D-2 (04-sep-2026): el gate global está apagado por default y
+            # STEP 5 era un no-op silencioso — los candidatos salían sin
+            # content_quality/audience_quality/brand_fit sin que nadie en el
+            # equipo lo supiera. Ahora la causa queda explícita en el run.
+            logger.warning(
+                "ai_analyzer_globally_disabled",
+                run_id=run_id,
+                hint="Set ENABLE_AI_ANALYZER=true (~$0.10-0.30/run) para activar el análisis IA de candidatos",
+            )
         if analyze_with_ai and not is_explore_mode:
             print(f"[discovery_run_task] STEP 5: AI analysis with DeepSeek ({len(to_analyze)} candidates)", flush=True)
             tracker = get_discovery_cost_tracker()

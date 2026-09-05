@@ -35,10 +35,15 @@ async def embed_text(text: str) -> list[float]:
         raise
 
 
-async def embed_texts(texts: list[str]) -> list[list[float]]:
+async def embed_texts(texts: list[str]) -> list[list[float] | None]:
     """
     Embed multiple strings in a single batch request using fastembed.
-    Returns list of 384-dim vectors.
+    Returns list of 384-dim vectors, or None for strings that failed.
+
+    FIX R-2 (04-sep-2026): antes el fallback producía [0.0]*384 — vectores
+    cero insertados en document_chunks como filas muertas que contaban como
+    embebidas pero jamás matcheaban. Ahora el fallo se propaga como None y
+    el indexador salta ese chunk.
     """
     if not texts:
         return []
@@ -49,13 +54,14 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
         return [r.tolist() for r in results]
     except Exception as e:
         logger.warning("batch_embedding_failed", error=str(e))
-        results: list[list[float]] = []
+        results: list[list[float] | None] = []
         for text in texts:
             try:
                 vec = await embed_text(text)
                 results.append(vec)
             except Exception:
-                results.append([0.0] * 384)
+                logger.warning("embedding_failed_skipping_chunk", text_preview=text[:80])
+                results.append(None)
         return results
 
 

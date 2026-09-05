@@ -187,7 +187,12 @@ class BriefParserAgent:
             prompt=user_prompt,
             system=BRIEF_PARSER_SYSTEM_PROMPT,
             temperature=0.3,
-            max_tokens=300,
+            # FIX D-1 (04-sep-2026): max_tokens=300 truncaba el JSON de ~25
+            # campos → JSONDecodeError → el orquestador caía al brief
+            # heurístico en silencio, perdiendo hashtags/ciudades/tono del
+            # brief real. Un JSON fiel de este template necesita ~600-900
+            # tokens. Con truncation-retry en el cliente, 1200 da margen.
+            max_tokens=1200,
             response_format={"type": "json_object"},
         )
 
@@ -357,7 +362,8 @@ class BriefParserAgent:
             prompt=user_prompt,
             system=_DOCUMENT_PARSER_SYSTEM_PROMPT,
             temperature=0.2,
-            max_tokens=800,
+            # FIX D-1: 800 era apretado para ~25 campos desde documentos largos.
+            max_tokens=1500,
             response_format={"type": "json_object"},
         )
 
