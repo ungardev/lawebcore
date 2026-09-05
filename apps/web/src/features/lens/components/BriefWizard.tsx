@@ -298,7 +298,6 @@ export function BriefWizard({
   // 2 variantes geo por keyword, DISCOVERY_HASHTAG_TOP_LIMIT=6, RECENT=4,
   // MAX_HANDLES_TO_ENRICH=25.
   const nichesCount = brief.niches?.length ?? 0
-  const keywordsExecuted = Math.min(nichesCount, 6)
   const hashtagsCount = brief.hashtags?.length ?? 0
   const hashtagsTop = Math.min(hashtagsCount, 6)
   const hashtagsRecent = Math.min(hashtagsCount, 4)
@@ -406,10 +405,10 @@ export function BriefWizard({
             <div>
               <Label className="mb-1 block">Nichos de la campaña</Label>
               <p className="text-xs text-muted-foreground mb-3">
-                Cada nicho se convierte en búsquedas de cuentas reales de Instagram
-                («nicho», «nicho venezuela», «nicho vzla») y guía al generador de
-                hashtags con IA. Escríbelos en español — así nombran sus cuentas
-                los creadores venezolanos.
+                Tus nichos guían al generador IA: los convierte en cuentas y
+                hashtags venezolanos reales, y puntúan la afinidad de cada
+                candidato. En español — así nombran sus cuentas los creadores
+                de acá.
               </p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {(brief.niches ?? []).map((n) => (
@@ -428,11 +427,6 @@ export function BriefWizard({
                     </button>
                   </span>
                 ))}
-                {(brief.niches?.length ?? 0) > 0 && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-muted text-muted-foreground text-[10px] border border-border">
-                    ≈ {(brief.niches?.length ?? 0) * 3} búsquedas de cuentas
-                  </span>
-                )}
               </div>
               <div className="flex gap-2">
                 <Input
@@ -817,9 +811,13 @@ export function BriefWizard({
               </p>
               <ul className="text-[11px] text-muted-foreground space-y-1 list-disc pl-4">
                 <li>
-                  {keywordsExecuted} nichos → {keywordsExecuted * 3} búsquedas de cuentas
-                  («nicho», «nicho venezuela», «nicho vzla»)
-                  {nichesCount > 6 ? ` (+${nichesCount - 6} nichos de reserva)` : ''}
+                  {nichesCount > 0
+                    ? `${nichesCount} ${nichesCount === 1 ? 'nicho' : 'nichos'} → contexto del generador IA (cuentas y hashtags del nicho)`
+                    : 'Sin nichos: la IA usará solo la industria para generar cuentas y hashtags'}
+                </li>
+                <li>
+                  6 keywords generadas por IA → 18 búsquedas de cuentas
+                  («kw», «kw venezuela», «kw vzla»)
                 </li>
                 <li>
                   {hashtagsCount > 0
