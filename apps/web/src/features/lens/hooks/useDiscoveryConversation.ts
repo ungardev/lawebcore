@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { lensApi } from '../api/lensApi';
-import { useRunPolling } from './useRunPolling';
+import { CANDIDATE_RUN_STATUSES, useRunPolling } from './useRunPolling';
 import type { BriefStructured, ChatTurn, DiscoveryCandidate, DiscoveryConversation, DiscoveryMessage } from '../types/discovery';
 
 export function useDiscoveryConversation() {
@@ -12,6 +12,7 @@ export function useDiscoveryConversation() {
   const [pendingBrief, setPendingBrief] = useState<BriefStructured | null>(null);
   const [pollingRunId, setPollingRunId] = useState<string | null>(null);
   const { candidates: pollingCandidates, isPolling, progress: pollingProgress } = useRunPolling(pollingRunId);
+  const wasPollingRef = useRef(false);
 
   useEffect(() => {
     if (!pollingCandidates.length) return;
@@ -53,6 +54,19 @@ export function useDiscoveryConversation() {
     });
   }, [pollingProgress]);
 
+  // FIX B-FE-7 (04-sep-2026): cuando el polling termina SIN candidatos
+  // (empty / aborted_budget / failed / inconsistent), el worker dejó un
+  // mensaje asistente con la causa real — recargar el chat para mostrarlo
+  // en vez de dejar el spinner congelado.
+  useEffect(() => {
+    const wasPolling = wasPollingRef.current;
+    wasPollingRef.current = isPolling;
+    if (wasPolling && !isPolling && conversation && pollingCandidates.length === 0) {
+      loadConversation(conversation.id).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPolling, pollingCandidates.length, conversation]);
+
   const startConversation = useCallback(async (initialBrief?: string) => {
     if (isCreating) throw new Error('Conversation creation already in progress');
     setIsCreating(true);
@@ -73,6 +87,47 @@ export function useDiscoveryConversation() {
     }
   }, [isCreating]);
 
+  /**
+   * FIX UX wizard (04-sep-2026): el botón "Buscar candidatos" del BriefWizard
+   * promete un click, pero el flujo del orquestador exige un segundo turno
+   * afirmativo (START → parse → "¿correcto?" → BRIEF → lanzamiento). Esta
+   * función crea la conversación con el brief y envía la confirmación
+   * inmediatamente — UX de un click sin tocar el backend. Además ponia el
+   * run en polling y recarga los mensajes para mostrar ambos turnos.
+   */
+  const startWizardSearch = useCallback(async (brief: Partial<BriefStructured>) => {
+    if (isCreating) throw new Error('Conversation creation already in progress');
+    setIsCreating(true);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const briefJson = JSON.stringify(brief, null, 2);
+      const briefMessage = `Brief: ${briefJson}\n\nBuscar ahora.`;
+      const conv = await lensApi.conversations.create(briefMessage);
+      setConversation(conv);
+      setTurns([]);
+      setPendingBrief(null);
+
+      const result = await lensApi.conversations.sendMessage(
+        conv.id,
+        'Confirmo el brief. Buscar ahora.',
+      );
+      if (result.discovery_run_id) {
+        setPollingRunId(result.discovery_run_id);
+      }
+
+      await loadConversation(conv.id);
+      return conv;
+    } catch (e) {
+      setError((e as Error).message);
+      throw e;
+    } finally {
+      setIsLoading(false);
+      setIsCreating(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreating]);
+
   const loadConversation = useCallback(async (conversationId: string) => {
     setIsLoading(true);
     setError(null);
@@ -85,7 +140,11 @@ export function useDiscoveryConversation() {
       if (conv.discovery_run_id) {
         try {
           const run = await lensApi.search.getRun(conv.discovery_run_id);
-          if ((run.status as string) === 'completed' || (run.status as string) === 'partial' || (run.status as string) === 'explored') {
+          // FIX B-FE-7: los estados que el backend realmente emite con
+          // candidatos son 'delivered'/'degraded' (antes: completed/partial/
+          // explored — legacy que jamás llegó, por eso recargar la página
+          // tampoco mostraba candidatos).
+          if (CANDIDATE_RUN_STATUSES.includes(run.status)) {
             candidates = await lensApi.search.getCandidates(conv.discovery_run_id, { limit: 20 });
           }
         } catch {
@@ -235,6 +294,7 @@ export function useDiscoveryConversation() {
     pendingBrief,
     setPendingBrief: updatePendingBrief,
     startConversation,
+    startWizardSearch,
     loadConversation,
     sendMessage,
     confirmBrief,

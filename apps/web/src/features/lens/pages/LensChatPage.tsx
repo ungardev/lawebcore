@@ -37,6 +37,7 @@ export function LensChatPage() {
     error,
     pendingBrief,
     startConversation,
+    startWizardSearch,
     loadConversation,
     sendMessage,
     confirmBrief,
@@ -87,10 +88,11 @@ export function LensChatPage() {
     setWizardLoading(true);
     resetConversation();
     try {
-      const briefJson = JSON.stringify(brief, null, 2);
-      const briefMessage = `Brief: ${briefJson}\n\nBuscar ahora.`;
-
-      const newConversation = await startConversation(briefMessage);
+      // FIX UX (04-sep-2026): startWizardSearch crea la conversación, envía la
+      // confirmación del brief automáticamente, pone el run en polling y
+      // recarga los mensajes. Antes el wizard exigía confirmar de nuevo
+      // escribiendo "sí" en el chat, y el polling nunca mostraba candidatos.
+      const newConversation = await startWizardSearch(brief);
       queryClient.setQueryData<DiscoveryConversation[]>(['lens-conversations'], (old) =>
         [newConversation, ...(Array.isArray(old) ? old : [])],
       );

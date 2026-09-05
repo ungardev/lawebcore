@@ -101,11 +101,16 @@ const VENEZUELA_STATES = [
   { value: 'Delta Amacuro', label: 'Delta Amacuro' },
 ]
 
-const PLATFORMS: { value: Platform; label: string; icon: ReactNode }[] = [
-  { value: 'instagram', label: 'Instagram', icon: <Camera className="h-6 w-6" /> },
-  { value: 'tiktok', label: 'TikTok', icon: <Music2 className="h-6 w-6" /> },
-  { value: 'youtube', label: 'YouTube', icon: <PlayCircle className="h-6 w-6" /> },
+// FIX honestidad (04-sep-2026): el pipeline de discovery solo cubre Instagram
+// (HikerAPI). TikTok/YouTube aparecían seleccionables pero el run los ignoraba
+// silenciosamente. Deshabilitados con badge hasta que haya pipeline propio.
+const PLATFORMS: { value: Platform; label: string; icon: ReactNode; available?: boolean }[] = [
+  { value: 'instagram', label: 'Instagram', icon: <Camera className="h-6 w-6" />, available: true },
+  { value: 'tiktok', label: 'TikTok', icon: <Music2 className="h-6 w-6" />, available: false },
+  { value: 'youtube', label: 'YouTube', icon: <PlayCircle className="h-6 w-6" />, available: false },
 ]
+
+const AVAILABLE_PLATFORM_VALUES = PLATFORMS.filter((p) => p.available).map((p) => p.value)
 
 const TONES = [
   { value: 'emocional', label: 'Emocional' },
@@ -216,6 +221,9 @@ export function BriefWizard({
   }
 
   const handleSubmit = () => {
+    const availablePlatforms = (brief.platforms ?? []).filter((p) =>
+      AVAILABLE_PLATFORM_VALUES.includes(p),
+    )
     onSubmit({
       ...brief,
       ...(extractedBrief
@@ -232,7 +240,7 @@ export function BriefWizard({
             source_document: extractedBrief.source_document,
           }
         : {}),
-      platforms: (brief.platforms?.length ?? 0) > 0 ? brief.platforms : ['instagram'],
+      platforms: availablePlatforms.length > 0 ? availablePlatforms : ['instagram'],
     })
   }
 
@@ -257,6 +265,8 @@ export function BriefWizard({
   }
 
   const togglePlatform = (platform: Platform) => {
+    const config = PLATFORMS.find((p) => p.value === platform)
+    if (!config?.available) return
     const current = brief.platforms ?? []
     if (current.includes(platform)) {
       update({ platforms: current.filter((p) => p !== platform) })
@@ -585,22 +595,32 @@ export function BriefWizard({
             <div>
               <Label className="mb-2 block">Plataformas</Label>
               <div className="flex gap-3">
-                {PLATFORMS.map((p) => (
-                  <button
-                    key={p.value}
-                    type="button"
-                    onClick={() => togglePlatform(p.value)}
-                    className={cn(
-                      'flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border text-sm font-medium transition-colors',
-                      brief.platforms?.includes(p.value)
-                        ? 'border-brand-purple bg-brand-purple/5 text-brand-purple'
-                        : 'border-border hover:bg-muted',
-                    )}
-                  >
-                    {p.icon}
-                    <span className="text-xs mt-1">{p.label}</span>
-                  </button>
-                ))}
+                {PLATFORMS.map((p) => {
+                  const available = p.available ?? true
+                  return (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => togglePlatform(p.value)}
+                      disabled={!available}
+                      className={cn(
+                        'relative flex-1 flex flex-col items-center gap-2 py-4 rounded-xl border text-sm font-medium transition-colors',
+                        !available && 'cursor-not-allowed opacity-50',
+                        available && brief.platforms?.includes(p.value)
+                          ? 'border-brand-purple bg-brand-purple/5 text-brand-purple'
+                          : 'border-border hover:bg-muted',
+                      )}
+                    >
+                      {p.icon}
+                      <span className="text-xs mt-1">{p.label}</span>
+                      {!available && (
+                        <span className="absolute top-1.5 right-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Próximamente
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
             <div>
