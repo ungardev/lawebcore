@@ -160,7 +160,7 @@ Responde SOLO con JSON válido, sin texto adicional:
   "budget_usd": número o null,
   "budget_currency": "USD|EUR|COP|MXN|null",
   "kpis": ["kpi1", "kpi2"],
-  "campaign_dates": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} },
+  "campaign_dates": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}},
   "key_themes": ["tema1", "tema2"],
   "competitor_brands": ["competidor1"],
   "influencer_preferences": {{"tiers": ["MICRO", "MID"], "min_er": 0.04}},

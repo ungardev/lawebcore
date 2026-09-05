@@ -54,6 +54,10 @@ def test_enrichment_merge_reads_only_normalizer_output_keys():
 
     known_extra_keys = {
         "about",  # se procesa fuera del merge (about_data = e.get("about"))
+        # FIX N-3 (04-sep-2026): latestPosts NO viene del normalizador — lo
+        # agrega _enrich_one vía get_user_medias (/gql/user/medias) antes del
+        # merge. El scoring calcula ER real desde esta clave.
+        "latestPosts",
     }
     invalid = read_keys - valid_keys - known_extra_keys
     assert not invalid, (

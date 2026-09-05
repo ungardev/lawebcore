@@ -418,12 +418,29 @@ def _validate_elite_data(raw: dict[str, Any], brief: BriefStructured, country_co
 
 
 def _validate_niche_benchmarks(raw: Any, fallback: dict[str, Any]) -> dict[str, Any]:
+    """Valida y normaliza los benchmarks de nicho que produce el LLM.
+
+    B-NEW-3 (04-sep-2026): el LLM puede devolver los números como strings
+    ("5000") o floats. Un tipo incorrecto revienta el prefilter del worker
+    (`TypeError: '<' not supported between instances of 'int' and 'str'` en
+    `followers < min_followers`) y tumba el run completo. Nunca confiar en
+    el tipo que manda el LLM: coercionar o conservar el fallback.
+    """
     if not isinstance(raw, dict) or not raw:
         return fallback
     result = dict(fallback)
-    for key in ["min_followers", "min_er", "target_er", "max_fake_ratio", "min_posts"]:
+    for key in ("min_followers", "min_posts"):
         if key in raw and raw[key] is not None:
-            result[key] = raw[key]
+            try:
+                result[key] = int(float(raw[key]))
+            except (TypeError, ValueError):
+                pass
+    for key in ("min_er", "target_er", "max_fake_ratio"):
+        if key in raw and raw[key] is not None:
+            try:
+                result[key] = float(raw[key])
+            except (TypeError, ValueError):
+                pass
     if "ideal_follower_range" in raw and raw["ideal_follower_range"]:
         result["ideal_follower_range"] = str(raw["ideal_follower_range"])
     return result

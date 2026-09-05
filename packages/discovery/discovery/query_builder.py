@@ -32,7 +32,7 @@ VE_NICHE_HASHTAGS: dict[str, list[str]] = {
         "comidavzla", "foodve", "comidavenezolana", "arepavzla",
         "foodcaracas", "comidacaracas", "gastronomiavzla",
         "foodiesvzla", "foodpornvzla", "cocinavzla",
-        "recetasvzla", "cocina Latina", "comidastipicasvzla",
+        "recetasvzla", "cocinalatina", "comidastipicasvzla",
     ],
     "fitness": [
         "fitnessvzla", "gymvzla", "gymcaracas", "fitnesscaracas",
@@ -67,7 +67,7 @@ VE_NICHE_HASHTAGS: dict[str, list[str]] = {
         "negocioslatinos", "finanzaslatinas", "inversionvzla",
     ],
     "hogar": [
-        "hogartzla", "decoracionvzla", "interiorismovzla",
+        "hogarvzla", "decoracionvzla", "interiorismovzla",
         "casavzla", "hogarcaracas", "decoracioncaracas",
     ],
     "deportes": [

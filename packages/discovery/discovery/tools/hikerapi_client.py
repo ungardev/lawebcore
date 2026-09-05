@@ -120,46 +120,49 @@ class HikerAPIClient:
         Un run abortado antes de gastar cuesta $0; uno que muere a mitad del
         enrichment cuesta el descubrimiento completo (~$0.64) y produce cero.
 
-        HITO 25 FIX: Cuando el saldo es $0, HikerAPI retorna
-        `{state: false, error: "...", exc_type: "InsufficientFunds"}` SIN
-        campo `balance`. El parser original buscaba `balance`, no lo encontraba,
-        retornaba None, y el pre-flight se omitía silenciosamente.
-        Ahora detecta `state: false` y retorna 0.0 para activar el abort.
+        FIX N-1 (04-sep-2026): el método probaba /v1/account, /v1/user/balance
+        y /account — paths que NO existen en el OpenAPI spec de HikerAPI
+        (https://api.hikerapi.com/openapi.json). El único endpoint real es
+        GET /sys/balance, es gratis ("free, not billed") y retorna
+        {requests, rate, currency, amount}. Como los 3 paths viejos devolvían
+        404, get_balance() siempre retornaba None y el pre-flight se omitía
+        silenciosamente: un run con saldo $0 quemaba el discovery completo
+        antes de morir con 402 en enrichment.
+
+        `amount` es el dinero restante (USD); `requests` es la cuota restante.
+        El pre-flight del worker compara contra un costo estimado en USD,
+        así que retornamos `amount`.
         """
-        for path in ("/v1/account", "/v1/user/balance", "/account"):
-            try:
-                client = await self._get_client()
-                resp = await client.get(path)
-                if resp.status_code != 200:
-                    continue
-                data = resp.json()
-
-                # HITO 25 FIX: detectar respuesta de saldo insuficiente.
-                # HikerAPI retorna {state: false, exc_type: "InsufficientFunds"}
-                # cuando el balance es 0, SIN campo balance/credit/amount.
-                if data.get("state") is False:
-                    logger.warning(
-                        "hikerapi_balance_insufficient",
-                        path=path,
-                        exc_type=data.get("exc_type"),
-                        error=data.get("error"),
-                    )
-                    return 0.0  # Saldo confirmado insuficiente → activa pre-flight abort
-
-                for key in ("balance", "balance_usd", "credits_usd", "amount"):
-                    if key in data:
-                        return float(data[key])
-
-                # state:true pero sin campo de balance conocido
+        try:
+            client = await self._get_client()
+            resp = await client.get("/sys/balance")
+            if resp.status_code != 200:
+                logger.warning(
+                    "hikerapi_balance_unavailable",
+                    status=resp.status_code,
+                    hint="pre-flight omitido",
+                )
+                return None
+            data = resp.json()
+            amount = data.get("amount")
+            if amount is None:
                 logger.warning(
                     "hikerapi_balance_response_unrecognized",
-                    path=path,
-                    data_keys=list(data.keys()),
+                    path="/sys/balance",
+                    data_keys=list(data.keys()) if isinstance(data, dict) else None,
                 )
-            except Exception:
-                continue
-        logger.info("hikerapi_balance_unavailable", hint="pre-flight omitido")
-        return None
+                return None
+            balance = float(amount)
+            if balance <= 0:
+                logger.warning(
+                    "hikerapi_balance_insufficient",
+                    amount=balance,
+                    requests_left=data.get("requests"),
+                )
+            return balance
+        except Exception as e:
+            logger.warning("hikerapi_balance_error", error=str(e), hint="pre-flight omitido")
+            return None
 
     async def close(self) -> None:
         if self._client:
@@ -554,6 +557,124 @@ class HikerAPIClient:
         normalized = self._normalize_user(user)
         logger.info("hikerapi_profile_enriched", username=clean, followers=normalized.get("follower_count"))
         return normalized
+
+    async def get_user_medias(
+        self,
+        user_id: int | str,
+        count: int = 12,
+    ) -> list[dict[str, Any]]:
+        """GET /gql/user/medias — posts recientes del usuario (ER real).
+
+        FIX N-3 (04-sep-2026): /v2/user/by/username NO devuelve posts
+        (`latestPosts` tiene 0 ocurrencias en el OpenAPI spec). Sin posts no
+        hay engagement_rate real y el 38.9% del Lens Score
+        (tier_normalized_er) queda en 0 para todos los candidatos, además de
+        desactivar el filtro anti-bot de ER y dejar avg_likes/avg_comments
+        en NULL.
+
+        Este endpoint existe en el spec, cuesta 1 request y trae los posts
+        con sus contadores de engagement. Normalizamos cada post a la forma
+        {pk, likesCount, commentsCount, taken_at} que consume worker.py
+        (worker calcula ER como (likes_avg + comments_avg) / followers).
+        """
+        clean_id = str(user_id)
+        resp = await self._get(
+            "/gql/user/medias",
+            params={"user_id": clean_id, "safe_int": self.SAFE_INT},
+            cache_ttl=CACHE_TTL_PROFILE,
+        )
+        raw_posts = self._extract_posts(resp or {})
+        posts: list[dict[str, Any]] = []
+        for post in raw_posts[:count]:
+            likes, comments = self._post_engagement(post)
+            posts.append({
+                "pk": post.get("pk") or post.get("id"),
+                "likesCount": likes,
+                "commentsCount": comments,
+                "taken_at": post.get("taken_at"),
+            })
+        logger.info(
+            "hikerapi_user_medias_done",
+            user_id=clean_id,
+            posts=len(posts),
+            with_likes=sum(1 for p in posts if p["likesCount"] > 0),
+        )
+        return posts
+
+    def _extract_posts(self, resp: dict) -> list[dict]:
+        """Extrae la lista de posts de /gql/user/medias, type-agnostic.
+
+        El endpoint GraphQL puede envolver los medias en varias estructuras
+        según la versión del upstream:
+
+          - data.user.edge_owner_to_timeline_media.edges[*].node
+          - user.edge_owner_to_timeline_media.edges[*].node   (sin data)
+          - items[*] / medias[*]                              (flat)
+
+        Nunca confiar en una sola forma: se devuelve [] ante cualquier
+        estructura desconocida y el run continúa con ER=NULL (no crash).
+        """
+        if not isinstance(resp, dict):
+            return []
+        data = resp.get("data") if isinstance(resp.get("data"), dict) else resp
+        if not isinstance(data, dict):
+            return []
+
+        user = data.get("user")
+        if isinstance(user, dict):
+            for timeline_key in (
+                "edge_owner_to_timeline_media",
+                "edge_felix_video_timeline",
+            ):
+                timeline = user.get(timeline_key)
+                if isinstance(timeline, dict):
+                    edges = timeline.get("edges")
+                    if isinstance(edges, list):
+                        nodes = [
+                            e.get("node")
+                            for e in edges
+                            if isinstance(e, dict) and isinstance(e.get("node"), dict)
+                        ]
+                        if nodes:
+                            return nodes
+
+        for key in ("items", "medias", "media_items"):
+            val = data.get(key)
+            if isinstance(val, list):
+                flat = [v for v in val if isinstance(v, dict)]
+                if flat:
+                    return flat
+        return []
+
+    def _post_engagement(self, post: dict) -> tuple[int, int]:
+        """(likes, comments) de un post, type-agnostic sobre el contrato.
+
+        Formas observadas o plausibles en el payload de IG/HikerAPI:
+
+          - like_count / comment_count          (REST v2, safe_int)
+          - edge_liked_by.count                 (GraphQL)
+          - edge_media_preview_like.count       (GraphQL)
+          - edge_media_to_comment.count         (GraphQL)
+
+        Ante cualquier otra forma retorna (0, 0) — el post se ignora en el
+        promedio en lugar de tumbar el enrichment.
+        """
+        def _edge_count(*keys: str) -> int:
+            for key in keys:
+                node = post.get(key)
+                if isinstance(node, dict):
+                    val = node.get("count")
+                    if isinstance(val, (int, float)):
+                        return int(val)
+            return 0
+
+        likes = post.get("like_count")
+        if not isinstance(likes, (int, float)):
+            likes = _edge_count("edge_liked_by", "edge_media_preview_like")
+        comments = post.get("comment_count")
+        if not isinstance(comments, (int, float)):
+            comments = _edge_count("edge_media_to_comment")
+        return int(likes or 0), int(comments or 0)
 
     async def search_top_accounts(
         self,

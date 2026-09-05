@@ -73,6 +73,11 @@ MAX_REELS_PER_QUERY = 3
 MAX_FOLLOWER_EXPANSION_PER_SEED = 5
 
 ENRICHMENT_INCLUDE_ABOUT = os.getenv("HIKERAPI_INCLUDE_ABOUT", "false").lower() == "true"
+# FIX N-3 (04-sep-2026): /v2/user/by/username no devuelve posts — sin este
+# fetch el ER real de todos los candidatos es NULL y el 38.9% del Lens Score
+# queda en 0. Cuesta 1 request por perfil enriquecido (~$0.25/run a 25
+# perfiles). Apagable sin deploy vía HIKERAPI_FETCH_MEDIAS=false.
+ENRICHMENT_FETCH_MEDIAS = os.getenv("HIKERAPI_FETCH_MEDIAS", "true").lower() == "true"
 
 DEFAULT_COMMERCE_SIGNAL_KEYWORDS = [
     ["tienda", "shop"],
@@ -124,6 +129,19 @@ def _tier_of(followers: int) -> str:
     if followers < 500_000:
         return "MID"
     return "MACRO"
+
+
+def _min_match_score_for_mode(is_explore_mode: bool) -> int:
+    """Umbral de match_score según modo de discovery.
+
+    FIX N-2 (04-sep-2026): en modo Explorar el umbral es 0. Sin enrichment,
+    los perfiles llegan con followers=0 y la mayoría sin bio (son UserShort
+    de hashtags/reels), así que rough score = 0 y el umbral de 5 los
+    eliminaba a TODOS — el modo entregaba 0 candidatos siempre. La regla de
+    oro es "mostrar candidatos > rechazar candidatos": en Explorar el
+    analista decide, el pipeline no filtra por score.
+    """
+    return 0 if is_explore_mode else 5
 
 
 def _rerank_diversified(scored: list[dict], target_n: int = 80) -> list[dict]:
@@ -1154,6 +1172,20 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         # si la respuesta vino de caché.
                         async with hikerapi_enrich_semaphore:
                             profile = await instagram_source.enrich_profile(handle)
+                            if (
+                                profile
+                                and profile.get("pk")
+                                and ENRICHMENT_FETCH_MEDIAS
+                                and hasattr(instagram_source, "get_user_medias")
+                            ):
+                                try:
+                                    posts = await instagram_source.get_user_medias(profile["pk"])
+                                    if posts:
+                                        profile["latestPosts"] = posts
+                                except SourceUnavailable:
+                                    raise
+                                except Exception as e:
+                                    logger.warning("hikerapi_user_medias_error", handle=handle, error=str(e))
                         if profile and profile.get("pk") and ENRICHMENT_INCLUDE_ABOUT and hasattr(instagram_source, "get_user_about"):
                             try:
                                 about_data = await instagram_source.get_user_about(profile["pk"])
@@ -1257,6 +1289,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "country": e.get("country", ""),
                 "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
                 "location": e.get("location_name", profiles[handle].get("location", "")),
+                # FIX N-3: posts normalizados por get_user_medias — el scoring
+                # calcula ER real desde aquí ((likes+comments)/followers).
+                "latestPosts": e.get("latestPosts") or profiles[handle].get("latestPosts") or [],
             })
             if about_data:
                 profiles[handle]["about"] = about_data
@@ -1267,14 +1302,26 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 follower_count=profiles[handle].get("follower_count"),
                 has_about=bool(about_data),
                 country=profiles[handle].get("country") or None,
+                posts_fetched=len(e.get("latestPosts") or []),
             )
 
+        # FIX N-4 (04-sep-2026): contabilidad de funnel sin dobles conteos.
+        # `enrichment_targets` es el conjunto de handles que el run intentó
+        # enriquecer (prefilter en auto/explore, selección del analista en
+        # analyze). Todo handle fuera de este conjunto ya quedó contabilizado
+        # como drop de prefilter (ver bloque tras la exclusión de brand
+        # safety), y NO debe volver a contarse ni en el loop de scoring ni
+        # aquí como ENRICHMENT_FAILED — ese doble conteo era la razón por la
+        # que la invariante `deduped == delivered + drops` nunca cuadraba.
+        enrichment_targets = set(handles_to_enrich)
         for handle in list(profiles):
             if handle in enriched_handles:
+                profiles[handle]["_enriched"] = True
                 continue
-            logger.warning("enrichment_missing", handle=handle, stage="step3_merge")
-            drop_profile(handle, DropReason.ENRICHMENT_FAILED, "step3_merge", ledger=drop_ledger)
             profiles[handle]["_enriched"] = False
+            if handle in enrichment_targets and not is_explore_mode:
+                logger.warning("enrichment_missing", handle=handle, stage="step3_merge")
+                drop_profile(handle, DropReason.ENRICHMENT_FAILED, "step3_merge", ledger=drop_ledger)
 
         logger.info(
             "step3_enrichment_done",
@@ -1323,6 +1370,22 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             profiles = {k: v for k, v in profiles.items() if k.lower() not in exclude_handles}
             print(f"[discovery_run_task] STEP 4: Excluded {excluded_count} handles via brand safety, scoring {len(profiles)} remaining", flush=True)
 
+        # FIX N-4: los handles que el prefilter no seleccionó para enrichment
+        # (o que el analista no eligió en modo analyze) quedan contabilizados
+        # aquí, UNA sola vez, con la razón honesta. Antes estos handles no se
+        # registraban en el drop ledger y además eran re-dropeados en el loop
+        # de scoring como MISSING_FOLLOWER_FIELD — doble conteo que rompía la
+        # invariante `deduped == delivered + drops` en todos los runs.
+        for handle in list(profiles.keys()):
+            if handle not in enrichment_targets:
+                drop_profile(
+                    handle,
+                    DropReason.SCORE_BELOW_THRESHOLD,
+                    "prefilter",
+                    {"reason": "not_selected_for_enrichment"},
+                    ledger=drop_ledger,
+                )
+
         _cross_ref_handles = step1_handles & step2_handles
         hashtag_appearances: dict[str, int] = {}
         for h in step1_handles:
@@ -1350,6 +1413,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
+            # FIX N-4: los no seleccionados por el prefilter ya fueron
+            # contabilizados como drop ("prefilter"). Si entraran aquí,
+            # followers=0 dispararía un segundo drop (MISSING_FOLLOWER_FIELD)
+            # y la invariante del funnel dejaría de cuadrar.
+            if handle not in enrichment_targets:
+                continue
             followers = p.get("follower_count") if "follower_count" in p else p.get("followersCount")
             if followers is None:
                 followers = 0
@@ -1714,12 +1783,32 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             top_5=top_5_summary,
         )
 
-        min_match_score = 5
+        # FIX N-2: en modo Explorar el umbral es 0 (mostrar > rechazar).
+        min_match_score = _min_match_score_for_mode(is_explore_mode)
         exclude_stores = getattr(brief, "exclude_stores", True)
 
         passed_score = [c for c in scored if (c.get("match_score") or 0) >= min_match_score]
+        # FIX N-4: cada salida del funnel queda registrada una sola vez.
+        for c in scored:
+            if (c.get("match_score") or 0) < min_match_score:
+                drop_profile(
+                    c.get("handle", ""),
+                    DropReason.SCORE_BELOW_THRESHOLD,
+                    "score_filter",
+                    {"match_score": c.get("match_score"), "min": min_match_score},
+                    ledger=drop_ledger,
+                )
         passed_store = [c for c in passed_score if not c.get("is_tienda")]
         qualified = [c for c in passed_score if (not exclude_stores or not c.get("is_tienda"))]
+        if exclude_stores:
+            for c in passed_score:
+                if c.get("is_tienda"):
+                    drop_profile(
+                        c.get("handle", ""),
+                        DropReason.EXCLUDED_STORE,
+                        "store_filter",
+                        ledger=drop_ledger,
+                    )
         # Capturado aquí porque `qualified` se reasigna tras el análisis IA.
         stores_excluded_count = len(passed_score) - len(qualified)
 
@@ -1738,6 +1827,20 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         target_n = 80
         to_analyze = _rerank_diversified(qualified, target_n)
+        # FIX N-4: el corte de diversificación top-N también es una salida del
+        # funnel — sin este registro, candidatos que pasaron todos los filtros
+        # desaparecían sin dejar rastro en el drop ledger.
+        if len(qualified) > len(to_analyze):
+            rerank_selected = {c.get("handle") for c in to_analyze}
+            for c in qualified:
+                if c.get("handle") not in rerank_selected:
+                    drop_profile(
+                        c.get("handle", ""),
+                        DropReason.SCORE_BELOW_THRESHOLD,
+                        "rerank_cutoff",
+                        {"reason": "outside_top_n", "target_n": target_n},
+                        ledger=drop_ledger,
+                    )
 
         # HITO 28 — FIX B: No DeepSeek en modo Explorar.
         # En Explorar no hay enrichment → followers=0, bio vacía.
