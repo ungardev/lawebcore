@@ -111,7 +111,7 @@ Brief → STEP 0 (Location Bootstrap) [GATED: HIKERAPI_STEP0_LOCATION=false]
 |----|----------|-------------|---------------|--------|-----|
 | **B-E-2** | 🔴 CRÍTICA | `latestPosts` nunca se fetch — ER real = 0 para todos | `hikerapi_client.py` | ✅ **FIXED (N-3, 04-sep)** — `get_user_medias()` vía `/gql/user/medias` |
 | **B-E-1** | 🔴 CRÍTICA | Normalizador pierde `is_business`/`is_verified` (camelCase → snake_case) | `hikerapi_client.py:846-860` | PENDIENTE | Agregar campos al normalizador |
-| **B-FE-7** | 🔴 CRÍTICA | `RunStatus` no tiene `EXPLORED` — polling infinito en estado terminal | `worker_enqueuer.py:1862-1868` | PENDIENTE | Agregar EXPLORED o filtrar en UI |
+| **B-FE-7** | 🔴 CRÍTICA | `RunStatus` no tiene `EXPLORED` — polling infinito en estado terminal | `worker_enqueuer.py:1862-1868` | ✅ **FIXED (04-sep, FE)** — hooks alineados a `RunStatus` real + test de contrato |
 | **B-NEW-1** | 🔴 CRÍTICA | `}` en template `.format()` — crash 100% en parse_from_document | `brief_parser.py:163` | ✅ **FIXED (04-sep)** — `} }` → `}}` |
 | **B-NEW-2** | 🔴 CRÍTICA | `elite_data` column missing → DB persist broken 100% | `profile_generator.py:543,294-307` | PENDIENTE | Agregar columna + normalizar |
 | **B-NEW-3** | 🔴 CRÍTICA | benchmarks LLM sin type coercion + fuera de try block | `profile_generator.py:420` | ✅ **FIXED (04-sep)** — coerción int/float |

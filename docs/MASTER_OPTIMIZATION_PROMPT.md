@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-04 (tarde) — Auditoría contra OpenAPI spec v1.8.1: N-1..N-4 fixed (pre-flight `/sys/balance`, Explorar entrega, ER real vía `/gql/user/medias`, funnel sin dobles conteos). Ver `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md`
+> **Última actualización docs:** 2026-09-04 (tarde) — Backend N-1..N-4 fixed (OpenAPI spec) + Frontend B-FE-7/B-FE-15 fixed (paridad de estados, wizard de un click). Ver `docs/FIXES_HIKERAPI_CONTRACT_PRE_E2E_04-09-26.md` + `docs/FIXES_FRONTEND_STATUS_PARITY_BFE7_04-09-26.md`
 
 ---
 
@@ -699,7 +699,7 @@ El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles.
 | # | Prioridad | Bug | Archivo:Línea | Estado |
 |---|-----------|-----|---------------|--------|
 | **B-E-1** | 🔴 CRÍTICA→REVISAR | Normalizador `is_business`/`is_verified` | `hikerapi_client.py:876-911` | Verificación OpenAPI: el normalizador YA lee snake_case correcto (`is_business`, `is_verified` existen en spec). Re-auditar claim |
-| **B-FE-7** | 🔴 CRÍTICA | Polling infinito para estados terminales | `useRunPolling.ts` | PENDIENTE (frontend — enum RunStatus tiene 8 estados) |
+| **B-FE-7/15** | 🔴→✅ FIXED | Polling infinito — FE esperaba estados legacy | `useRunPolling.ts` + `useDiscoveryConversation.ts` | FIXED 04-sep: `TERMINAL_RUN_STATUSES`/`CANDIDATE_RUN_STATUSES` alineados a `RunStatus` + test de contrato en CI + wizard de un click (`startWizardSearch`) |
 | **B-NEW-4** | 🔴 CRÍTICA | Key HikerAPI expuesta en historia git | 3 commits atrás | REMEDIACIÓN PARCIAL (HEAD limpio); rotación pendiente por Ungar |
 | **N-5** | 🟡 P1 | Cuota real ≠ llamadas contabilizadas | Enrichment cuesta 2 requests/llamada según spec; BudgetFuse cuenta llamadas | DOCUMENTADO — pendiente conteo por endpoint |
 | **min_followers** | 🟡 DECISIÓN | Nanos 1K-5K fuera por default | `query_builder.py` tier "micro" → 5000 | CONFIRMADO filtro duro. Requiere decisión de producto (metodología LWFA dice nanos = 80-85% views) |
@@ -707,10 +707,11 @@ El E2E del 03-sep-2026 (run `10a59ecf`) produjo **0 candidatos** de 188 handles.
 
 ### Plan de validación (siguiente paso):
 
-1. **E2E EXPLORAR** (~$0.24) — debe entregar perfiles prefiltrados con rough scores
-2. **E2E AUTO** (~$1.45) — ER real, bot filter activo, funnel cuadrado, status honesto
+1. **Deploy Railway** (backend + frontend) — ambos batches pendientes de desplegar
+2. **E2E vía UI** (mascotas/VE): wizard → un click → progreso → candidatos visibles (~$1.45)
+   - Alternativa script: E2E EXPLORAR (~$0.24) primero, luego AUTO
 3. Logs a verificar: `preflight_balance_ok` (nuevo), `hikerapi_user_medias_done` (nuevo), `posts_fetched>0` en `enrichment_merged`, `funnel_invariant_check funnel_ok=True`, `no_engagement_data=0`
-4. Si ambos pasan → Fable 5.1 retoma TIER 2/3 con el pipeline demostradamente funcional
+4. Si pasa → Fable 5.1 retoma TIER 2/3 con el pipeline demostradamente funcional de punta a punta
 
 ---
 
