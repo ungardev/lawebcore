@@ -309,7 +309,19 @@ class HikerAPIClient:
                 )
             if response.status_code == 404:
                 return None
-            if response.status_code in (401, 402, 403):
+            if response.status_code == 403:
+                # FIX 07-sep-2026 (run 4c3c6cc8): un 403 es PER-RECURSO
+                # ("PrivateAccount" — el usuario es privado en IG), no "fuente
+                # caída". Antes se lanzaba SourceUnavailable → TODO el run
+                # moría por UNA cuenta privada entre 25. Ahora: log + None →
+                # el caller saltea este recurso y continúa con el resto.
+                logger.warning(
+                    "hikerapi_forbidden_skipping",
+                    path=path,
+                    response_body=response.text[:200],
+                )
+                return None
+            if response.status_code in (401, 402):
                 logger.error(
                     "hikerapi_auth_error",
                     path=path,
