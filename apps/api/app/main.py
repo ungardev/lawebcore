@@ -39,14 +39,56 @@ logger = structlog.get_logger(__name__)
 import multiprocessing  # noqa: E402
 
 
+async def arq_worker_supervised() -> None:
+    """Corre el worker arq reintentando ante blips de conexión de Redis.
+
+    FIX 04-sep-2026: el loop de polling de arq NO captura ConnectionError —
+    un "Connection reset by peer" del proxy Redis de Railway mató el proceso
+    arq-worker completo. Como la API sigue sirviendo /health → 200, Railway
+    nunca reinicia el contenedor y los discovery runs quedaban enqueued para
+    siempre con cero workers vivos. Este supervisor relanza run_worker con
+    backoff (5s→60s) ante errores transitorios de conexión; un error fatal
+    de código sí aborta.
+    """
+    import asyncio
+
+    import redis.exceptions
+
+    from app.workers.worker import WorkerSettings
+
+    attempt = 0
+    while True:
+        attempt += 1
+        try:
+            from arq.worker import run_worker
+
+            await run_worker(WorkerSettings)
+            logger.info("arq_worker_exited_cleanly")
+            return
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+            ConnectionError,
+            OSError,
+        ) as e:
+            wait = min(60, 5 * attempt)
+            logger.warning(
+                "arq_worker_connection_blip_restarting",
+                attempt=attempt,
+                wait_s=wait,
+                error=str(e),
+            )
+            await asyncio.sleep(wait)
+        except Exception:
+            logger.exception("arq_worker_fatal_error")
+            raise
+
+
 def _arq_worker_entry():
     """Entry point for the ARQ worker process."""
     import asyncio
 
-    from arq.worker import run_worker
-
-    from app.workers.worker import WorkerSettings
-    asyncio.run(run_worker(WorkerSettings))
+    asyncio.run(arq_worker_supervised())
 
 
 @asynccontextmanager

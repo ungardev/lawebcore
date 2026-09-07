@@ -2494,15 +2494,23 @@ async def sync_metricool_task(ctx, channel: str = "instagram") -> dict:
 
 
 async def scheduled_reports_cron(ctx) -> None:
-    """Run scheduled reports daily at 9 AM."""
-    logger.info("scheduled_reports_cron_running")
+    """Run scheduled reports daily at 9 AM.
 
-    runs = await railway_pg.select(
-        table="scheduled_reports",
-        select="id,name,query_config,delivery_channels",
-        filters=["is_active=eq.true"],
-        limit=50,
-    )
+    FIX 04-sep-2026: la función es un stub (solo loguea) — un fallo en el
+    select no debe propagarse al health del worker (antes marcaba
+    j_failed=1 todos los días).
+    """
+    logger.info("scheduled_reports_cron_running")
+    try:
+        runs = await railway_pg.select(
+            table="scheduled_reports",
+            select="id,name,query_config,delivery_channels",
+            filters=["is_active=eq.true"],
+            limit=50,
+        )
+    except Exception as e:
+        logger.warning("scheduled_reports_cron_select_failed", error=str(e))
+        return
 
     for run in runs:
         try:

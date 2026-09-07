@@ -10,14 +10,13 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 import asyncpg
 
 from shared_core.config import settings
-
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +135,18 @@ class RailwayPg:
             if "=" in f:
                 col, val = f.split("=", 1)
                 val = _strip_postgrest_op(val)
+                # FIX 04-sep-2026: la forma PostgREST `col=in.(a,b)` contiene
+                # "=" así que caía aquí y se trataba como IGUALDAD contra el
+                # string literal "('a','b')" → 0 filas siempre. El modo
+                # Analizar construye exactamente ese filtro para cargar los
+                # handles del run padre (discovery.py: handle=in.(...)).
+                if val.startswith("(") and val.endswith(")"):
+                    vals = [v.strip().strip("'\"") for v in val[1:-1].split(",") if v.strip()]
+                    base = len(params) + 1 + param_offset
+                    placeholders = [f"${base + i}" for i in range(len(vals))]
+                    conds.append(f"{col} IN ({','.join(placeholders)})")
+                    params.extend(self._maybe_parse_datetime(v) for v in vals)
+                    continue
                 conds.append(f"{col} = ${len(params) + 1 + param_offset}")
                 params.append(self._maybe_parse_datetime(val))
             elif f.startswith("!"):
@@ -179,6 +190,16 @@ class RailwayPg:
     def _maybe_parse_datetime(self, val: str) -> Any:
         if not isinstance(val, str):
             return val
+        # FIX 04-sep-2026: literales booleanos de PostgREST (eq.true/eq.false,
+        # también dentro de in.(...)) deben llegar a asyncpg como bool real.
+        # Como string 'true' reventaba con DataError "a boolean is required"
+        # — el cron diario de scheduled_reports fallaba todos los días a las
+        # 9 AM por esto (j_failed=1 en el health del worker).
+        lowered = val.lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
         if len(val) < 10 or val[4] != "-" or val[7] != "-":
             return val
         try:
@@ -190,17 +211,13 @@ class RailwayPg:
     def _val_to_pg(self, v: Any) -> Any:
         if isinstance(v, dict):
             return json.dumps(v, default=str)
-        elif isinstance(v, list):
-            return v
-        elif isinstance(v, bool):
+        elif isinstance(v, list) or isinstance(v, bool):
             return v
         elif v is None:
             return None
         elif isinstance(v, uuid.UUID):
             return str(v)
-        elif isinstance(v, datetime):
-            return v
-        elif isinstance(v, date) and not isinstance(v, datetime):
+        elif isinstance(v, datetime) or isinstance(v, date) and not isinstance(v, datetime):
             return v
         else:
             return v
