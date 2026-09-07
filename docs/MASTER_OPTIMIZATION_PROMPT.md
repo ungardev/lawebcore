@@ -4,7 +4,7 @@
 > **Date:** 2026-07-30
 > **Repo:** `github.com/ungardev/lawebcore` (public, analyze directly)
 > **Goal:** Transform Lens into the world's most elegant, powerful, and cost-efficient influencer discovery tool — Apple-grade quality.
-> **Última actualización docs:** 2026-09-05 — Resiliencia Railway: supervisor del worker arq (blips de Redis ya no matan el proceso), coerción PostgREST true/false, bug latente col=in.(...) corregido. Ver `docs/FIXES_RAILWAY_WORKER_RESILIENCE_05-09-26.md`
+> **Última actualización docs:** 2026-09-07 — Run 3: entrega bloqueada por schema (F1 migración auto-aplicada), ER real (F2 extractor xdt), NULL≠0 candidatos (F3), keywords v2 de identidad de creador + exclusión brand-own (F5). Ver `docs/FIXES_RUN3_DELIVERY_KEYWORDS_07-09-26.md`
 
 ---
 
