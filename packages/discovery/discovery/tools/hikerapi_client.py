@@ -797,7 +797,14 @@ class HikerAPIClient:
             return []
         rows = resp.get("stream_rows", []) or resp.get("items", []) or []
         for row in rows:
-            data = row.get("data", {}) if isinstance(row, dict) else row
+            if not isinstance(row, dict):
+                continue
+            # FIX 07-sep-2026 (fuente dormida): con flat=true los items vienen
+            # PLANOS — __typename y user al tope del item, sin wrapper .data.
+            # El parser viejo buscaba row.data.__typename → typename="" →
+            # TODO descartado → topsearch devolvía 0 accounts en todos los
+            # runs. Soportar ambos: .data wrapper (stream_rows) y plano.
+            data = row.get("data") if isinstance(row.get("data"), dict) else row
             typename = data.get("__typename", "")
             if typename == "XDTUserDict":
                 user = data.get("user", {}) or data
@@ -808,13 +815,24 @@ class HikerAPIClient:
                     if len(results) >= limit:
                         break
             elif typename == "XDTMediaDict":
-                user = data.get("user", {}) or {}
+                user = data.get("user") or data
                 if user.get("username"):
                     normalized = self._normalize_user(user)
                     normalized["_source_topsearch_media"] = query
                     results.append(normalized)
                     if len(results) >= limit:
                         break
+        if not results:
+            # Diagnóstico de forma (metodología medias): keys reales para el
+            # siguiente ajuste sin adivinar.
+            logger.warning(
+                "hikerapi_topsearch_unknown_shape",
+                query=query,
+                top_keys=list(resp.keys()) if isinstance(resp, dict) else None,
+                first_row=(
+                    str(rows[0])[:400] if rows else None
+                ),
+            )
         logger.info("hikerapi_topsearch_results", query=query, results=len(results))
         return results
 
@@ -920,8 +938,12 @@ class HikerAPIClient:
             logger.warning("hikerapi_user_about_not_found", user_id=user_id)
             return None
         user_data = resp.get("user", {}) or resp
-        if not user_data.get("pk") and not user_data.get("id"):
-            logger.warning("hikerapi_user_about_no_pk", user_id=user_id)
+        # FIX 07-sep-2026: el schema About NO trae pk/id (solo username,
+        # country, date, former_usernames) — el guard viejo rechazaba TODAS
+        # las respuestas válidas → con HIKERAPI_INCLUDE_ABOUT=true el about
+        # nunca aterrizaba. Validar por username/country.
+        if not user_data.get("username") and not user_data.get("country") and not user_data.get("date"):
+            logger.warning("hikerapi_user_about_unrecognized", user_id=user_id)
             return None
         former_usernames = _coerce_former_usernames(
             user_data.get("former_usernames"), user_id=user_id
@@ -929,6 +951,22 @@ class HikerAPIClient:
         account_age_days = user_data.get("account_age_days")
         if account_age_days is None:
             account_age_days = user_data.get("account_age")
+        # FIX 07-sep-2026: el schema About trae `date` (fecha de creación de
+        # la cuenta), NO account_age_days — por eso el fraude por cuenta nueva
+        # (<90 días → penalty 0.90) nunca aplicaba. Parsear `date` activa esa
+        # señal anti-bots real.
+        if account_age_days is None:
+            date_val = user_data.get("date")
+            if isinstance(date_val, str) and len(date_val) >= 10:
+                try:
+                    from datetime import datetime, timezone
+
+                    created = datetime.fromisoformat(date_val.replace("Z", "+00:00"))
+                    account_age_days = max(
+                        0, int((datetime.now(timezone.utc) - created).total_seconds() // 86400)
+                    )
+                except ValueError:
+                    pass
         return {
             "former_usernames": former_usernames,
             "former_usernames_count": len(former_usernames),
@@ -1018,6 +1056,7 @@ class HikerAPIClient:
         )
         if not resp:
             return []
+        results: list[dict[str, Any]] = []
         for sp in resp.get("suggested_profiles", [])[:limit]:
             username_val = sp.get("username") or (sp.get("user", {}) or {}).get("username", "")
             if not username_val:
@@ -1025,6 +1064,16 @@ class HikerAPIClient:
             normalized = self._normalize_user(sp.get("user", sp) if sp.get("user") else sp)
             normalized["_source_suggested"] = username
             results.append(normalized)
+        if not results:
+            # Diagnóstico de forma (metodología medias): suggested_profiles
+            # devolvió 0 en todos los runs — con las keys reales el ajuste
+            # del parser es inmediato.
+            logger.warning(
+                "hikerapi_suggested_unknown_shape",
+                seed=username,
+                top_keys=list(resp.keys()) if isinstance(resp, dict) else None,
+                preview=str(resp)[:400],
+            )
         logger.info("hikerapi_suggested_results", seed=username, results=len(results))
         return results
 

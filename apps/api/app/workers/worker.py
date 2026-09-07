@@ -160,6 +160,30 @@ def _brand_tokens(*sources: str | None) -> set[str]:
     return tokens
 
 
+def _engagement_multiplier(likers: int | None) -> float:
+    """FIX 07-sep-2026 (prefilter v2): señal GRATIS de los posts de hashtag.
+
+    Cada perfil descubierto por hashtags trae los likes del post que lo
+    descubrió (_post_likers_count) — proxy fuerte de seguidores reales y de
+    contenido que funciona. Sin esta señal, el prefilter ordena con rough
+    scores casi todos en 0 (bios vacías de UserShort) → los 25 slots de
+    enrichment se llenaban a sorteo y ~48% era basura <5000 followers.
+
+    None (fuente sin señal, ej: keywords) → 1.0 neutro, NO penaliza.
+    """
+    likers = likers  # noqa: ERA001 — None explícito = fuente sin señal → neutro
+    if likers is None:
+        return 1.0
+    likers = likers or 0
+    if likers >= 300:
+        return 1.35
+    if likers >= 100:
+        return 1.15
+    if likers < 30:
+        return 0.8
+    return 1.0
+
+
 def _min_match_score_for_mode(is_explore_mode: bool) -> int:
     """Umbral de match_score según modo de discovery.
 
@@ -826,6 +850,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "pk": item.get("pk"),
                     "is_private": item.get("is_private", False),
                     "_discovery_query": hashtag_query_map.get(handle, ""),
+                    # FIX prefilter v2: likes del post que descubrió al
+                    # perfil — señal de engagement para el prefilter.
+                    "_post_likers_count": item.get("_post_likers_count", 0),
                 }
 
             keyword_query_map = {item.get("username", ""): item.get("_discovery_query", "keyword:unknown") for item in keyword_items if item.get("username")}
@@ -976,6 +1003,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "location": item.get("locationName", "") or "",
                     "pk": item.get("pk"),
                     "_discovery_query": hashtag_recent_query_map.get(handle, ""),
+                    "_post_likers_count": item.get("_post_likers_count", 0),
                 }
 
             reels_query_map = {item.get("username", ""): item.get("_discovery_query", "reels:unknown") for item in reels_items if item.get("username")}
@@ -1122,6 +1150,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     rough *= 1.3
                 elif creator_signals == 1:
                     rough *= 1.15
+
+                # FIX prefilter v2 (07-sep-2026): señal de engagement del post
+                # que descubrió al perfil — gratis, ya capturada, antes se
+                # descartaba. Prioriza creadores cuyo contenido funciona.
+                rough *= _engagement_multiplier(p.get("_post_likers_count"))
 
                 scored.append((handle, rough))
 
