@@ -61,15 +61,16 @@ def test_normal_detail_untouched():
 
 def test_worker_geo_variant_dedupe_guard():
     """Guard de fuente: la variante geo se salta si el kw ya contiene el
-    sufijo (evita quemar una llamada con 'dog chow venezuela venezuela')."""
+    sufijo o cualquier marcador de país (evita 'dog chow venezuela venezuela'
+    y el over-enclosure de las keywords v2)."""
     from pathlib import Path
 
     src = Path("apps/api/app/workers/worker.py").read_text(encoding="utf-8")
     start = src.index("async def _fetch_step2(")
     end = src.index("return results", start)
     section = src[start:end]
-    assert "if geo in kw.lower():" in section, (
+    assert "if geo in kw_lower" in section, (
         "_fetch_step2 debe saltar la variante geo cuando el kw ya contiene "
-        "el sufijo — sin este guard se quemaba una llamada API por keyword "
-        "que ya terminaba en 'venezuela'."
+        "el sufijo o geografía — sin este guard se quemaba una llamada API "
+        "por keyword que ya traía 'venezuela'/'vzla'."
     )

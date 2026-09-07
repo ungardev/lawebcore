@@ -131,6 +131,35 @@ def _tier_of(followers: int) -> str:
     return "MACRO"
 
 
+def _brand_tokens(*sources: str | None) -> set[str]:
+    """Tokens de marca para detectar la cuenta PROPIA de la marca.
+
+    FIX 07-sep-2026 (run 75855ad1): 'dogchowve' — la cuenta oficial de
+    Dog Chow Venezuela — fue entregada como "creador". Con "Purina Dog
+    Chow" generamos: palabras ≥5 chars ('purina') + bigrams consecutivos
+    ≥6 ('dogchow', 'purinadog'). El bigram evita el falso positivo de
+    'chow' (razas Chow Chow reales).
+    """
+    tokens: set[str] = set()
+    for src in sources:
+        if not src:
+            continue
+        all_words = [
+            w
+            for w in "".join(c if c.isalnum() else " " for c in str(src).lower()).split()
+            if w
+        ]
+        tokens.update(w for w in all_words if len(w) >= 5)
+        # Bigrams consecutivos sobre TODAS las palabras (sin filtro de largo):
+        # "Purina Dog Chow" → 'purinadog', 'dogchow' — matchea @dogchowve sin
+        # el falso positivo de 'chow' (razas Chow Chow reales).
+        for a, b in zip(all_words, all_words[1:], strict=False):
+            bigram = a + b
+            if len(bigram) >= 6:
+                tokens.add(bigram)
+    return tokens
+
+
 def _min_match_score_for_mode(is_explore_mode: bool) -> int:
     """Umbral de match_score según modo de discovery.
 
@@ -616,12 +645,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     logger.warning("source_keyword_error", source="hikerapi", keyword=kw, error=str(e))
                 if target_country == "VE":
                     for geo in geo_suffixes:
-                        # FIX 07-sep-2026: keywords que ya contienen el sufijo
-                        # ("dog chow venezuela") generaban queries duplicadas
-                        # ("dog chow venezuela venezuela") — llamada API
-                        # quemada. Si el kw ya trae el sufijo, la variante
-                        # geo es la misma búsqueda.
-                        if geo in kw.lower():
+                        # FIX 07-sep-2026: keywords que ya traen geografía
+                        # ("dog chow venezuela", "vzla", o cualquier variante)
+                        # no generan duplicados — llamada API quemada. Además,
+                        # con las keywords v2 de identidad de creador, la geo
+                        # se agrega por separado solo cuando aporta.
+                        kw_lower = kw.lower()
+                        if geo in kw_lower or "venezuela" in kw_lower or "vzla" in kw_lower:
                             continue
                         combined_kw = f"{kw} {geo}"
                         try:
@@ -1368,6 +1398,22 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         print(f"[discovery_run_task] STEP 4: Scoring {len(profiles)} profiles", flush=True)
 
         exclude_handles = set(h.lower() for h in (plan.exclude_handles or []))
+        # FIX 07-sep-2026 (run 75855ad1): la cuenta oficial de la PROPIA
+        # marca (ej: @dogchowve para Purina) no es un creador — excluirla
+        # automáticamente por tokens del producto/marca en el handle.
+        brand_tokens = _brand_tokens(
+            getattr(brief, "product_name", None), getattr(brief, "brand_name", None)
+        )
+        if brand_tokens:
+            brand_own = [
+                _handle
+                for _handle in list(profiles.keys())
+                if any(tok in _handle.lower() for tok in brand_tokens)
+                and _handle.lower() not in exclude_handles
+            ]
+            for _handle in brand_own:
+                plan.exclude_handles = list(plan.exclude_handles or []) + [_handle]
+                exclude_handles.add(_handle.lower())
         if exclude_handles:
             excluded_count = 0
             for handle in list(profiles.keys()):
@@ -1702,12 +1748,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "country": country_val,
                 "city": p.get("locationName") or p.get("location") or "",
                 "followers": followers,
-                "following": p.get("followsCount") if "followsCount" in p else p.get("following_count"),
-                "posts_count": p.get("postsCount") if "postsCount" in p else p.get("posts_count"),
+                # FIX 07-sep-2026 (run 75855ad1): los zeros camelCase del
+                # discovery (followsCount=0, postsCount=0) TAPABAN los valores
+                # enriquecidos del merge (snake_case) → candidatos persistidos
+                # con following=0/posts_count=0 reales ignorados. Preferir el
+                # valor enriquecido cuando exista.
+                "following": p.get("following_count") if p.get("following_count") is not None else p.get("followsCount"),
+                "posts_count": p.get("posts_count") if p.get("posts_count") is not None else p.get("postsCount"),
                 "avg_likes": round(likes_avg) if latest else None,
                 "avg_comments": round(comments_avg) if latest else None,
                 "avg_views": None,
-                "engagement_rate": round(er, 6),
+                # FIX NULL≠0: sin posts no hay ER — NULL, no 0.0 (antes se
+                # persistía 0.0 y el analista leía "sin engagement" como dato).
+                "engagement_rate": round(er, 6) if has_engagement_data else None,
                 "audience_credibility": credibility,
                 "audience_quality": None,
                 "audience_gender_split": {},
@@ -1718,9 +1771,9 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 "audience_relevance": None,
                 "content_quality": None,
                 "expected_reach": int(followers * 0.7),
-                "expected_engagement": int(followers * er),
+                "expected_engagement": int(followers * er) if has_engagement_data else None,
                 "roi_estimate": None,
-                "rationale": build_rationale(p, tier, followers, er, target_country=target_country),
+                "rationale": build_rationale(p, tier, followers, er if has_engagement_data else None, target_country=target_country),
                 "tier": tier,
                 "is_tienda": is_tienda,
                 "discovery_query": p.get("_discovery_query", ""),
@@ -1909,6 +1962,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         })
 
         qualified = analyzed
+        # FIX 07-sep-2026 (run 75855ad1): snapshot del conteo calificado ANTES
+        # del insert — si el guardado falla, el mensaje final debe decir la
+        # verdad ("falló el guardado") y no "ninguno califica".
+        qualified_count = len(qualified)
 
         logger.info(
             "scoring_done",
@@ -2024,7 +2081,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 f"ER {c.get('engagement_rate', 0):.1%}"
                 for c in top_candidates
             ]
-            if total == 0:
+            if total == 0 and qualified_count > 0:
+                # FIX 07-sep-2026 (run 75855ad1): hubo candidatos calificados
+                # pero el INSERT falló (schema drift) — decir la verdad en vez
+                # de "ninguno califica" (el run anterior mostró ambos mensajes
+                # en contradicción).
+                content = (
+                    f"⚠️ Encontré **{qualified_count} candidatos** que calificaron "
+                    f"para tu campaña, pero falló el guardado en la base de datos. "
+                    f"El escaneo sí se completó — el equipo técnico puede ver el "
+                    f"detalle en los logs del sistema."
+                )
+            elif total == 0:
                 # HITO 23: el mensaje se deriva del contador que MÁS perfiles
                 # descartó, no de un texto fijo. Antes decía siempre "filtro
                 # geográfico" — en el run 0c44ea23 la causa real fue que el

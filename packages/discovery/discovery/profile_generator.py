@@ -176,7 +176,7 @@ Tu especialidad: el mercado de Instagram en Venezuela — el mercado más activo
 REGLAS ESTRICTAS:
 1. Devuelve SOLO JSON válido — ningún texto adicional, ningún comentario
 2. hashtags: USA los que LA GENTE REAL USA en el país objetivo, no traducciones de hashtags gringos
-3. keywords: piensa como la gente común — cómo buscan productos reales en Instagram, no como un marketeer
+3. keywords: frases para ENCONTRAR CUENTAS DE CREADORES — identidades y profesiones del nicho tal como aparecen en usernames y bios de Instagram ("dog mom", "adiestrador canino", "veterinario", "pet lover", "groomer"). NO frases de compra de producto ("precio", "dónde comprar", "comida para perros") — eso vive en buy_intent_keywords
 4. NO uses nombres de marcas específicas en los queries de búsqueda a menos que el brief las mencione explícitamente
 5. competitor_intel: qué marcas ya tienen presencia fuerte en el país/ciudad para ese nicho (investiga desde el conocimiento general)
 6. credibility_signals: qué hace que un perfil sea REAL y de CALIDAD en ese nicho específico (no señales genéricas)
@@ -184,6 +184,7 @@ REGLAS ESTRICTAS:
 8. content_themes: qué tipos de contenido funcionan mejor para este nicho en Instagram VE
 9. Si no estás seguro de datos específicos, usa el contexto de arriba como fallback
 10. TODO en español de Latam — hashtags en español, keywords en español
+11. NUNCA incluyas el país ni ciudades dentro de las keywords — el sistema agrega geografía por separado (evita duplicados tipo "perros venezuela venezuela")
 
 IDIOMA: Todo en español local. Moneda: usar la moneda del país (bs/$/pesos/etc)."""
 
@@ -206,6 +207,7 @@ TONO DE CAMPAÑA: {tone_str}
 PAÍS OBJETIVO: {country.upper()}
 CIUDADES: {cities_str}
 MARCAS COMPETIDORAS: {competitor_str}
+CONTEXTO ADICIONAL DEL CLIENTE (respeta estas restricciones en TODO lo que generes): {getattr(brief, "additional_context", "") or "ninguno"}
 
 Genera el JSON completo con todos los campos abajo:
 
@@ -258,7 +260,7 @@ Genera el JSON completo con todos los campos abajo:
 }}
 
 hashtags: 20-30, SIN #, en español local, relevantes al nicho y país
-keywords: 15-25, frases que la gente USA para buscar productos similares en Instagram
+keywords: 15-25, frases de IDENTIDAD DE CREADOR para encontrar cuentas reales — cómo se hace llamar un creador de contenido del nicho en su username/bio (profesiones, pasiones, comunidades). PROHIBIDO: frases de compra de producto, precios, "dónde comprar", y el país/ciudades dentro de la frase
 niche_keywords: 15-25 términos en español que describen el nicho (productos, actividades, estilos)
 geo_indicators: capital, 5-8 ciudades, gentilicio, abreviaturas (vzla, co...), emoji bandera, variaciones
 buy_intent_keywords: en el idioma del país, incluye la moneda local y sus variantes

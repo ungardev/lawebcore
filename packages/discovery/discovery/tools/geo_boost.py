@@ -134,7 +134,7 @@ def build_rationale(
     profile: dict,
     tier: str,
     followers: int,
-    er: float,
+    er: float | None,
     target_country: str = "VE",
 ) -> str:
     """Build a human-readable rationale string for a candidate profile.
@@ -143,18 +143,23 @@ def build_rationale(
         profile: candidate profile dict with bio, biography, etc.
         tier: follower tier label (NANO, MICRO, MID, MACRO)
         followers: follower count
-        er: engagement rate (decimal)
+        er: engagement rate (decimal) — None si no hay posts para calcularlo
         target_country: ISO 2-letter country code (default VE)
     """
     country_name = _COUNTRY_NAMES.get(target_country.upper(), target_country)
     niches = _detect_niches(profile)
 
     niche_str = ", ".join(niches[:2]) if niches else "niche general"
-    er_pct = er * 100
+    # FIX NULL≠0 (07-sep-2026): sin datos de posts el ER es NULL — no decir
+    # "ER 0.0%" (parece cuenta muerta) sino que no hay datos aún.
+    if er is None:
+        er_str = "ER sin datos (posts no analizados)"
+    else:
+        er_str = f"ER {er * 100:.1f}%"
 
     return (
         f"Perfil {tier} de {niche_str} en {country_name}. "
-        f"ER {er_pct:.1f}%, {followers:,} seguidores. "
+        f"{er_str}, {followers:,} seguidores. "
         f"Perfil relevante para campaña en {country_name}."
     )
 

@@ -584,6 +584,23 @@ class HikerAPIClient:
             cache_ttl=CACHE_TTL_PROFILE,
         )
         raw_posts = self._extract_posts(resp or {})
+        if not raw_posts:
+            # FIX 07-sep-2026: diagnóstico de forma — el primer E2E mostró
+            # medias fetch OK pero posts_analyzed=0 en TODOS los candidatos
+            # (forma de respuesta no reconocida). Con estas keys el próximo
+            # ajuste del extractor es inmediato.
+            preview = resp if isinstance(resp, dict) else {}
+            logger.warning(
+                "hikerapi_user_medias_unknown_shape",
+                user_id=clean_id,
+                top_keys=list(preview.keys()) if isinstance(preview, dict) else None,
+                data_keys=(
+                    list(preview["data"].keys())
+                    if isinstance(preview.get("data"), dict)
+                    else None
+                ),
+                preview=str(preview)[:400],
+            )
         posts: list[dict[str, Any]] = []
         for post in raw_posts[:count]:
             likes, comments = self._post_engagement(post)
@@ -607,12 +624,16 @@ class HikerAPIClient:
         El endpoint GraphQL puede envolver los medias en varias estructuras
         según la versión del upstream:
 
-          - data.user.edge_owner_to_timeline_media.edges[*].node
-          - user.edge_owner_to_timeline_media.edges[*].node   (sin data)
-          - items[*] / medias[*]                              (flat)
+          - data.user.edge_owner_to_timeline_media.edges[*].node   (legacy)
+          - data.xdt_api__v1__feed__user_timeline_graphql_connection.edges[*].node
+            (forma MODERNA del GraphQL de IG — la más probable hoy)
+          - user.edge_owner_to_timeline_media.edges[*].node        (sin data)
+          - items[*] / medias[*]                                   (flat)
 
         Nunca confiar en una sola forma: se devuelve [] ante cualquier
-        estructura desconocida y el run continúa con ER=NULL (no crash).
+        estructura desconocida y get_user_medias registra las keys reales
+        para diagnóstico (FIX 07-sep: el primer E2E mostró medias fetch OK
+        pero posts_analyzed=0 — forma no reconocida).
         """
         if not isinstance(resp, dict):
             return []
@@ -620,23 +641,41 @@ class HikerAPIClient:
         if not isinstance(data, dict):
             return []
 
+        def _edges_to_nodes(edges: Any) -> list[dict]:
+            if isinstance(edges, list):
+                nodes = [
+                    e.get("node")
+                    for e in edges
+                    if isinstance(e, dict) and isinstance(e.get("node"), dict)
+                ]
+                if nodes:
+                    return nodes
+            return []
+
+        # Forma moderna primero: xdt_api__v1__feed__user_timeline_graphql_connection
+        for conn_key in (
+            "xdt_api__v1__feed__user_timeline_graphql_connection",
+            "edge_owner_to_timeline_media",
+            "edge_felix_video_timeline",
+        ):
+            conn = data.get(conn_key)
+            if isinstance(conn, dict):
+                nodes = _edges_to_nodes(conn.get("edges"))
+                if nodes:
+                    return nodes
+
         user = data.get("user")
         if isinstance(user, dict):
             for timeline_key in (
                 "edge_owner_to_timeline_media",
                 "edge_felix_video_timeline",
+                "xdt_api__v1__feed__user_timeline_graphql_connection",
             ):
                 timeline = user.get(timeline_key)
                 if isinstance(timeline, dict):
-                    edges = timeline.get("edges")
-                    if isinstance(edges, list):
-                        nodes = [
-                            e.get("node")
-                            for e in edges
-                            if isinstance(e, dict) and isinstance(e.get("node"), dict)
-                        ]
-                        if nodes:
-                            return nodes
+                    nodes = _edges_to_nodes(timeline.get("edges"))
+                    if nodes:
+                        return nodes
 
         for key in ("items", "medias", "media_items"):
             val = data.get(key)

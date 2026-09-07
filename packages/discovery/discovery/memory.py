@@ -83,6 +83,26 @@ async def migrate_discovery_conversations_schema() -> None:
             else:
                 logger.warning(f"[migration] Could not add column title to discovery_runs: {e}")
 
+        # FIX 07-sep-2026 (run 75855ad1): el worker emite discovery_query y
+        # brand_fit en cada candidato, pero la migración numerada 111 que las
+        # crea NUNCA se aplicó manualmente en Railway (las migraciones
+        # numeradas no son auto-aplicadas — arquitectura conocida) → TODOS
+        # los INSERTs de candidatos fallaban (batch + fallback individual) →
+        # 0 entregados con status INCONSISTENT tras gastar el run completo.
+        # Idempotente: se auto-aplica en cada startup.
+        for col_name, col_type in (
+            ("discovery_query", "TEXT DEFAULT ''"),
+            ("brand_fit", "INTEGER"),
+        ):
+            try:
+                await conn.execute(
+                    f'ALTER TABLE discovery_candidates ADD COLUMN IF NOT EXISTS {col_name} {col_type}'
+                )
+                logger.info(f"[migration] Ensured column {col_name} on discovery_candidates")
+            except Exception as e:
+                logger.warning(f"[migration] Could not ensure column {col_name} on discovery_candidates: {e}")
+
+
         try:
             await conn.execute("""
                 UPDATE discovery_conversations dc
