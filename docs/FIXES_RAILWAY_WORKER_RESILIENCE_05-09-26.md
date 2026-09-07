@@ -52,4 +52,30 @@ La forma PostgREST `handle=in.('a','b')` **contiene "="** → caía en la rama e
 
 ---
 
-*GLM 5.3 Flash (opencode) · 04/05-sep-2026*
+## ⚠️ CORRECCIÓN v2 (07-sep-2026): el supervisor v1 tenía un bug — worker muerto AL ARRANCAR
+
+El deploy del 07-sep (14:22 UTC) mostró el supervisor v1 muriendo en el arranque:
+
+```
+main.py:65  await run_worker(WorkerSettings)
+arq/worker.py:899  run_worker: worker.run()
+arq/worker.py:313  self.loop.run_until_complete(self.main_task)
+RuntimeError: This event loop is already running
+```
+
+**Causa raíz (bug de la v1):** `run_worker` de arq es **SYNC** — crea y maneja su propio event loop (`worker.run()` → `run_until_complete`). La v1 lo envolvió en `async def` + `asyncio.run(...)`: el await evaluaba la llamada síncronamente con un loop ya corriendo → RuntimeError → `except Exception: raise` → **el proceso moría al arranque** → producción quedó SIN worker otra vez (no aparecía "Starting worker for 5 functions" en los logs).
+
+**Por qué los tests no lo detectaron:** el fake era `async def fake_run_worker` — validaba el contrato equivocado. Lección: el fake debe replicar el contrato REAL de la librería, no el de nuestra abstracción.
+
+**FIX v2:** supervisor **sync puro** — `run_worker(WorkerSettings)` directo (bloquea con su propio loop, idéntico al código original que funcionó en producción), `time.sleep(backoff)` ante blips (bloquear el thread es correcto: el proceso existe solo para el worker), y **event loop NUEVO por intento** (`asyncio.new_event_loop()` + close en finally) para no heredar loops cerrados. `_arq_worker_entry` llama directo, sin `asyncio.run`.
+
+**Tests v2 al contrato real:** fake **sync** de `run_worker` + patch de `time.sleep` — 4 casos: blip→reconecta, OSError(104)→reconecta, fatal→propaga, salida limpia. 14/14 en el archivo, 224 passed en la suite.
+
+**Verificación post-deploy v2 (el check exacto que falló hoy):**
+```
+Starting worker for 5 functions: discovery_run_task, ...   ← DEBE aparecer tras el arranque
+```
+
+---
+
+*GLM 5.3 Flash (opencode) · 04/05/07-sep-2026*
