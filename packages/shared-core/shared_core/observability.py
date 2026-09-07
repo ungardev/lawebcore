@@ -123,6 +123,14 @@ def drop_profile(
     """Único punto de salida de un perfil del pipeline.
 
     Registra en ledger, emite evento estructurado, y retorna.
+
+    FIX 07-sep-2026 (incidente E2E run e2efd17b): un `detail` con clave
+    'reason' colisionaba con el kwarg explícito `reason=reason.value` →
+    TypeError "got multiple values for keyword argument 'reason'" → el run
+    COMPLETO moría en scoring DESPUÉS de gastar discovery + enrichment
+    (~$1.4). Ahora las claves que colisionan con los kwargs del evento se
+    renombran automáticamente (reason → detail_reason), preservando la info.
+    Este guard protege los 7+ call sites actuales y todos los futuros.
     """
     import structlog
 
@@ -130,12 +138,16 @@ def drop_profile(
     if ledger is not None:
         ledger.record(reason)
         ledger._stages[reason] = stage
+    log_detail = dict(detail or {})
+    for colliding in ("reason", "username", "stage", "event"):
+        if colliding in log_detail:
+            log_detail[f"detail_{colliding}"] = log_detail.pop(colliding)
     logger.info(
         RunEvent.PROFILE_DROPPED.value,
         username=username,
         reason=reason.value,
         stage=stage,
-        **(detail or {}),
+        **log_detail,
     )
 
 

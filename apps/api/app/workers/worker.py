@@ -616,6 +616,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     logger.warning("source_keyword_error", source="hikerapi", keyword=kw, error=str(e))
                 if target_country == "VE":
                     for geo in geo_suffixes:
+                        # FIX 07-sep-2026: keywords que ya contienen el sufijo
+                        # ("dog chow venezuela") generaban queries duplicadas
+                        # ("dog chow venezuela venezuela") — llamada API
+                        # quemada. Si el kw ya trae el sufijo, la variante
+                        # geo es la misma búsqueda.
+                        if geo in kw.lower():
+                            continue
                         combined_kw = f"{kw} {geo}"
                         try:
                             items = await instagram_source.search_keyword(combined_kw, limit=10)
@@ -1382,7 +1389,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     handle,
                     DropReason.SCORE_BELOW_THRESHOLD,
                     "prefilter",
-                    {"reason": "not_selected_for_enrichment"},
+                    {"why": "not_selected_for_enrichment"},
                     ledger=drop_ledger,
                 )
 
@@ -1533,7 +1540,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     continue
                 if er < 0.005 and followers > 5000:
                     bots_filtered += 1
-                    drop_profile(handle, DropReason.BOT_PATTERN, "scoring", {"er": er, "followers": followers, "reason": "very_low_er"}, ledger=drop_ledger)
+                    drop_profile(handle, DropReason.BOT_PATTERN, "scoring", {"er": er, "followers": followers, "why": "very_low_er"}, ledger=drop_ledger)
                     continue
             else:
                 no_engagement_data += 1
@@ -1552,12 +1559,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             )
             if any(handle_lower.endswith(tld) for tld in non_ve_handle_tlds):
                 geo_country_mismatch += 1
-                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "tld_mismatch", "tld": [t for t in non_ve_handle_tlds if handle_lower.endswith(t)]}, ledger=drop_ledger)
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"why": "tld_mismatch", "tld": [t for t in non_ve_handle_tlds if handle_lower.endswith(t)]}, ledger=drop_ledger)
                 continue
 
             if about_country and about_country != target_country:
                 geo_country_mismatch += 1
-                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "about_country_mismatch", "about_country": about_country, "target": target_country}, ledger=drop_ledger)
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"why": "about_country_mismatch", "about_country": about_country, "target": target_country}, ledger=drop_ledger)
                 continue
 
             non_ve_signals = (
@@ -1571,7 +1578,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             bio_geo = f"{bio.lower()} {handle.lower()} {p.get('full_name', '').lower()}"
             if any(sig in bio_geo for sig in non_ve_signals):
                 geo_country_mismatch += 1
-                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "bio_geo_signal_mismatch"}, ledger=drop_ledger)
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"why": "bio_geo_signal_mismatch"}, ledger=drop_ledger)
                 continue
 
             geo_indicators = profile_data.get("geo_indicators", [])
@@ -1580,13 +1587,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 geo = max(geo, 0.85)
             if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country):
                 geo_no_signal += 1
-                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"reason": "low_geo_score", "geo_score": geo}, ledger=drop_ledger)
+                drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"why": "low_geo_score", "geo_score": geo}, ledger=drop_ledger)
                 continue
 
             bio_or_username = f"{bio.lower()} {handle.lower()}"
             if any(kw in bio_or_username for kw in exclusion_keywords):
                 political_filtered += 1
-                drop_profile(handle, DropReason.POLITICAL_CONTENT, "scoring", {"reason": "exclusion_keyword_match"}, ledger=drop_ledger)
+                drop_profile(handle, DropReason.POLITICAL_CONTENT, "scoring", {"why": "exclusion_keyword_match"}, ledger=drop_ledger)
                 continue
 
             geo_passed += 1
@@ -1838,7 +1845,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                         c.get("handle", ""),
                         DropReason.SCORE_BELOW_THRESHOLD,
                         "rerank_cutoff",
-                        {"reason": "outside_top_n", "target_n": target_n},
+                        {"why": "outside_top_n", "target_n": target_n},
                         ledger=drop_ledger,
                     )
 
