@@ -39,7 +39,7 @@ logger = structlog.get_logger(__name__)
 import multiprocessing  # noqa: E402
 
 
-async def arq_worker_supervised() -> None:
+def arq_worker_supervised() -> None:
     """Corre el worker arq reintentando ante blips de conexión de Redis.
 
     FIX 04-sep-2026: el loop de polling de arq NO captura ConnectionError —
@@ -49,8 +49,19 @@ async def arq_worker_supervised() -> None:
     siempre con cero workers vivos. Este supervisor relanza run_worker con
     backoff (5s→60s) ante errores transitorios de conexión; un error fatal
     de código sí aborta.
+
+    FIX v2 (07-sep-2026): la v1 era `async def` y hacía `await run_worker(...)`
+    dentro de `asyncio.run(...)` — pero run_worker es SYNC y maneja su propio
+    event loop (worker.run() → loop.run_until_complete). Await'earlo con un
+    loop ya corriendo reventaba con "RuntimeError: This event loop is already
+    running" y el worker moría AL ARRANCAR en Railway. Esta versión es sync
+    pura: run_worker bloquea con su propio loop (idéntico al código original
+    que funcionó en producción), y ante blips reintentamos con backoff y un
+    event loop NUEVO por intento. El time.sleep bloquea el thread, lo cual es
+    correcto: este proceso existe únicamente para ejecutar el worker.
     """
     import asyncio
+    import time as _time
 
     import redis.exceptions
 
@@ -59,10 +70,12 @@ async def arq_worker_supervised() -> None:
     attempt = 0
     while True:
         attempt += 1
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
         try:
             from arq.worker import run_worker
 
-            await run_worker(WorkerSettings)
+            run_worker(WorkerSettings)
             logger.info("arq_worker_exited_cleanly")
             return
         except (
@@ -78,17 +91,20 @@ async def arq_worker_supervised() -> None:
                 wait_s=wait,
                 error=str(e),
             )
-            await asyncio.sleep(wait)
+            _time.sleep(wait)
         except Exception:
             logger.exception("arq_worker_fatal_error")
             raise
+        finally:
+            import contextlib
+
+            with contextlib.suppress(Exception):
+                loop.close()
 
 
 def _arq_worker_entry():
     """Entry point for the ARQ worker process."""
-    import asyncio
-
-    asyncio.run(arq_worker_supervised())
+    arq_worker_supervised()
 
 
 @asynccontextmanager

@@ -12,7 +12,6 @@ Dos incidentes reales de Railway:
    para siempre con cero workers vivos.
 """
 
-import asyncio
 
 import pytest
 import redis.exceptions
@@ -90,53 +89,79 @@ class TestScheduledReportsCronHardening:
 
 
 class TestArqWorkerSupervisor:
-    """FIX 3: un blip de Redis NO debe matar al worker para siempre."""
+    """FIX 3: un blip de Redis NO debe matar al worker para siempre.
 
-    async def test_restarts_after_connection_blip(self, monkeypatch):
+    IMPORTANTE (lección de la v1): run_worker de arq es SYNC y maneja su
+    propio event loop (worker.run() → loop.run_until_complete). El supervisor
+    debe ser sync puro — la v1 lo envolvió en asyncio.run + await y reventó
+    con "RuntimeError: This event loop is already running" AL ARRANCAR en
+    Railway. Estos tests validan el contrato REAL: fake SYNC de run_worker.
+    """
+
+    def test_restarts_after_connection_blip(self, monkeypatch):
+        import time as time_mod
+
         import arq.worker
 
         from app import main as app_main
 
         calls = {"n": 0}
 
-        async def fake_run_worker(settings):
+        def fake_run_worker(settings):
             calls["n"] += 1
             if calls["n"] == 1:
                 raise redis.exceptions.ConnectionError("Connection reset by peer")
-            return None  # salida limpia
+            return None  # salida limpia en el segundo intento
 
         monkeypatch.setattr(arq.worker, "run_worker", fake_run_worker)
-
-        async def _noop_sleep(_):
-            return None
-
-        monkeypatch.setattr(asyncio, "sleep", _noop_sleep)
-        await app_main.arq_worker_supervised()
+        monkeypatch.setattr(time_mod, "sleep", lambda s: None)
+        app_main.arq_worker_supervised()
         assert calls["n"] == 2, "el supervisor debe relanzar tras el blip"
 
-    async def test_fatal_error_propagates(self, monkeypatch):
+    def test_fatal_error_propagates(self, monkeypatch):
         import arq.worker
 
         from app import main as app_main
 
-        async def fake_run_worker(settings):
+        def fake_run_worker(settings):
             raise ValueError("bug de código")
 
         monkeypatch.setattr(arq.worker, "run_worker", fake_run_worker)
         with pytest.raises(ValueError):
-            await app_main.arq_worker_supervised()
+            app_main.arq_worker_supervised()
 
-    async def test_clean_exit_returns(self, monkeypatch):
+    def test_clean_exit_returns(self, monkeypatch):
         import arq.worker
 
         from app import main as app_main
 
         calls = {"n": 0}
 
-        async def fake_run_worker(settings):
+        def fake_run_worker(settings):
             calls["n"] += 1
             return None
 
         monkeypatch.setattr(arq.worker, "run_worker", fake_run_worker)
-        await app_main.arq_worker_supervised()
+        app_main.arq_worker_supervised()
         assert calls["n"] == 1
+
+    def test_oserror_also_retried(self, monkeypatch):
+        """OSError crudo (104 Connection reset by peer) también es transitorio."""
+        import time as time_mod
+
+        import arq.worker
+
+        from app import main as app_main
+
+        calls = {"n": 0}
+
+        def fake_run_worker(settings):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OSError(104, "Connection reset by peer")
+            return None
+
+        monkeypatch.setattr(arq.worker, "run_worker", fake_run_worker)
+        monkeypatch.setattr(time_mod, "sleep", lambda s: None)
+        app_main.arq_worker_supervised()
+        assert calls["n"] == 2
