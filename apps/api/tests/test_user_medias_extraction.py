@@ -54,6 +54,76 @@ class TestExtractPosts:
         resp = {"data": {"user": {"edge_owner_to_timeline_media": "corrupt"}}}
         assert _CLIENT._extract_posts(resp) == []
 
+    def test_stream_rows_shape_observed_in_production(self):
+        """Forma EXACTA observada en Railway 07-sep (script test_user_medias):
+        /gql/user/medias responde {stream_rows: [{data: {clave-variable}}]}.
+        La clave del timeline es VARIABLE (variables embebidas en el nombre)."""
+        resp = {
+            "stream_rows": [
+                {
+                    "data": {
+                        "__typename": "Query",
+                        "1$xdt_api__v1__profile_timeline(_request_data:{\"count\":12})": {
+                            "xdt_api__v1__feed__user_timeline_graphql_connection": {
+                                "edges": [
+                                    {"node": {"pk": 101, "like_count": 200, "comment_count": 15}},
+                                    {"node": {"pk": 102, "like_count": 180, "comment_count": 12}},
+                                ]
+                            }
+                        },
+                    }
+                }
+            ]
+        }
+        posts = _CLIENT._extract_posts(resp)
+        assert [p["pk"] for p in posts] == [101, 102]
+
+    def test_stream_rows_connection_nested_deeper(self):
+        """La conexión anidada más adentro de la clave variable también se encuentra."""
+        resp = {
+            "stream_rows": [
+                {
+                    "data": {
+                        "1$xdt_api__v1__profile_timeline(...)": {
+                            "nested_wrapper": {
+                                "xdt_api__v1__feed__user_timeline_graphql_connection": {
+                                    "edges": [{"node": {"pk": 5, "like_count": 9}}]
+                                }
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+        posts = _CLIENT._extract_posts(resp)
+        assert [p["pk"] for p in posts] == [5]
+
+    async def test_get_user_medias_with_stream_rows_end_to_end(self, monkeypatch):
+        """End-to-end con la forma real: likes/comments normalizados para el ER."""
+        client = HikerAPIClient(api_key="test-key")
+
+        async def _fake_get(path, params=None, cache_ttl=0, run_id=None, budget_fuse=None):
+            return {
+                "stream_rows": [
+                    {
+                        "data": {
+                            "1$xdt_api__v1__profile_timeline(...)": {
+                                "xdt_api__v1__feed__user_timeline_graphql_connection": {
+                                    "edges": [
+                                        {"node": {"pk": 1, "like_count": 300, "comment_count": 20}},
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+
+        monkeypatch.setattr(client, "_get", _fake_get)
+        posts = await client.get_user_medias("555")
+        assert posts[0]["likesCount"] == 300
+        assert posts[0]["commentsCount"] == 20
+
 
 class TestPostEngagement:
     def test_rest_style_counts(self):

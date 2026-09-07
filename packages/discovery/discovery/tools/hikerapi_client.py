@@ -621,38 +621,42 @@ class HikerAPIClient:
     def _extract_posts(self, resp: dict) -> list[dict]:
         """Extrae la lista de posts de /gql/user/medias, type-agnostic.
 
-        El endpoint GraphQL puede envolver los medias en varias estructuras
-        según la versión del upstream:
+        Formas observadas o plausibles:
 
-          - data.user.edge_owner_to_timeline_media.edges[*].node   (legacy)
+          - {stream_rows: [{data: {"1$xdt_api__v1__profile_timeline(...)":
+            {xdt_api__v1__feed__user_timeline_graphql_connection: {edges}}}}]}
+            ← FORMA REAL observada en producción 07-sep (script
+            test_user_medias en Railway): mismo envelope que /gql/topsearch,
+            con la clave del timeline VARIABLE (variables embebidas en el
+            nombre — imposible matchear literal)
           - data.xdt_api__v1__feed__user_timeline_graphql_connection.edges[*].node
-            (forma MODERNA del GraphQL de IG — la más probable hoy)
-          - user.edge_owner_to_timeline_media.edges[*].node        (sin data)
+          - data.user.edge_owner_to_timeline_media.edges[*].node   (legacy)
           - items[*] / medias[*]                                   (flat)
 
-        Nunca confiar en una sola forma: se devuelve [] ante cualquier
-        estructura desconocida y get_user_medias registra las keys reales
-        para diagnóstico (FIX 07-sep: el primer E2E mostró medias fetch OK
-        pero posts_analyzed=0 — forma no reconocida).
+        Para stream_rows y claves variables se usa un buscador recursivo
+        (_find_timeline_nodes): desciende por claves que contengan
+        'connection' o 'timeline' sin importar su nombre exacto.
         """
         if not isinstance(resp, dict):
             return []
+
+        # Forma REAL (07-sep): envelope stream_rows
+        stream_rows = resp.get("stream_rows")
+        if isinstance(stream_rows, list):
+            for row in stream_rows:
+                if isinstance(row, dict) and isinstance(row.get("data"), dict):
+                    nodes = self._find_timeline_nodes(row["data"])
+                    if nodes:
+                        return nodes
+
         data = resp.get("data") if isinstance(resp.get("data"), dict) else resp
         if not isinstance(data, dict):
             return []
 
         def _edges_to_nodes(edges: Any) -> list[dict]:
-            if isinstance(edges, list):
-                nodes = [
-                    e.get("node")
-                    for e in edges
-                    if isinstance(e, dict) and isinstance(e.get("node"), dict)
-                ]
-                if nodes:
-                    return nodes
-            return []
+            return self._edges_to_nodes(edges)
 
-        # Forma moderna primero: xdt_api__v1__feed__user_timeline_graphql_connection
+        # Forma moderna: xdt_api__v1__feed__user_timeline_graphql_connection
         for conn_key in (
             "xdt_api__v1__feed__user_timeline_graphql_connection",
             "edge_owner_to_timeline_media",
@@ -683,6 +687,53 @@ class HikerAPIClient:
                 flat = [v for v in val if isinstance(v, dict)]
                 if flat:
                     return flat
+
+        # Último recurso: búsqueda recursiva genérica (formas futuras)
+        return self._find_timeline_nodes(data)
+
+    @staticmethod
+    def _edges_to_nodes(edges: Any) -> list[dict]:
+        if isinstance(edges, list):
+            nodes = [
+                e.get("node")
+                for e in edges
+                if isinstance(e, dict) and isinstance(e.get("node"), dict)
+            ]
+            if nodes:
+                return nodes
+        return []
+
+    def _find_timeline_nodes(self, obj: Any, depth: int = 0) -> list[dict]:
+        """Busca recursivamente timeline connections y extrae edges[*].node.
+
+        La clave que envuelve la conexión es VARIABLE en el GraphQL de IG
+        (ej: "1$xdt_api__v1__profile_timeline(_request_data:{...})") — no se
+        puede matchear literal. Se desciende por claves que contengan
+        'connection' o 'timeline' (profundidad máxima 5) o genéricamente.
+        """
+        if depth > 5 or not isinstance(obj, dict):
+            return []
+        for key, value in obj.items():
+            key_l = str(key).lower()
+            if "connection" in key_l and isinstance(value, dict) and isinstance(value.get("edges"), list):
+                nodes = self._edges_to_nodes(value.get("edges"))
+                if nodes:
+                    return nodes
+            if "timeline" in key_l and isinstance(value, dict):
+                if isinstance(value.get("edges"), list):
+                    nodes = self._edges_to_nodes(value.get("edges"))
+                    if nodes:
+                        return nodes
+                for inner_key, inner_val in value.items():
+                    if "connection" in str(inner_key).lower() and isinstance(inner_val, dict):
+                        nodes = self._edges_to_nodes(inner_val.get("edges"))
+                        if nodes:
+                            return nodes
+            candidates = value if isinstance(value, list) else [value]
+            for candidate in candidates:
+                nodes = self._find_timeline_nodes(candidate, depth + 1)
+                if nodes:
+                    return nodes
         return []
 
     def _post_engagement(self, post: dict) -> tuple[int, int]:
