@@ -56,4 +56,20 @@ Run 75855ad1 mostró "✅ 3 creadores calificados" Y LUEGO "ninguno califica". *
 
 ---
 
+## 🔄 CORRECCIÓN F2 (07-sep, noche): endpoint de medias cambiado a /v2/user/medias
+
+El shape test en Railway console (2 corridas, ~$0.12) reveló la verdad completa:
+
+1. **`/gql/user/medias` es un stub NO FULFILLIDO**: el envelope `stream_rows` trae solo `{is_fulfilled__(name: "XDTProfileFeedDict"): true}` — **cero posts**, sin importar cuánto se refiné el extractor. La spec lo recomienda, pero en la práctica no entrega.
+2. **`/v2/user/medias` (REST) es perfecto**: `{response: {items: [12 posts directos]}}` — cada item ES el post con `pk`/`like_count`/`comment_count` al tope (verificado con @ecoanimalistadevenezuela: like_count=26, comment_count=1). Sin wrapper edges/node.
+
+**Fix aplicado:**
+- `get_user_medias()` → endpoint `/v2/user/medias` (docstring documenta la evidencia empírica vs spec)
+- `_extract_posts()` → forma `response.items[*]` PRIMERO (post directo, sin node); todas las formas gql/legacy quedan como fallback
+- `scripts/test_user_medias.py` → ahora end-to-end (enrich → get_user_medias → posts con likes + ER estimado)
+
+**Lección registrada:** la spec describía el endpoint pero no su comportamiento real con esta cuenta/tipo de perfil — el dump empírico (walk recursivo de claves + dump JSON completo) resolvió en una iteración lo que la adivinación no resolvió en dos.
+
+---
+
 *GLM 5.3 Flash (opencode) · 07-sep-2026*
