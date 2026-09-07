@@ -563,7 +563,7 @@ class HikerAPIClient:
         user_id: int | str,
         count: int = 12,
     ) -> list[dict[str, Any]]:
-        """GET /gql/user/medias — posts recientes del usuario (ER real).
+        """GET /v2/user/medias — posts recientes del usuario (ER real).
 
         FIX N-3 (04-sep-2026): /v2/user/by/username NO devuelve posts
         (`latestPosts` tiene 0 ocurrencias en el OpenAPI spec). Sin posts no
@@ -572,31 +572,35 @@ class HikerAPIClient:
         desactivar el filtro anti-bot de ER y dejar avg_likes/avg_comments
         en NULL.
 
-        Este endpoint existe en el spec, cuesta 1 request y trae los posts
-        con sus contadores de engagement. Normalizamos cada post a la forma
-        {pk, likesCount, commentsCount, taken_at} que consume worker.py
-        (worker calcula ER como (likes_avg + comments_avg) / followers).
+        FIX 07-sep-2026 (evidencia empírica en Railway): la spec recomienda
+        /gql/user/medias, pero el test real (scripts.test_user_medias) mostró
+        que gql responde un stream_rows NO FULFILLIDO — el timeline trae solo
+        {is_fulfilled__: true} SIN posts. /v2/user/medias (REST) sí entrega:
+        {response: {items: [12 posts directos con like_count/comment_count]}}.
+        Empírico > spec: usamos v2.
+
+        Normalizamos cada post a {pk, likesCount, commentsCount, taken_at}
+        que consume worker.py (ER = (likes_avg + comments_avg) / followers).
         """
         clean_id = str(user_id)
         resp = await self._get(
-            "/gql/user/medias",
+            "/v2/user/medias",
             params={"user_id": clean_id, "safe_int": self.SAFE_INT},
             cache_ttl=CACHE_TTL_PROFILE,
         )
         raw_posts = self._extract_posts(resp or {})
         if not raw_posts:
-            # FIX 07-sep-2026: diagnóstico de forma — el primer E2E mostró
-            # medias fetch OK pero posts_analyzed=0 en TODOS los candidatos
-            # (forma de respuesta no reconocida). Con estas keys el próximo
-            # ajuste del extractor es inmediato.
+            # FIX 07-sep-2026: diagnóstico de forma — con estas keys el
+            # ajuste del extractor es inmediato (metodología del incidente
+            # gql: nunca adivinar formas, medirlas).
             preview = resp if isinstance(resp, dict) else {}
             logger.warning(
                 "hikerapi_user_medias_unknown_shape",
                 user_id=clean_id,
                 top_keys=list(preview.keys()) if isinstance(preview, dict) else None,
-                data_keys=(
-                    list(preview["data"].keys())
-                    if isinstance(preview.get("data"), dict)
+                response_keys=(
+                    list(preview["response"].keys())
+                    if isinstance(preview.get("response"), dict)
                     else None
                 ),
                 preview=str(preview)[:400],
@@ -619,28 +623,34 @@ class HikerAPIClient:
         return posts
 
     def _extract_posts(self, resp: dict) -> list[dict]:
-        """Extrae la lista de posts de /gql/user/medias, type-agnostic.
+        """Extrae la lista de posts de /v2/user/medias, type-agnostic.
 
         Formas observadas o plausibles:
 
-          - {stream_rows: [{data: {"1$xdt_api__v1__profile_timeline(...)":
-            {xdt_api__v1__feed__user_timeline_graphql_connection: {edges}}}}]}
-            ← FORMA REAL observada en producción 07-sep (script
-            test_user_medias en Railway): mismo envelope que /gql/topsearch,
-            con la clave del timeline VARIABLE (variables embebidas en el
-            nombre — imposible matchear literal)
+          - {response: {items: [post-directo...]}}  ← FORMA REAL confirmada
+            en Railway 07-sep (dump completo): cada item ES el post con
+            pk/like_count/comment_count — SIN wrapper edges/node
+          - {stream_rows: [...]} de /gql/user/medias → stub NO FULFILLIDO
+            (solo is_fulfilled__, sin posts) — se mantiene como fallback
+            por si gql empieza a fulfillar
           - data.xdt_api__v1__feed__user_timeline_graphql_connection.edges[*].node
           - data.user.edge_owner_to_timeline_media.edges[*].node   (legacy)
-          - items[*] / medias[*]                                   (flat)
-
-        Para stream_rows y claves variables se usa un buscador recursivo
-        (_find_timeline_nodes): desciende por claves que contengan
-        'connection' o 'timeline' sin importar su nombre exacto.
+          - items[*]                                               (flat)
         """
         if not isinstance(resp, dict):
             return []
 
-        # Forma REAL (07-sep): envelope stream_rows
+        # FORMA REAL (07-sep, dump completo en Railway): response.items son
+        # los posts directos — pk/like_count/comment_count al tope del item.
+        response_obj = resp.get("response")
+        if isinstance(response_obj, dict):
+            items = response_obj.get("items")
+            if isinstance(items, list):
+                flat = [v for v in items if isinstance(v, dict)]
+                if flat:
+                    return flat
+
+        # Fallback: envelope stream_rows de /gql (stub no fulfillado hoy)
         stream_rows = resp.get("stream_rows")
         if isinstance(stream_rows, list):
             for row in stream_rows:

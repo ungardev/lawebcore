@@ -54,6 +54,54 @@ class TestExtractPosts:
         resp = {"data": {"user": {"edge_owner_to_timeline_media": "corrupt"}}}
         assert _CLIENT._extract_posts(resp) == []
 
+    def test_v2_response_items_shape_real(self):
+        """FORMA REAL confirmada en Railway 07-sep (dump completo):
+        /v2/user/medias → {response: {items: [post-directo...]}} — cada item
+        ES el post con pk/like_count/comment_count al tope, SIN wrapper node.
+        (El endpoint gql devuelve stream_rows NO FULFILLIDO sin posts.)"""
+        resp = {
+            "response": {
+                "num_results": 12,
+                "more_available": True,
+                "items": [
+                    {"pk": "3778125925129987453", "like_count": 26, "comment_count": 1, "taken_at": 1764607729},
+                    {"pk": "3778125925129987454", "like_count": 40, "comment_count": 3, "taken_at": 1764500000},
+                ],
+                "next_max_id": "3977307607731142786_21472078226",
+            },
+            "next_page_id": "3977307607731142786_21472078226",
+        }
+        posts = _CLIENT._extract_posts(resp)
+        assert [p["pk"] for p in posts] == ["3778125925129987453", "3778125925129987454"]
+        likes, comments = _CLIENT._post_engagement(posts[0])
+        assert (likes, comments) == (26, 1)
+
+    async def test_get_user_medias_v2_end_to_end(self, monkeypatch):
+        """End-to-end con la forma real v2: get_user_medias apunta a
+        /v2/user/medias y normaliza likesCount/commentsCount para el ER."""
+        client = HikerAPIClient(api_key="test-key")
+        requested_paths = []
+
+        async def _fake_get(path, params=None, cache_ttl=0, run_id=None, budget_fuse=None):
+            requested_paths.append(path)
+            return {
+                "response": {
+                    "num_results": 2,
+                    "more_available": True,
+                    "items": [
+                        {"pk": "111", "like_count": 26, "comment_count": 1, "taken_at": 1764607729},
+                        {"pk": "222", "like_count": 40, "comment_count": 3, "taken_at": 1764500000},
+                    ],
+                }
+            }
+
+        monkeypatch.setattr(client, "_get", _fake_get)
+        posts = await client.get_user_medias("21472078226")
+        assert requested_paths == ["/v2/user/medias"]
+        assert len(posts) == 2
+        assert posts[0]["likesCount"] == 26
+        assert posts[0]["commentsCount"] == 1
+
     def test_stream_rows_shape_observed_in_production(self):
         """Forma EXACTA observada en Railway 07-sep (script test_user_medias):
         /gql/user/medias responde {stream_rows: [{data: {clave-variable}}]}.
@@ -152,24 +200,23 @@ class TestPostEngagement:
 
 async def test_get_user_medias_normalizes_posts(monkeypatch):
     """get_user_medias normaliza a {pk, likesCount, commentsCount, taken_at} —
-    el contrato que worker.py consume para calcular ER real."""
+    el contrato que worker.py consume para calcular ER real.
+    (FIX 07-sep: endpoint /v2/user/medias — gql responde stub sin posts.)"""
     client = HikerAPIClient(api_key="test-key")
     payload = {
-        "data": {
-            "user": {
-                "edge_owner_to_timeline_media": {
-                    "edges": [
-                        {"node": {"pk": 1, "like_count": 100, "comment_count": 10}},
-                        {"node": {"pk": 2, "like_count": 50, "comment_count": 5}},
-                        {"node": {"pk": 3}},
-                    ]
-                }
-            }
+        "response": {
+            "num_results": 3,
+            "more_available": True,
+            "items": [
+                {"pk": 1, "like_count": 100, "comment_count": 10},
+                {"pk": 2, "like_count": 50, "comment_count": 5},
+                {"pk": 3},
+            ],
         }
     }
 
     async def _fake_get(path, params=None, cache_ttl=0, run_id=None, budget_fuse=None):
-        assert path == "/gql/user/medias"
+        assert path == "/v2/user/medias"
         assert params["user_id"] == "12345"
         return payload
 
