@@ -438,6 +438,8 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         step2_handles: set[str] = set()
         step3_handles: set[str] = set()
         step4_handles: set[str] = set()
+        step5_handles: set[str] = set()
+        brand_engagers_items: list[dict] = []
 
         if is_analyze_mode and parent_run_id:
             parent_candidates = await railway_pg.select(
@@ -817,12 +819,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             reels_items: list[dict] = []
             topsearch_items: list[dict] = []
             suggested_items: list[dict] = []
-            brand_engagers_items: list[dict] = []
             step1_handles: set[str] = set()
             step2_handles: set[str] = set()
             step3_handles: set[str] = set()
             step4_handles: set[str] = set()
-            step5_handles: set[str] = set()
         else:
             print("[discovery_run_task] STEP 1+2+2.5+3+4+5: Running", flush=True)
             step1_result, step2_result = await asyncio.gather(
