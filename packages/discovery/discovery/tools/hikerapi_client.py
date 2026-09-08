@@ -434,6 +434,8 @@ class HikerAPIClient:
                 normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
                 results.append(normalized)
 
+            if len(results) >= limit:
+                break
             cursor = resp.get("next_page_id")
             if not cursor or resp.get("more_available") is False:
                 break
@@ -482,6 +484,8 @@ class HikerAPIClient:
                 normalized["_post_comments_count"] = post.get("comment_count", 0) or post.get("comments_count", 0)
                 results.append(normalized)
 
+            if len(results) >= limit:
+                break
             cursor = resp.get("next_page_id", "")
             if not cursor:
                 break
@@ -534,6 +538,8 @@ class HikerAPIClient:
                 normalized = self._normalize_user(user)
                 results.append(normalized)
 
+            if len(results) >= limit:
+                break
             cursor = resp.get("page_token")
             has_more = resp.get("has_more")
             if not cursor or not has_more:

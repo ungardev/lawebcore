@@ -181,6 +181,16 @@ class BriefParserAgent:
             logger.info("brief_parser_cache_hit", cache_key=cache_key[:8])
             return self._parse_response(cached, text)
 
+        # FIX 08-sep-2026: el wizard envía "Brief: {...json...}" completo.
+        # El LLM lo re-parsea y pierde campos (tiers, kpis, objective, etc.).
+        # Intento determinista primero: si el texto contiene "Brief: {" o "{" tras
+        # "Brief:", extraer el JSON y usarlo directamente — costo $0.
+        brief_json = self._extract_brief_json(text)
+        if brief_json is not None:
+            logger.info("brief_json_extracted_deterministically", content_preview=brief_json[:300])
+            _parse_cache[cache_key] = brief_json
+            return self._parse_response(brief_json, text)
+
         user_prompt = BRIEF_PARSER_USER_TEMPLATE.format(brief_text=text)
 
         response = await deepseek_client.complete(
@@ -206,6 +216,42 @@ class BriefParserAgent:
         )
 
         return self._parse_response(response.content, text)
+
+    def _extract_brief_json(self, text: str) -> str | None:
+        """Extrae JSON determinístico de mensajes tipo 'Brief: {...}'.
+
+        El wizard envía el brief completo como JSON. Parsear con json.loads
+        preserva TODOS los campos (tiers, kpis, objective, dates, etc.)
+        que el LLM pierde. Costo: $0.
+
+        Returns the JSON string inside the first {...} block found after
+        "Brief:" (case-insensitive), or None if extraction fails.
+        """
+        import json
+        marker = text.find("Brief:")
+        if marker == -1:
+            marker = text.find("brief:")
+        if marker == -1:
+            return None
+        start = text.find("{", marker)
+        if start == -1:
+            return None
+        depth = 0
+        end = start
+        for i, ch in enumerate(text[start:], start):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i + 1
+                    break
+        json_str = text[start:end]
+        try:
+            json.loads(json_str)
+            return json_str
+        except json.JSONDecodeError:
+            return None
 
     def _extract_json(self, raw: str) -> str | None:
         match = re.search(r'\{.*\}', raw, re.DOTALL)

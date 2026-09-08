@@ -732,56 +732,54 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             return results
 
         async def _fetch_step5_brand_engagers():
-            """FIX 07-sep-2026: NUEVA FUENTE — brand engagers.
+            """FIX 07-sep-2026 + FIX 08-sep-2026: brand engagers reescrito.
 
-            Usa search_top_accounts con brand handles y competitor_brands para
-            encontrar cuentas oficiales de marca y sus seguidores activos en VE.
-            Estas cuentas ya interactúan con la categoría — máxima relevancia para
-            el objetivo de conversión.
-
-            Costo: ~3-6 llamadas (topsearch por brand keyword)."""
+            Usa search_followers_of con 2 seeds de marca (dogchowve, catchowve) para
+            encontrar seguidores reales que interactuaron con la marca y matchean
+            el nicho VE. Costo: ~4 llamadas (2 × enrich_profile + 2 × search_followers_of).
+            """
             from discovery.exceptions import SourceUnavailable
 
             results: list[dict] = []
 
-            brand_keywords = [
-                "dogchowve", "catchowve", "purina ve",
-                "pedigreeve", "doguive", "ringove",
-                "whiskasve", "fancyfeastve",
-            ]
+            brand_seeds = ["dogchowve", "catchowve"]
+            niche_queries = ["mascota", "perro", "gato"]
             seen_usernames: set[str] = set()
 
-            for kw in brand_keywords[:6]:
+            for seed in brand_seeds:
                 try:
-                    items = await instagram_source.search_top_accounts(kw, limit=8)
-                    for item in items:
-                        username = item.get("username", "")
-                        if not username or username in seen_usernames:
-                            continue
-                        # Solo cuentas de perfil (no contenido viral) con bios
-                        # que parecen marcas o creadores de mascotas en VE.
-                        bio = (item.get("bio") or item.get("biography") or "").lower()
-                        is_business = item.get("isBusinessAccount") or item.get("is_business")
-                        followers = item.get("follower_count") or item.get("followersCount") or 0
-                        # Aceptar: cuentas verificadas, cuentas de negocio con bio
-                        # relevante (pet, dog, cat, vzla), o cuentas grandes (≥10k).
-                        pet_bio = any(kw in bio for kw in ["pet", "dog", "cat", "vzla", "venezuela", "mascota"])
-                        is_brand_like = (
-                            item.get("is_verified") or item.get("verified") or
-                            is_business or
-                            pet_bio or
-                            followers >= 10_000
+                    profile = await instagram_source.enrich_profile(seed)
+                    if not profile or not profile.get("pk"):
+                        continue
+                    seed_pk = profile.get("pk")
+                    for query in niche_queries[:1]:
+                        resp = await instagram_source.search_followers_of(
+                            user_id=seed_pk,
+                            query=query,
                         )
-                        if not is_brand_like:
-                            continue
-                        seen_usernames.add(username)
-                        item["_discovery_query"] = f"brand_engagers:{kw}"
-                        results.append(item)
+                        users = resp.get("users", []) if isinstance(resp, dict) else []
+                        for u in users:
+                            user = u.get("user", {}) or u
+                            username = user.get("username", "")
+                            if not username or username in seen_usernames:
+                                continue
+                            bio = (user.get("biography") or user.get("bio") or "").lower()
+                            followers = user.get("follower_count") or 0
+                            pet_bio = any(
+                                kw in bio
+                                for kw in ["pet", "dog", "cat", "vzla", "venezuela", "mascota"]
+                            )
+                            if followers < 500 and not pet_bio:
+                                continue
+                            normalized = instagram_source._normalize_user(user)
+                            normalized["_discovery_query"] = f"brand_engagers:{seed}:{query}"
+                            seen_usernames.add(username)
+                            results.append(normalized)
                     await asyncio.sleep(0.3)
                 except SourceUnavailable:
                     raise
                 except Exception as e:
-                    logger.warning("step5_brand_engagers_error", keyword=kw, error=str(e))
+                    logger.warning("step5_brand_engagers_error", seed=seed, error=str(e))
 
             logger.info("step5_brand_engagers_done", results=len(results))
             return results
@@ -1457,17 +1455,17 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             about_data = e.get("about")
             profiles[handle].update({
                 "_enriched": True,
-                "follower_count": e.get("follower_count"),
-                "following_count": e.get("following_count"),
-                "posts_count": e.get("posts_count"),
+                "follower_count": e.get("follower_count") if e.get("follower_count") is not None else profiles[handle].get("follower_count", profiles[handle].get("followersCount")),
+                "following_count": e.get("following_count") if e.get("following_count") is not None else profiles[handle].get("following_count", profiles[handle].get("followsCount")),
+                "posts_count": e.get("posts_count") if e.get("posts_count") is not None else profiles[handle].get("posts_count", profiles[handle].get("postsCount")),
                 "is_business": e.get("is_business", False),
                 "is_verified": e.get("is_verified", False),
-                "bio": e.get("biography", profiles[handle].get("bio", "")),
-                "full_name": e.get("full_name", profiles[handle].get("full_name", "")),
+                "bio": e.get("biography") or profiles[handle].get("bio", ""),
+                "full_name": e.get("full_name") or profiles[handle].get("full_name", ""),
                 "avatar_url": e.get("avatar_url") or profiles[handle].get("avatar_url", ""),
-                "country": e.get("country", ""),
+                "country": e.get("country") or profiles[handle].get("country", ""),
                 "is_private": e.get("is_private", profiles[handle].get("is_private", False)),
-                "location": e.get("location_name", profiles[handle].get("location", "")),
+                "location": e.get("location_name") or profiles[handle].get("location", ""),
                 # FIX N-3: posts normalizados por get_user_medias — el scoring
                 # calcula ER real desde aquí ((likes+comments)/followers).
                 "latestPosts": e.get("latestPosts") or profiles[handle].get("latestPosts") or [],
@@ -1596,23 +1594,33 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         political_filtered = 0
         geo_passed = 0
         target_country = (brief.audience_countries or ["VE"])[0].upper()
-        # HITO 22: el techo de seguidores viene del brief, no de una constante.
-        # Antes TIER_MAX_FOLLOWERS=50.000 hacía imposible devolver cualquier
-        # perfil mid/macro, aunque el cliente los pidiera explícitamente.
+        # HITO 22 + FIX 08-sep-2026: el techo de seguidores viene del brief
+        # (influencer_preferences.max_followers) si existe; si no, del tier
+        # pedido (MACRO=500k, MID=100k, MICRO=50k); fallback final 50k.
+        TIER_MAX_FOLLOWERS_BY_TIER = {"MACRO": 500_000, "MID": 100_000, "MICRO": 50_000, "NANO": 10_000}
         max_followers_cap = TIER_MAX_FOLLOWERS
         if brief.influencer_preferences:
             pref_max = brief.influencer_preferences.get("max_followers")
             if isinstance(pref_max, int) and pref_max > 0:
                 max_followers_cap = pref_max
+            tiers = brief.influencer_preferences.get("tiers") or []
+            tier_caps = [
+                TIER_MAX_FOLLOWERS_BY_TIER.get(t.upper())
+                for t in tiers
+                if t.upper() in TIER_MAX_FOLLOWERS_BY_TIER
+            ]
+            if tier_caps:
+                max_followers_cap = max(max_followers_cap, max(tier_caps))
         exclusion_keywords = profile_data.get(
             "exclusion_keywords", DEFAULT_EXCLUSION_KEYWORDS
         )
         for handle, p in profiles.items():
-            # FIX N-4: los no seleccionados por el prefilter ya fueron
-            # contabilizados como drop ("prefilter"). Si entraran aquí,
-            # followers=0 dispararía un segundo drop (MISSING_FOLLOWER_FIELD)
-            # y la invariante del funnel dejaría de cuadrar.
-            if handle not in enrichment_targets:
+            # FIX 08-sep-2026: gate correcto — solo scoring de perfiles
+            # que realmente fueron enriquecidos (enriched_handles). Los 17 con
+            # BudgetExhausted NO están en enriched_handles y sus datos de
+            # discovery pueden estar sobrescritos con None por el merge.
+            # Also: mode explorar special-caseado abajo (rough scores).
+            if handle not in enriched_handles and not is_explore_mode:
                 continue
             followers = p.get("follower_count") if "follower_count" in p else p.get("followersCount")
             if followers is None:
