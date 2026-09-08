@@ -411,7 +411,11 @@ async def send_message(
 
 # ---- Brief Upload (PDF/TXT/CSV → Super Brief) ----
 
-@router.post("/lens/discovery/upload-brief")
+# FIX 08-sep-2026: el decorator decía "/lens/discovery/upload-brief" pero el
+# router ya tiene prefix="/discovery" y lens.py ya agrega "/lens" — la ruta
+# real era /api/v1/lens/discovery/lens/discovery/upload-brief (404). Con solo
+# "/upload-brief" la ruta correcta es /api/v1/lens/discovery/upload-brief ✅
+@router.post("/upload-brief")
 async def upload_brief_from_file(user: CurrentUserDep, file: UploadFile = File(...)):
     """Parse a PDF, TXT or CSV file and extract a super-enriched BriefStructured JSON."""
     import csv
