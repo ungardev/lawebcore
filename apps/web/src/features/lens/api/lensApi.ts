@@ -143,7 +143,12 @@ export const lensApi = {
       brief: BriefStructured;
       file_name: string;
       text_length: number;
-    }>('/lens/discovery/upload-brief', formData);
+    }>('/lens/discovery/upload-brief', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    if (!data?.brief) {
+      throw new Error('El servidor no devolvió un brief válido. Intenta de nuevo.');
+    }
     return data;
   },
 

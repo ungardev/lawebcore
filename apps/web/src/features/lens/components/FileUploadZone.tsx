@@ -49,9 +49,12 @@ export function FileUploadZone({ onBriefExtracted, onClear, isLoading, onLoading
       setUploadState('success');
     } catch (error) {
       const responseDetail = typeof error === 'object' && error !== null && 'response' in error
-        ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        ? (error as { response?: { data?: { detail?: string | Array<{msg?: string}> } } }).response?.data?.detail
         : undefined;
-      setErrorMessage(responseDetail || (error instanceof Error ? error.message : 'Error al procesar archivo'));
+      const errorMessage = Array.isArray(responseDetail)
+        ? responseDetail.map((e) => (typeof e === 'string' ? e : e.msg ?? 'Error de validación')).join('; ')
+        : responseDetail || (error instanceof Error ? error.message : 'Error al procesar archivo');
+      setErrorMessage(errorMessage);
       setUploadState('error');
     } finally {
       onLoadingChange?.(false);
