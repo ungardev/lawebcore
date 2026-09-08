@@ -315,6 +315,7 @@ async def send_message(
                 run = await conversation_memory.launch_discovery_run(
                     brief=DiscoverySearchRequest(
                         product_name=brief.product_name,
+                        brand_name=brief.brand_name,
                         industry=brief.industry,
                         niches=brief.niches,
                         hashtags=brief.hashtags,

@@ -222,6 +222,7 @@ class DiscoverySearchRequest(BaseModel):
 
     product_name: str | None = None
     brand_id: UUID | None = None
+    brand_name: str | None = None
     industry: str | None = None
     niches: list[str] = Field(default_factory=list)
     hashtags: list[str] = Field(default_factory=list)

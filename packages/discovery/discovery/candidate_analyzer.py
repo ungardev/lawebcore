@@ -127,6 +127,8 @@ def _build_batch_prompt(
     tone: list[str],
     country: str,
     elite_data: dict[str, Any] | None = None,
+    campaign_objective: str | None = None,
+    kpis: list[str] | None = None,
 ) -> str:
     blocks = []
     for i, c in enumerate(candidates):
@@ -160,6 +162,8 @@ def _build_batch_prompt(
         elite_section = f"""
 
 CONTEXTO ELITE DE LA CAMPAÑA (usa esto para evaluar content_quality, audience_quality y brand_fit):
+  Objetivo de campaña: {campaign_objective or 'no especificado'}
+  KPIs a optimizar: {", ".join(kpis) if kpis else 'no especificados'}
   Content themes winners: {content_themes_str}
   Benchmarks del nicho: min_followers={min_followers:,}, ideal_range={ideal_range}, min_er={min_er:.1%}, target_er={target_er:.1%}
   Señales de credibilidad (busca estas en bio/posts): {credibility_str}
@@ -291,6 +295,8 @@ class CandidateAnalyzer:
         tone = getattr(brief, "tone", []) or []
         countries = getattr(brief, "audience_countries", []) or []
         country = countries[0] if countries else "Venezuela"
+        campaign_objective = getattr(brief, "campaign_objective", None)
+        kpis = getattr(brief, "kpis", None) or []
 
         elite_data = None
         if profile_data and isinstance(profile_data, dict):
@@ -316,6 +322,8 @@ class CandidateAnalyzer:
                     tone,
                     country,
                     elite_data,
+                    campaign_objective,
+                    kpis,
                 )
 
                 batch_results: list[tuple[int, dict[str, Any]]] = []

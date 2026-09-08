@@ -77,14 +77,72 @@ VE_NICHE_HASHTAGS: dict[str, list[str]] = {
 }
 
 
+_INDUSTRY_ALIAS_MAP: dict[str, str] = {
+    "pet food": "mascotas",
+    "pets": "mascotas",
+    "pet": "mascotas",
+    "mascotas": "mascotas",
+    "mascota": "mascotas",
+    "dog": "mascotas",
+    "dogs": "mascotas",
+    "perro": "mascotas",
+    "perros": "mascotas",
+    "cat": "mascotas",
+    "cats": "mascotas",
+    "gato": "mascotas",
+    "gatos": "mascotas",
+    "veterinaria": "mascotas",
+    "vet": "mascotas",
+    "pet care": "mascotas",
+    "belleza": "belleza",
+    "beauty": "belleza",
+    "makeup": "belleza",
+    "skincare": "belleza",
+    "food": "food",
+    "comida": "food",
+    "gastronomia": "food",
+    "restaurant": "food",
+    "fitness": "fitness",
+    "gym": "fitness",
+    "gimnasio": "fitness",
+    "moda": "moda",
+    "fashion": "moda",
+    "tecnologia": "tecnologia",
+    "tech": "tecnologia",
+    "turismo": "turismo",
+    "viajes": "turismo",
+    "viaje": "turismo",
+    "entretenimiento": "entretenimiento",
+    "entretenimiento": "entretenimiento",
+    "educacion": "educacion",
+    "education": "educacion",
+    "finanzas": "finanzas",
+    "finance": "finanzas",
+    "negocios": "finanzas",
+    "hogar": "hogar",
+    "deportes": "deportes",
+    "deporte": "deportes",
+}
+
+
+def _resolve_industry_key(industry: str | None) -> str:
+    """Resolve an industry string to a VE_NICHE_HASHTAGS key, with alias support."""
+    if not industry:
+        return "default"
+    normalized = industry.lower().strip()
+    if normalized in _INDUSTRY_ALIAS_MAP:
+        return _INDUSTRY_ALIAS_MAP[normalized]
+    return normalized
+
+
 def auto_hashtags_for_brief(brief: BriefStructured) -> list[str]:
     """Returns VE-specific hashtags auto-generated for the brief's industry.
 
     These hashtags are prepended to the hashtag list to boost VE-native
     creator discovery. Falls back to generic VE hashtags if industry unknown.
     """
-    industry = (brief.industry or "default").lower().strip()
-    return VE_NICHE_HASHTAGS.get(industry, [
+    industry_key = _resolve_industry_key(brief.industry)
+    return VE_NICHE_HASHTAGS.get(industry_key, [
         "vzla", "venezuela", "caracas", "vzlatex",
         "vzlan", "venezolano", "mascotasvzla",
     ])
