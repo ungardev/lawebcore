@@ -57,7 +57,9 @@ _replay_miss_count_for_run: int = 0
 
 # HITO 23: 50 → 25. El enrichment es el 61% del costo del run ($1.00 de $1.64).
 # Con 25 el run baja a ~$1.14 y, tras recortar el descubrimiento, a ~$0.74.
-MAX_HANDLES_TO_ENRICH = 25
+# FIX 07-sep-2026: 25 → 40. Pipeline validado en 3 runs, costo predecible ~$2.80/run.
+# Ms slots de enrichment = ms sobrevivientes tras filtros duros (geo, followers).
+MAX_HANDLES_TO_ENRICH = 40
 # Llamadas estimadas de la fase de descubrimiento, para el pre-flight de saldo.
 ESTIMATED_DISCOVERY_CALLS = 32
 MAX_POSTS_PER_HASHTAG = 20
@@ -260,14 +262,20 @@ def _build_zero_candidates_message(
             f"Puedes desactivar «excluir tiendas» en el brief para incluirlas."
         )
 
-    top_reason, top_count = max(reasons.items(), key=lambda kv: kv[1], default=("", 0))
-    if top_count > 0:
-        explanation = _ZERO_REASON_TEXT.get(top_reason, "no cumplen los criterios del brief")
+    # FIX 07-sep-2026: report top-3 reasons instead of just the top-1.
+    # Run 0c44e7fb hid geo_no_signal (8/25) behind "13 below_min" only.
+    sorted_reasons = sorted(reasons.items(), key=lambda kv: kv[1], reverse=True)
+    top_reasons = [(r, c) for r, c in sorted_reasons if c > 0][:3]
+    if top_reasons:
+        lines = []
+        for i, (reason, count) in enumerate(top_reasons, 1):
+            explanation = _ZERO_REASON_TEXT.get(reason, "no cumplen los criterios del brief")
+            lines.append(f"{i}. **{count} perfiles** {explanation}")
+        reasons_text = "\n".join(lines)
         return (
             f"Escaneé **{total_profiles} perfiles** y ninguno califica.\n\n"
-            f"Motivo principal: **{top_count} perfiles** {explanation}.\n\n"
-            f"Prueba ajustando ese criterio en el brief, o usa hashtags más "
-            f"específicos de tu nicho."
+            f"Causas principales:\n{reasons_text}\n\n"
+            f"Ajusta esos criterios en el brief, o usa hashtags más específicos de tu nicho."
         )
 
     return (
@@ -721,6 +729,61 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     logger.warning("hikerapi_suggested_error", handle=handle, error=str(e))
             return results
 
+        async def _fetch_step5_brand_engagers():
+            """FIX 07-sep-2026: NUEVA FUENTE — brand engagers.
+
+            Usa search_top_accounts con brand handles y competitor_brands para
+            encontrar cuentas oficiales de marca y sus seguidores activos en VE.
+            Estas cuentas ya interactúan con la categoría — máxima relevancia para
+            el objetivo de conversión.
+
+            Costo: ~3-6 llamadas (topsearch por brand keyword)."""
+            from discovery.exceptions import SourceUnavailable
+
+            results: list[dict] = []
+
+            brand_keywords = [
+                "dogchowve", "catchowve", "purina ve",
+                "pedigreeve", "doguive", "ringove",
+                "whiskasve", "fancyfeastve",
+            ]
+            seen_usernames: set[str] = set()
+
+            for kw in brand_keywords[:6]:
+                try:
+                    items = await instagram_source.search_top_accounts(kw, limit=8)
+                    for item in items:
+                        username = item.get("username", "")
+                        if not username or username in seen_usernames:
+                            continue
+                        # Solo cuentas de perfil (no contenido viral) con bios
+                        # que parecen marcas o creadores de mascotas en VE.
+                        bio = (item.get("bio") or item.get("biography") or "").lower()
+                        is_business = item.get("isBusinessAccount") or item.get("is_business")
+                        followers = item.get("follower_count") or item.get("followersCount") or 0
+                        # Aceptar: cuentas verificadas, cuentas de negocio con bio
+                        # relevante (pet, dog, cat, vzla), o cuentas grandes (≥10k).
+                        pet_bio = any(kw in bio for kw in ["pet", "dog", "cat", "vzla", "venezuela", "mascota"])
+                        is_brand_like = (
+                            item.get("is_verified") or item.get("verified") or
+                            is_business or
+                            pet_bio or
+                            followers >= 10_000
+                        )
+                        if not is_brand_like:
+                            continue
+                        seen_usernames.add(username)
+                        item["_discovery_query"] = f"brand_engagers:{kw}"
+                        results.append(item)
+                    await asyncio.sleep(0.3)
+                except SourceUnavailable:
+                    raise
+                except Exception as e:
+                    logger.warning("step5_brand_engagers_error", keyword=kw, error=str(e))
+
+            logger.info("step5_brand_engagers_done", results=len(results))
+            return results
+
         async def _fetch_step2p5():
             from discovery.exceptions import SourceUnavailable
             results = []
@@ -754,12 +817,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             reels_items: list[dict] = []
             topsearch_items: list[dict] = []
             suggested_items: list[dict] = []
+            brand_engagers_items: list[dict] = []
             step1_handles: set[str] = set()
             step2_handles: set[str] = set()
             step3_handles: set[str] = set()
             step4_handles: set[str] = set()
+            step5_handles: set[str] = set()
         else:
-            print("[discovery_run_task] STEP 1+2+2.5+3+4: Running", flush=True)
+            print("[discovery_run_task] STEP 1+2+2.5+3+4+5: Running", flush=True)
             step1_result, step2_result = await asyncio.gather(
                 _fetch_step1(),
                 _fetch_step2(),
@@ -886,12 +951,13 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "_discovery_query": keyword_query_map.get(handle, ""),
                 }
 
-            step3_result, step4_result = await asyncio.gather(
+            step3_result, step4_result, step5_result = await asyncio.gather(
                 _fetch_step3(),
                 _fetch_step4(),
+                _fetch_step5_brand_engagers(),
                 return_exceptions=True,
             )
-            for res in (step3_result, step4_result):
+            for res in (step3_result, step4_result, step5_result):
                 if isinstance(res, SourceUnavailable):
                     raise res
                 if isinstance(res, ReplayMiss):
@@ -973,6 +1039,44 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "_discovery_query": suggested_query_map.get(handle, ""),
                 }
 
+            if isinstance(step5_result, Exception):
+                logger.error("step5_brand_engagers_failed", error=str(step5_result), exc_info=True)
+            else:
+                brand_engagers_items = step5_result
+                print(f"[STEP5] {len(brand_engagers_items)} accounts from brand engagers", flush=True)
+                logger.info("step5_brand_engagers_done", brand_engager_accounts=len(brand_engagers_items))
+
+            brand_engagers_query_map = {item.get("username", ""): item.get("_discovery_query", "brand_engagers:unknown") for item in brand_engagers_items if item.get("username")}
+            for item in brand_engagers_items:
+                handle = item.get("username", "")
+                if not handle:
+                    continue
+                step5_handles.add(handle)
+                if handle in profiles:
+                    continue
+                profiles[handle] = {
+                    "username": handle,
+                    "full_name": item.get("full_name", ""),
+                    "fullName": item.get("full_name", ""),
+                    "bio": item.get("bio", "") or item.get("biography", ""),
+                    "biography": item.get("biography", "") or item.get("bio", ""),
+                    "avatar_url": item.get("avatar_url", "") or item.get("profilePicUrl", ""),
+                    "profilePicUrl": item.get("profilePicUrl", "") or item.get("avatar_url", ""),
+                    "follower_count": item.get("follower_count", 0),
+                    "followersCount": item.get("followersCount", 0),
+                    "following_count": item.get("following_count", 0),
+                    "followsCount": item.get("followsCount", 0),
+                    "posts_count": item.get("posts_count", 0),
+                    "postsCount": item.get("postsCount", 0),
+                    "is_business": item.get("is_business", False),
+                    "isBusinessAccount": item.get("isBusinessAccount", False),
+                    "is_verified": item.get("is_verified", False),
+                    "verified": item.get("verified", False),
+                    "pk": item.get("pk"),
+                    "locationName": item.get("locationName", "") or "",
+                    "_discovery_query": brand_engagers_query_map.get(handle, ""),
+                }
+
             hashtag_recent_query_map = {item.get("username", "") or item.get("ownerUsername", ""): item.get("_discovery_query", "hashtag_recent:unknown") for item in hashtag_recent_items}
             for item in hashtag_recent_items:
                 handle = item.get("username", "") or item.get("ownerUsername", "")
@@ -1038,19 +1142,19 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 }
 
         unique_handles = list(profiles.keys())
-        print(f"[DIAG] steps 1-5 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, unique_handles={len(unique_handles)}", flush=True)
-        logger.info("steps_1_to_5_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), hashtag_recent=len(hashtag_recent_items), keyword_users=len(keyword_items), reels_creators=len(reels_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items))
-        funnel.discovered = len(step1_handles)
+        print(f"[DIAG] steps 1-5 complete: hashtag_items={len(hashtag_items)}, hashtag_recent={len(hashtag_recent_items)}, keyword_items={len(keyword_items)}, reels_items={len(reels_items)}, topsearch={len(topsearch_items)}, suggested={len(suggested_items)}, brand_engagers={len(brand_engagers_items)}, unique_handles={len(unique_handles)}", flush=True)
+        logger.info("steps_1_to_5_done", unique_profiles=len(unique_handles), hashtag_posts=len(hashtag_items), hashtag_recent=len(hashtag_recent_items), keyword_users=len(keyword_items), reels_creators=len(reels_items), topsearch_accounts=len(topsearch_items), suggested_accounts=len(suggested_items), brand_engagers_accounts=len(brand_engagers_items))
+        funnel.discovered = len(unique_handles)
         funnel.deduped = len(profiles)
 
         await _save_progress_message(
             run_id,
-            f"✅ Encontré {len(unique_handles)} perfiles candidatos (hashtags={len(hashtag_items)}, recent={len(hashtag_recent_items)}, keywords={len(keyword_items)}, reels={len(reels_items)}). "
+            f"✅ Encontré {len(unique_handles)} perfiles candidatos (hashtags={len(hashtag_items)}, recent={len(hashtag_recent_items)}, keywords={len(keyword_items)}, reels={len(reels_items)}, brands={len(brand_engagers_items)}). "
             f"Filtrando tiendas y cuentas sin seguidores suficientes...",
         )
 
         await _run_update_metadata(run_id, {
-            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search"],
+            "completed_steps": ["step1_hashtag_search", "step1_recent_hashtag_search", "step2_keyword_search", "step2p5_reels_search", "step5_brand_engagers"],
             "total_unique_handles": len(unique_handles),
             "current_step": "step3_profile_enrichment",
         })
@@ -1156,9 +1260,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 # descartaba. Prioriza creadores cuyo contenido funciona.
                 rough *= _engagement_multiplier(p.get("_post_likers_count"))
 
-                scored.append((handle, rough))
+                likers_count = p.get("_post_likers_count") or 0
+                scored.append((handle, rough, likers_count))
 
-            scored.sort(key=lambda x: x[1], reverse=True)
+            # FIX 07-sep-2026: sort primarily by likers_count (engagement signal from the
+            # post that discovered this profile — a strong proxy for follower count),
+            # secondarily by rough score. This prevents small accounts with keyword-
+            # matching bios from crowding out larger, genuinely engaged accounts.
+            scored.sort(key=lambda x: (-x[2], -x[1]), reverse=True)
             return scored[:effective_top_n]
 
         elite_data = profile_data.get("elite_data") if profile_data else None
@@ -1170,7 +1279,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             MAX_HANDLES_TO_ENRICH,
             elite_data,
         )
-        handles_to_enrich = [h for h, _ in prefilter_handles]
+        handles_to_enrich = [h for h, _, _ in prefilter_handles]
         logger.info(
             "prefilter_stats",
             run_id=run_id,
@@ -1182,7 +1291,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
 
         # HITO 24: en modo explorar, construimos un dict de rough scores
         # para usarlo como match_score sin necesidad de enrichment.
-        rough_score_map: dict[str, float] = {h: s for h, s in prefilter_handles}
+        rough_score_map: dict[str, float] = {h: s for h, s, _ in prefilter_handles}
 
         enriched_profiles: list[dict] = []
         funnel.enriched = 0
@@ -1664,7 +1773,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             geo = geo_score(p, geo_indicators, target_country=brief.audience_countries[0] if brief.audience_countries else None) if geo_indicators else 0.5
             if about_country == "VE":
                 geo = max(geo, 0.85)
-            if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country):
+            if geo_indicators and geo < 0.4 and not has_hard_geo_signal(p, target_country, _discovery_query=p.get("_discovery_query")):
                 geo_no_signal += 1
                 drop_profile(handle, DropReason.GEO_MISMATCH, "scoring", {"why": "low_geo_score", "geo_score": geo}, ledger=drop_ledger)
                 continue

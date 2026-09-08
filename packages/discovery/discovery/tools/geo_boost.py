@@ -164,14 +164,30 @@ def build_rationale(
     )
 
 
-def has_hard_geo_signal(profile: dict, target_iso: str = "VE") -> bool:
+def has_hard_geo_signal(
+    profile: dict,
+    target_iso: str = "VE",
+    _discovery_query: str | None = None,
+) -> bool:
     """Hard geo filter fallback: checks hard-coded city/country signals when geo_indicators fail.
 
-    This prevents profiles with explicit location mentions from being incorrectly filtered out
-    when geo_indicators don't match (e.g., LLM-generated indicators miss common aliases).
+    FIX 07-sep-2026: also checks the discovery source (_discovery_query) for VE-specific
+    hashtags. A profile discovered via #mascotasvzla or #perrosvzla is VE with very high
+    probability — the source itself is geo evidence that should not be ignored.
 
     Returns True if profile contains unambiguous VE location signals.
     """
+    if target_iso == "VE" and _discovery_query:
+        ve_source_patterns = (
+            "vzla", "venezuela", "mascotasvzla", "mascotasve", "perrosvzla",
+            "perrosve", "gatosvzla", "gatosve", "gatosdevenezuela",
+            "perrosdevenezuela", "catloversvenezuela", "dogloversvenezuela",
+            "petloversvzla", "petloversvenezuela",
+        )
+        query_lower = _discovery_query.lower()
+        if any(pat in query_lower for pat in ve_source_patterns):
+            return True
+
     bio = (profile.get("biography") or profile.get("bio") or "").lower()
     full_name = (profile.get("full_name") or profile.get("fullName") or "").lower()
     location = (profile.get("locationName") or profile.get("location") or "").lower()
