@@ -135,6 +135,140 @@ def _resolve_industry_key(industry: str | None) -> str:
     return normalized
 
 
+KEYWORD_PRESETS_BY_INDUSTRY: dict[str, list[str]] = {
+    "mascotas": [
+        "adiestramiento canino",
+        "veterinaria",
+        "peluqueria canina",
+        "grooming",
+        "pet lover",
+        "dueña de perro",
+        "doglovers",
+        "mascotas",
+    ],
+    "belleza": [
+        "makeup",
+        "skincare",
+        "uñas",
+        "hair",
+        "belleza",
+        "cosmeticos",
+        "nails",
+        "skinfluencer",
+    ],
+    "food": [
+        "comida",
+        "arepa",
+        "cocina",
+        "food",
+        "recetas",
+        "gastronomia",
+        "comidavenezolana",
+        "foodie",
+    ],
+    "fitness": [
+        "gym",
+        "fitness",
+        "ejercicio",
+        "entrenamiento",
+        "gimnasio",
+        "fit",
+        "deporte",
+        "workout",
+    ],
+    "moda": [
+        "moda",
+        "outfit",
+        "ropa",
+        "fashion",
+        "estilo",
+        "tendencias",
+        "closet",
+        "fashionista",
+    ],
+    "tecnologia": [
+        "tech",
+        "tecnologia",
+        "gadgets",
+        "innovacion",
+        "digital",
+        "software",
+        "programacion",
+        "developer",
+    ],
+    "turismo": [
+        "viajes",
+        "turismo",
+        "viajar",
+        "destinos",
+        "vacaciones",
+        "explora",
+        "adventura",
+        "viajeblogger",
+    ],
+    "entretenimiento": [
+        "musica",
+        "cine",
+        "entretenimiento",
+        "cultura",
+        "artist",
+        "cantante",
+        "actor",
+        "entretenimiento",
+    ],
+    "educacion": [
+        "educacion",
+        "cursos",
+        "aprendizaje",
+        "estudio",
+        "universidad",
+        "docencia",
+        "formacion",
+        "clases",
+    ],
+    "finanzas": [
+        "finanzas",
+        "negocios",
+        "emprendimiento",
+        "inversion",
+        "dinero",
+        "economia",
+        "startup",
+        "negocio",
+    ],
+    "hogar": [
+        "hogar",
+        "decoracion",
+        "interiorismo",
+        "casa",
+        "decor",
+        "arquitectura",
+        "muebles",
+        "hogar",
+    ],
+    "deportes": [
+        "deportes",
+        "futbol",
+        "beisbol",
+        "gym",
+        "atletismo",
+        "deportista",
+        "liga",
+        "seleccion",
+    ],
+    "default": [
+        "emprendimiento",
+        "negocios",
+        "creator",
+        "contenido",
+        "influencer",
+        "social media",
+        "brand",
+        "marketing",
+    ],
+}
+
+
 def auto_hashtags_for_brief(brief: BriefStructured) -> list[str]:
     """Returns VE-specific hashtags auto-generated for the brief's industry.
 
@@ -179,6 +313,12 @@ class QueryBuilder:
     def _build_keyword_queries(self, profile: dict[str, Any], brief: BriefStructured) -> list[str]:
         queries: list[str] = []
 
+        industry_key = _resolve_industry_key(brief.industry)
+        preset_keywords = KEYWORD_PRESETS_BY_INDUSTRY.get(industry_key, [])
+        if not preset_keywords:
+            preset_keywords = KEYWORD_PRESETS_BY_INDUSTRY.get("default", [])
+
+        queries.extend(preset_keywords)
         queries.extend(profile.get("keywords", []))
 
         if brief.competitor_brands:

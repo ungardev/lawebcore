@@ -58,8 +58,8 @@ _replay_miss_count_for_run: int = 0
 # HITO 23: 50 → 25. El enrichment es el 61% del costo del run ($1.00 de $1.64).
 # Con 25 el run baja a ~$1.14 y, tras recortar el descubrimiento, a ~$0.74.
 # FIX 07-sep-2026: 25 → 40. Pipeline validado en 3 runs, costo predecible ~$2.80/run.
-# Ms slots de enrichment = ms sobrevivientes tras filtros duros (geo, followers).
-MAX_HANDLES_TO_ENRICH = 40
+# FIX 08-sep-2026: 40 → 28. Con prefilter geo-first y slots ms selectos, 28 basta.
+MAX_HANDLES_TO_ENRICH = 28
 # Llamadas estimadas de la fase de descubrimiento, para el pre-flight de saldo.
 ESTIMATED_DISCOVERY_CALLS = 32
 MAX_POSTS_PER_HASHTAG = 20
@@ -747,15 +747,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             from discovery.exceptions import SourceUnavailable
 
             results: list[dict] = []
-            niche_queries = list(brief.niches[:2]) if brief.niches else []
-            if not niche_queries:
-                niche_queries = ["mascota"]
-
-            competitor_brands = list(brief.competitor_brands or [])[:3]
             industry_key = (brief.industry or "").lower()
             is_mascotas = industry_key in (
                 "mascotas", "pet", "pet_food", "pet food", "pets", "mascota",
             )
+            if is_mascotas:
+                niche_queries = ["perro", "gato"]
+            elif brief.niches:
+                niche_queries = [
+                    n.split()[0].lower()[:8] for n in brief.niches[:2]
+                ]
+                niche_queries = [q for q in niche_queries if q]
+                if not niche_queries:
+                    niche_queries = ["perro"]
+            else:
+                niche_queries = ["perro"]
+
+            competitor_brands = list(brief.competitor_brands or [])[:3]
 
             if not competitor_brands and not is_mascotas:
                 logger.info(
@@ -807,6 +815,12 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                             user_id=seed_pk,
                             query=query,
                         )
+                        logger.info(
+                            "step5_query_debug",
+                            seed=seed,
+                            query=query,
+                            raw_users_count=len(raw_users),
+                        )
                         for u in raw_users:
                             user = u.get("user", {}) if isinstance(u, dict) else u
                             if not isinstance(user, dict):
@@ -836,6 +850,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 try:
                     data = await instagram_source.search_reels_by_keyword(kw)
                     modules = data.get("reels_serp_modules", [])
+                    if not modules:
+                        top_keys = list(data.keys())[:12]
+                        logger.warning(
+                            "step2p5_reels_empty_or_unknown_shape",
+                            keyword=kw,
+                            top_keys=top_keys,
+                            response_size=len(str(data)[:200]),
+                        )
                     for module in modules:
                         clips = module.get("clips", [])[:MAX_REELS_PER_QUERY]
                         for clip in clips:
@@ -1249,6 +1271,14 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     if posts_count < 10 and followers > 5000:
                         bot_flags[handle] = bot_flags.get(handle, 0) + 1
 
+                is_brand_engager = p.get("_is_brand_engager", False)
+                if (
+                    not is_brand_engager
+                    and followers > 0
+                    and followers < min_followers
+                ):
+                    continue
+
                 bio = p.get("biography") or p.get("bio") or ""
                 geo = geo_score(
                     {"biography": bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
@@ -1306,11 +1336,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 likers_count = p.get("_post_likers_count") or 0
                 scored.append((handle, rough, likers_count))
 
-            # FIX 07-sep-2026: sort primarily by likers_count (engagement signal from the
-            # post that discovered this profile — a strong proxy for follower count),
-            # secondarily by rough score. This prevents small accounts with keyword-
-            # matching bios from crowding out larger, genuinely engaged accounts.
-            scored.sort(key=lambda x: (-x[2], -x[1]), reverse=True)
+            # FIX 08-sep-2026: sort primarily by rough score (geo × niche × engagement),
+            # secondarily by likers_count as tiebreak. Previously likers-first caused
+            # viral diaspora posts to dominate enrichment slots over VE-native accounts.
+            scored.sort(key=lambda x: (-x[1], -x[2]), reverse=True)
             return scored[:effective_top_n]
 
         elite_data = profile_data.get("elite_data") if profile_data else None
