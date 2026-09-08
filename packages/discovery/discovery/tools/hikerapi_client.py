@@ -910,12 +910,17 @@ class HikerAPIClient:
         user_id: int | str,
         query: str,
         force: bool = True,
-    ) -> dict[str, Any]:
+    ) -> list[dict[str, Any]]:
         """GET /v1/user/search/followers — network expansion: find similar VE creators.
 
         Searches within a user's followers for those matching the query keyword.
         Key VE discovery technique: take top seed account, find VE-similar
         creators in their follower base.
+
+        FIX 08-sep-2026: la spec OpenAPI dice que responde un ARRAY RAÍZ de
+        UserShort, NO un dict con wrapper .users. El caller anterior hacía
+        resp.get("users", []) siempre que isinstance(resp, dict) — siempre []
+        porque la respuesta es list. Retornamos list[dict] ahora.
         """
         params = {
             "user_id": str(user_id),
@@ -923,7 +928,26 @@ class HikerAPIClient:
             "force": str(force).lower(),
             "safe_int": self.SAFE_INT,
         }
-        return await self._get("/v1/user/search/followers", params=params) or {}
+        resp = await self._get("/v1/user/search/followers", params=params)
+        if resp is None:
+            return []
+        if isinstance(resp, list):
+            logger.info(
+                "hikerapi_search_followers_of_parsed",
+                user_id=user_id,
+                query=query,
+                count=len(resp),
+            )
+            return resp
+        logger.warning(
+            "hikerapi_search_followers_of_unknown_shape",
+            user_id=user_id,
+            query=query,
+            response_type=type(resp).__name__,
+            response_keys=list(resp.keys()) if isinstance(resp, dict) else None,
+            preview=str(resp)[:400],
+        )
+        return []
 
     async def web_profile_info(self, user_id: int | str) -> dict[str, Any]:
         """GET /gql/user/web_profile_info — RECOMMENDED rich profile via GraphQL.
@@ -1074,8 +1098,9 @@ class HikerAPIClient:
         )
         if not resp:
             return []
+        raw_items = self._extract_suggested_users(resp)
         results: list[dict[str, Any]] = []
-        for sp in resp.get("suggested_profiles", [])[:limit]:
+        for sp in raw_items[:limit]:
             username_val = sp.get("username") or (sp.get("user", {}) or {}).get("username", "")
             if not username_val:
                 continue
@@ -1083,9 +1108,6 @@ class HikerAPIClient:
             normalized["_source_suggested"] = username
             results.append(normalized)
         if not results:
-            # Diagnóstico de forma (metodología medias): suggested_profiles
-            # devolvió 0 en todos los runs — con las keys reales el ajuste
-            # del parser es inmediato.
             logger.warning(
                 "hikerapi_suggested_unknown_shape",
                 seed=username,
@@ -1094,6 +1116,81 @@ class HikerAPIClient:
             )
         logger.info("hikerapi_suggested_results", seed=username, results=len(results))
         return results
+
+    def _extract_suggested_users(self, resp: dict | list) -> list[dict]:
+        """Extrae la lista de usuarios sugeridos de /v2/user/suggested/profiles.
+
+        La spec OpenAPI no documenta el schema (respuesta = {}). Formas
+        observadas en IG / empirically:
+
+          - suggested_profiles[...]            ← spec original (nuestra suposición)
+          - new_suggested_users.users[...]     ← forma moderna
+          - suggested_users.suggestions[...]  ← forma alternativa
+          - users[...]                        ← simple
+          - items[...]                        ← genérica
+          - new_suggested_users[*].user      ← cada item tiene .user
+          - suggestions[*].user
+
+        Si todos fallan, búsqueda recursiva de dicts con 'username'.
+        """
+        if isinstance(resp, list):
+            return [v for v in resp if isinstance(v, dict) and v.get("username")]
+        if not isinstance(resp, dict):
+            return []
+
+        direct_users: list[dict] = []
+        for key in ("suggested_profiles", "new_suggested_users", "suggested_users",
+                    "users", "items"):
+            val = resp.get(key)
+            if isinstance(val, list):
+                extracted = [v for v in val if isinstance(v, dict) and v.get("username")]
+                if extracted:
+                    return extracted
+                nested_users = self._find_suggested_users_nested(val)
+                if nested_users:
+                    return nested_users
+            elif isinstance(val, dict):
+                for inner_key in ("users", "suggestions", "items"):
+                    inner = val.get(inner_key)
+                    if isinstance(inner, list):
+                        extracted = [v for v in inner if isinstance(v, dict) and v.get("username")]
+                        if extracted:
+                            return extracted
+                        nested_users = self._find_suggested_users_nested(inner)
+                        if nested_users:
+                            return nested_users
+
+        recursive = self._find_suggested_users_recursive(resp, depth=0)
+        return recursive
+
+    def _find_suggested_users_nested(self, items: list) -> list[dict]:
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            user = item.get("user")
+            if isinstance(user, dict) and user.get("username"):
+                return [user]
+            if item.get("username"):
+                return [item]
+        return []
+
+    def _find_suggested_users_recursive(self, obj: Any, depth: int) -> list[dict]:
+        if depth > 6 or not isinstance(obj, dict):
+            return []
+        results: list[dict] = []
+        for key, value in obj.items():
+            if isinstance(value, list):
+                for item in value:
+                    if not isinstance(item, dict):
+                        continue
+                    user = item.get("user")
+                    if isinstance(user, dict) and user.get("username"):
+                        results.append(user)
+                    elif item.get("username") and item.get("pk"):
+                        results.append(item)
+            elif isinstance(value, dict):
+                results.extend(self._find_suggested_users_recursive(value, depth + 1))
+        return results[:20]
 
     def _extract_media_items(self, resp: dict) -> list[dict]:
         """Extrae media objects de la estructura anidada de /v2/hashtag/medias/top.
@@ -1196,6 +1293,11 @@ class HikerAPIClient:
             "pk": str(pk) if pk else None,
             "country": country_iso,
             "location_name": user.get("location_name", "") or user.get("city", ""),
+            "public_email": user.get("public_email") or None,
+            "city_name": user.get("city_name") or None,
+            "business_category_name": user.get("business_category_name") or None,
+            "category_name": user.get("category_name") or None,
+            "address_street": user.get("address_street") or None,
         }
 
 

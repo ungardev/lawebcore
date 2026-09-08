@@ -732,18 +732,68 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             return results
 
         async def _fetch_step5_brand_engagers():
-            """FIX 07-sep-2026 + FIX 08-sep-2026: brand engagers reescrito.
+            """FIX 08-sep-2026: brand engagers reescrito con seeds del brief.
 
-            Usa search_followers_of con 2 seeds de marca (dogchowve, catchowve) para
-            encontrar seguidores reales que interactuaron con la marca y matchean
-            el nicho VE. Costo: ~4 llamadas (2 × enrich_profile + 2 × search_followers_of).
+            Fuentes de seeds (prioridad):
+            1. competitor_brands del PDF → resolve handle → pk → search_followers_of
+            2. Si industry=mascotas y no hay competitor_brands → dogchowve/catchowve como fallback
+            3. Para otras industrias sin competitor_brands → S5 se salta (niche queries usadas)
+
+            Costo: 2 × enrich_profile + 2 × search_followers_of ≈ 4 llamadas/run.
+            UserShort (search_followers_of) no trae bio ni followers — esos datos
+            llegan en enrichment (step3). Marcamos _is_brand_engager=True para que
+            el prefilter los force-incluya en los slots de enrichment.
             """
             from discovery.exceptions import SourceUnavailable
 
             results: list[dict] = []
+            niche_queries = list(brief.niches[:2]) if brief.niches else []
+            if not niche_queries:
+                niche_queries = ["mascota"]
 
-            brand_seeds = ["dogchowve", "catchowve"]
-            niche_queries = ["mascota", "perro", "gato"]
+            competitor_brands = list(brief.competitor_brands or [])[:3]
+            industry_key = (brief.industry or "").lower()
+            is_mascotas = industry_key in (
+                "mascotas", "pet", "pet_food", "pet food", "pets", "mascota",
+            )
+
+            if not competitor_brands and not is_mascotas:
+                logger.info(
+                    "step5_brand_engagers_skipped",
+                    reason="no_competitor_brands_and_not_mascotas",
+                    industry=brief.industry,
+                )
+                return results
+
+            brand_seeds: list[str] = []
+            if competitor_brands:
+                for brand in competitor_brands:
+                    resolved = await instagram_source.enrich_profile(brand)
+                    if resolved and resolved.get("pk"):
+                        brand_seeds.append(resolved["username"])
+                        await asyncio.sleep(0.2)
+                    else:
+                        search_resp = await instagram_source.search_keyword(brand, limit=3)
+                        for item in search_resp:
+                            un = item.get("username", "")
+                            if un and un not in brand_seeds:
+                                brand_seeds.append(un)
+                                break
+                    if len(brand_seeds) >= 2:
+                        break
+                logger.info(
+                    "step5_brand_engagers_seeds_resolved",
+                    seeds=brand_seeds,
+                    from_brands=competitor_brands,
+                )
+
+            if not brand_seeds and is_mascotas:
+                brand_seeds = ["dogchowve", "catchowve"]
+
+            if not brand_seeds:
+                logger.info("step5_brand_engagers_no_seeds", reason="unresolved")
+                return results
+
             seen_usernames: set[str] = set()
 
             for seed in brand_seeds:
@@ -752,27 +802,21 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     if not profile or not profile.get("pk"):
                         continue
                     seed_pk = profile.get("pk")
-                    for query in niche_queries[:1]:
-                        resp = await instagram_source.search_followers_of(
+                    for query in niche_queries[:2]:
+                        raw_users = await instagram_source.search_followers_of(
                             user_id=seed_pk,
                             query=query,
                         )
-                        users = resp.get("users", []) if isinstance(resp, dict) else []
-                        for u in users:
-                            user = u.get("user", {}) or u
+                        for u in raw_users:
+                            user = u.get("user", {}) if isinstance(u, dict) else u
+                            if not isinstance(user, dict):
+                                user = u
                             username = user.get("username", "")
                             if not username or username in seen_usernames:
                                 continue
-                            bio = (user.get("biography") or user.get("bio") or "").lower()
-                            followers = user.get("follower_count") or 0
-                            pet_bio = any(
-                                kw in bio
-                                for kw in ["pet", "dog", "cat", "vzla", "venezuela", "mascota"]
-                            )
-                            if followers < 500 and not pet_bio:
-                                continue
                             normalized = instagram_source._normalize_user(user)
                             normalized["_discovery_query"] = f"brand_engagers:{seed}:{query}"
+                            normalized["_is_brand_engager"] = True
                             seen_usernames.add(username)
                             results.append(normalized)
                     await asyncio.sleep(0.3)
@@ -781,7 +825,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 except Exception as e:
                     logger.warning("step5_brand_engagers_error", seed=seed, error=str(e))
 
-            logger.info("step5_brand_engagers_done", results=len(results))
+            logger.info("step5_brand_engagers_done", results=len(results), seeds=brand_seeds)
             return results
 
         async def _fetch_step2p5():
@@ -1073,6 +1117,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "pk": item.get("pk"),
                     "locationName": item.get("locationName", "") or "",
                     "_discovery_query": brand_engagers_query_map.get(handle, ""),
+                    "_is_brand_engager": True,
                 }
 
             hashtag_recent_query_map = {item.get("username", "") or item.get("ownerUsername", ""): item.get("_discovery_query", "hashtag_recent:unknown") for item in hashtag_recent_items}
@@ -1278,11 +1323,23 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             elite_data,
         )
         handles_to_enrich = [h for h, _, _ in prefilter_handles]
+        brand_engagers_in_profiles = [
+            h for h in profiles
+            if profiles[h].get("_is_brand_engager") and h not in handles_to_enrich
+        ][:8]
+        if brand_engagers_in_profiles:
+            logger.info(
+                "step5_brand_engagers_force_included",
+                count=len(brand_engagers_in_profiles),
+                handles=brand_engagers_in_profiles,
+            )
+            handles_to_enrich = handles_to_enrich + brand_engagers_in_profiles
         logger.info(
             "prefilter_stats",
             run_id=run_id,
             before=prefilter_before,
             after=len(handles_to_enrich),
+            engagers_added=len(brand_engagers_in_profiles),
             top_score=prefilter_handles[0][1] if prefilter_handles else None,
         )
         funnel.prefiltered = len(handles_to_enrich)
@@ -1469,6 +1526,11 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 # FIX N-3: posts normalizados por get_user_medias — el scoring
                 # calcula ER real desde aquí ((likes+comments)/followers).
                 "latestPosts": e.get("latestPosts") or profiles[handle].get("latestPosts") or [],
+                "public_email": e.get("public_email") or profiles[handle].get("public_email"),
+                "city_name": e.get("city_name") or profiles[handle].get("city_name"),
+                "business_category_name": e.get("business_category_name") or profiles[handle].get("business_category_name"),
+                "category_name": e.get("category_name") or profiles[handle].get("category_name"),
+                "address_street": e.get("address_street") or profiles[handle].get("address_street"),
             })
             if about_data:
                 profiles[handle]["about"] = about_data
@@ -1943,6 +2005,10 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "avg_comments_calc": round(comments_avg) if latest else None,
                     "posts_analyzed": len(latest) if latest else 0,
                     "engagement_analytics": p.get("engagement_analytics"),
+                    "contact_email": p.get("public_email"),
+                    "city_name": p.get("city_name"),
+                    "business_category_name": p.get("business_category_name") or p.get("category_name"),
+                    "address_street": p.get("address_street"),
                     "fraud_signals": {
                         "former_usernames_count": former_usernames_count,
                         "account_age_days": account_age_days,
