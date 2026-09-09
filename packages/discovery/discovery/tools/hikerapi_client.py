@@ -1043,14 +1043,16 @@ class HikerAPIClient:
 
         Gets the most popular posts geotagged at a specific location.
         Use search_location first to get location_id.
+
+        FIX 09-sep-2026: la docs oficiales muestran que este endpoint responde
+        una LISTA BARE de Media (no {response:{items}}). Aceptamos las 3 formas
+        conocidas: list / {response:{items}} / {items}.
         """
         resp = await self._get(
             "/v1/location/medias/top",
             params={"location_pk": str(location_id)},
         )
-        if not resp:
-            return []
-        items = resp.get("response", {}).get("items", []) if isinstance(resp, dict) else []
+        items = self._parse_media_items(resp, endpoint="location_medias_top")
         logger.info("hikerapi_location_medias_top_done", location_id=location_id, items=len(items))
         return items[:limit]
 
@@ -1063,14 +1065,15 @@ class HikerAPIClient:
 
         Gets the most recent posts geotagged at a specific location.
         Captures nano/micro creators who recently posted from that location.
+
+        FIX 09-sep-2026: mismo parsing tolerante que medias/top (docs muestran
+        lista bare; el chunk puede traer [[items], cursor]).
         """
         resp = await self._get(
             "/v1/location/medias/recent/chunk",
             params={"location_pk": str(location_id)},
         )
-        if not resp:
-            return []
-        items = resp.get("response", {}).get("items", []) if isinstance(resp, dict) else []
+        items = self._parse_media_items(resp, endpoint="location_medias_recent")
         logger.info("hikerapi_location_medias_recent_done", location_id=location_id, items=len(items))
         return items[:limit]
 
@@ -1243,6 +1246,37 @@ class HikerAPIClient:
                     elif "pk" in item or "id" in item:
                         media_items.append(item)
         return media_items
+
+    def _parse_media_items(self, resp: Any, endpoint: str = "") -> list[dict[str, Any]]:
+        """FIX 09-sep-2026: parsing tolerante de items de media.
+
+        Formas conocidas en HikerAPI:
+        - Lista bare de Media: [{...}, {...}]           (v1/location/medias/top|recent)
+        - Wrapper: {"response": {"items": [...]}}        (v2/user/medias)
+        - Wrapper directo: {"items": [...]}
+        - Chunk: [[Media, ...], "cursor"]                (v1/*/chunk)
+
+        Si ninguna encaja, loggea diagnóstico y devuelve [].
+        """
+        if not resp:
+            return []
+        if isinstance(resp, list):
+            if resp and isinstance(resp[0], list):
+                return [m for m in resp[0] if isinstance(m, dict)]
+            return [m for m in resp if isinstance(m, dict)]
+        if isinstance(resp, dict):
+            inner = resp.get("response") if isinstance(resp.get("response"), dict) else resp
+            items = inner.get("items") if isinstance(inner, dict) else None
+            if isinstance(items, list):
+                return [m for m in items if isinstance(m, dict)]
+        logger.warning(
+            "hikerapi_media_items_unknown_shape",
+            endpoint=endpoint,
+            response_type=type(resp).__name__,
+            response_keys=list(resp.keys())[:12] if isinstance(resp, dict) else None,
+            preview=str(resp)[:400],
+        )
+        return []
 
     def _extract_user_from_post(self, post: dict) -> dict | None:
         user = post.get("user")

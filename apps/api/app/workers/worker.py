@@ -60,6 +60,12 @@ _replay_miss_count_for_run: int = 0
 # FIX 07-sep-2026: 25 → 40. Pipeline validado en 3 runs, costo predecible ~$2.80/run.
 # FIX 08-sep-2026: 40 → 28. Con prefilter geo-first y slots ms selectos, 28 basta.
 MAX_HANDLES_TO_ENRICH = 28
+# FIX 09-sep-2026 (B3): prior "probablemente-micro". Una cuenta VE de 5k+
+# seguidores genera 100+ likes/post (ER 2-8%). Un post con <40 likes casi
+# siempre pertenece a una cuenta <2k que morirá en BELOW_MIN tras el
+# enrichment ($0.04 desperdiciado por slot nano). None (engagers/suggested/
+# keywords sin likers) pasa intacto — no penalizamos fuentes sin señal.
+ENRICH_LIKERS_FLOOR = 40
 # Llamadas estimadas de la fase de descubrimiento, para el pre-flight de saldo.
 ESTIMATED_DISCOVERY_CALLS = 32
 MAX_POSTS_PER_HASHTAG = 20
@@ -548,50 +554,95 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         location_items: list[dict] = []
         step0_handles: set[str] = set()
         step0_api_calls = 0
-        step0_enabled = os.getenv("HIKERAPI_STEP0_LOCATION", "false").lower() == "true"
+        # FIX 09-sep-2026: default ON — discovery geotagueado es la única fuente
+        # con geo GARANTIZADO (posters físicamente en la ciudad). Costo capado.
+        step0_enabled = os.getenv("HIKERAPI_STEP0_LOCATION", "true").lower() == "true"
 
-        if step0_enabled and hasattr(instagram_source, "search_location") and brief.audience_cities:
-            logger.info("step0_location_search_starting", cities=brief.audience_cities)
-            print(f"[STEP0] Location search starting with cities={brief.audience_cities}", flush=True)
+        # FIX 09-sep-2026: fallback de ciudades — el PDF del brief puede traer
+        # solo estados (o nada). Mapeamos estados VE a capitales; default final.
+        _state_to_city = {
+            "distrito capital": "Caracas", "miranda": "Caracas",
+            "zulia": "Maracaibo", "carabobo": "Valencia", "lara": "Barquisimeto",
+            "aragua": "Maracay", "anzoátegui": "Barcelona", "anzoategui": "Barcelona",
+            "bolívar": "Ciudad Guayana", "bolivar": "Ciudad Guayana",
+            "táchira": "San Cristóbal", "tachira": "San Cristóbal",
+        }
+        _default_cities = ["Caracas", "Valencia"]
+        step0_cities = [c for c in (brief.audience_cities or []) if c]
+        if not step0_cities:
+            step0_cities = [
+                _state_to_city.get((s or "").lower())
+                for s in (brief.audience_states or [])
+            ]
+            step0_cities = [c for c in step0_cities if c]
+        if not step0_cities:
+            step0_cities = _default_cities
+        # Cap de costo duro: 2 ciudades × (2 place queries × 1 location × 2 endpoints)
+        step0_cities = step0_cities[:2]
+
+        # FIX 09-sep-2026: bounding box de Venezuela — el search por texto trae
+        # falsos positivos de otros países (docs: query "natgeo" → places en NYC).
+        def _in_ve_bbox(lat, lng) -> bool:
+            try:
+                lat_f, lng_f = float(lat), float(lng)
+            except (TypeError, ValueError):
+                return True
+            return 0.5 <= lat_f <= 12.5 and -73.5 <= lng_f <= -59.5
+
+        if step0_enabled and hasattr(instagram_source, "search_location"):
+            logger.info("step0_location_search_starting", cities=step0_cities)
+            print(f"[STEP0] Location search starting with cities={step0_cities}", flush=True)
 
             location_profiles: dict[str, dict] = {}
             cities_searched = 0
             locations_found = 0
 
-            for city in brief.audience_cities[:6]:
-                query = f"{city} Venezuela"
-                try:
-                    locations = await instagram_source.search_location(query)
-                    step0_api_calls += 1
-                    cities_searched += 1
-                    if not locations:
-                        continue
-
-                    for loc in locations[:3]:
-                        loc_pk = loc.get("location", {}).get("pk") or loc.get("pk")
-                        if not loc_pk:
+            for city in step0_cities:
+                for place_query in (city, f"veterinaria {city}"):
+                    try:
+                        locations = await instagram_source.search_location(place_query)
+                        step0_api_calls += 1
+                        cities_searched += 1
+                        if not locations:
                             continue
-                        locations_found += 1
 
-                        for media_func, limit, src_label in [
-                            (instagram_source.location_medias_top, 20, "top"),
-                            (instagram_source.location_medias_recent, 20, "recent"),
-                        ]:
-                            try:
-                                medias = await media_func(loc_pk, limit=limit)
-                                step0_api_calls += 1
-                                for media in medias:
-                                    user = instagram_source._extract_user_from_post(media) if hasattr(instagram_source, "_extract_user_from_post") else (media.get("user") or {})
-                                    if not user or not user.get("username"):
-                                        continue
-                                    normalized = instagram_source._normalize_user(user)
-                                    normalized["_source_location"] = f"{city}__{src_label}"
-                                    normalized["_source_city"] = city
-                                    location_profiles[normalized["username"]] = normalized
-                            except Exception as e:
-                                logger.warning("step0_location_media_error", city=city, loc_pk=loc_pk, error=str(e))
-                except Exception as e:
-                    logger.warning("step0_location_search_error", city=city, error=str(e))
+                        for loc in locations[:1]:
+                            loc_pk = loc.get("location", {}).get("pk") or loc.get("pk")
+                            if not loc_pk:
+                                continue
+                            if not _in_ve_bbox(loc.get("lat"), loc.get("lng")):
+                                logger.info(
+                                    "step0_location_bbox_rejected",
+                                    query=place_query,
+                                    name=loc.get("name", ""),
+                                    lat=loc.get("lat"),
+                                    lng=loc.get("lng"),
+                                )
+                                continue
+                            locations_found += 1
+
+                            for media_func, limit, src_label in [
+                                (instagram_source.location_medias_top, 20, "top"),
+                                (instagram_source.location_medias_recent, 20, "recent"),
+                            ]:
+                                try:
+                                    medias = await media_func(loc_pk, limit=limit)
+                                    step0_api_calls += 1
+                                    for media in medias:
+                                        user = instagram_source._extract_user_from_post(media) if hasattr(instagram_source, "_extract_user_from_post") else (media.get("user") or {})
+                                        if not user or not user.get("username"):
+                                            continue
+                                        normalized = instagram_source._normalize_user(user)
+                                        like_count = media.get("like_count") or 0
+                                        prev_likers = normalized.get("_post_likers_count") or 0
+                                        normalized["_post_likers_count"] = max(prev_likers, like_count)
+                                        normalized["_source_location"] = f"{city}__{src_label}"
+                                        normalized["_source_city"] = city
+                                        location_profiles[normalized["username"]] = normalized
+                                except Exception as e:
+                                    logger.warning("step0_location_media_error", city=city, loc_pk=loc_pk, error=str(e))
+                    except Exception as e:
+                        logger.warning("step0_location_search_error", city=city, query=place_query, error=str(e))
 
             for handle, p in location_profiles.items():
                 step0_handles.add(handle)
@@ -616,6 +667,7 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                     "is_verified": p.get("is_verified", False),
                     "verified": p.get("verified", False),
                     "pk": p.get("pk"),
+                    "_post_likers_count": p.get("_post_likers_count"),
                     "locationName": p.get("_source_city", ""),
                     "_source_location": p.get("_source_location", ""),
                     "_discovery_query": f"location:{p.get('_source_city', '')}",
@@ -1279,6 +1331,18 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
                 ):
                     continue
 
+                # FIX 09-sep-2026 (B3): prior "probablemente-micro". Post con
+                # <40 likes → cuenta casi seguro <2k → morirá en BELOW_MIN.
+                # No gastar slot de enrichment. Solo aplica a fuentes CON la
+                # señal (hashtags/reels/location); None pasa intacto.
+                post_likers = p.get("_post_likers_count")
+                if (
+                    not is_brand_engager
+                    and post_likers is not None
+                    and post_likers < ENRICH_LIKERS_FLOOR
+                ):
+                    continue
+
                 bio = p.get("biography") or p.get("bio") or ""
                 geo = geo_score(
                     {"biography": bio, "country": "", "username": handle, "full_name": p.get("full_name", ""), "locationName": p.get("locationName", "")},
@@ -1357,12 +1421,15 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
             if profiles[h].get("_is_brand_engager") and h not in handles_to_enrich
         ][:8]
         if brand_engagers_in_profiles:
+            # FIX 09-sep-2026 (B2): engagers DENTRO del cap MAX_HANDLES_TO_ENRICH.
+            # Antes se sumaban ADICIONALES (28+8=36 slots ≈ 72 llamadas). Ahora
+            # engagers primero y el prefilter llena el resto hasta 28 total.
             logger.info(
                 "step5_brand_engagers_force_included",
                 count=len(brand_engagers_in_profiles),
                 handles=brand_engagers_in_profiles,
             )
-            handles_to_enrich = handles_to_enrich + brand_engagers_in_profiles
+            handles_to_enrich = (brand_engagers_in_profiles + handles_to_enrich)[:MAX_HANDLES_TO_ENRICH]
         logger.info(
             "prefilter_stats",
             run_id=run_id,
@@ -2129,6 +2196,129 @@ async def discovery_run_task(ctx, run_id: str) -> dict:
         )
         print(f"[SCORING] {len(scored)} scored → {len(passed_score)} score≥{min_match_score} → {len(qualified)} qualified (tienda_excluded={exclude_stores})", flush=True)
         funnel.scored = len(scored)
+
+        # FIX 09-sep-2026 (B4): red de seguridad "nunca 0 visibles". Un run
+        # pagado (~$2) NUNCA debe terminar en silencio. Si 0 candidatos pasaron
+        # todos los gates pero HAY perfiles enriquecidos, insertamos los top-12
+        # más probables-VE marcados "REVISIÓN MANUAL". Forma EXACTA del dict de
+        # scoring normal (lección HITO 26: upsert_many deriva columnas de
+        # records[0].keys() — mezclar formas revienta el INSERT completo).
+        if not qualified and enriched_handles:
+            from discovery.tools.geo_boost import geo_score as _geo_score_fb
+            from discovery.tools.geo_boost import has_hard_geo_signal as _hard_ve_fb
+
+            geo_indicators_fb = profile_data.get("geo_indicators", [])
+            target_country_fb = brief.audience_countries[0] if brief.audience_countries else "VE"
+
+            def _fallback_sort_key(h: str) -> tuple:
+                p_fb = profiles.get(h) or {}
+                hard_ve = _hard_ve_fb(p_fb, target_country_fb, _discovery_query=p_fb.get("_discovery_query"))
+                geo_fb = _geo_score_fb(
+                    {
+                        "biography": p_fb.get("biography") or p_fb.get("bio") or "",
+                        "country": p_fb.get("country") or "",
+                        "username": h,
+                        "full_name": p_fb.get("full_name", ""),
+                        "locationName": p_fb.get("locationName") or p_fb.get("location") or "",
+                    },
+                    geo_indicators_fb,
+                    target_country=target_country_fb,
+                ) if geo_indicators_fb else 0.5
+                followers_fb = p_fb.get("follower_count") or 0
+                return (not hard_ve, -geo_fb, -followers_fb)
+
+            fallback_handles = sorted(
+                [h for h in enriched_handles if (profiles.get(h) or {}).get("follower_count")],
+                key=_fallback_sort_key,
+            )[:12]
+
+            qualified = []
+            for h_fb in fallback_handles:
+                p_fb = profiles.get(h_fb) or {}
+                followers_fb = p_fb.get("follower_count") or 0
+                bio_fb = p_fb.get("biography") or p_fb.get("bio") or ""
+                latest_fb = p_fb.get("latestPosts") or []
+                has_er_fb = bool(latest_fb) and followers_fb > 0
+                er_fb = None
+                likes_fb = None
+                comments_fb = None
+                if has_er_fb:
+                    likes_fb = sum((x.get("likesCount") or 0) for x in latest_fb) / max(len(latest_fb), 1)
+                    comments_fb = sum((x.get("commentsCount") or 0) for x in latest_fb) / max(len(latest_fb), 1)
+                    er_fb = (likes_fb + comments_fb) / followers_fb
+                hard_ve_fb = _hard_ve_fb(p_fb, target_country_fb, _discovery_query=p_fb.get("_discovery_query"))
+                geo_fb = _geo_score_fb(
+                    {
+                        "biography": bio_fb,
+                        "country": p_fb.get("country") or "",
+                        "username": h_fb,
+                        "full_name": p_fb.get("full_name", ""),
+                        "locationName": p_fb.get("locationName") or p_fb.get("location") or "",
+                    },
+                    geo_indicators_fb,
+                    target_country=target_country_fb,
+                ) if geo_indicators_fb else 0.5
+                tier_fb = classify_tier(followers_fb)
+                real_niche_fb = niche_relevance(p_fb, profile_data)
+                qualified.append({
+                    "run_id": run_id,
+                    "platform": "instagram",
+                    "handle": h_fb,
+                    "full_name": p_fb.get("fullName") or p_fb.get("full_name"),
+                    "bio": bio_fb,
+                    "avatar_url": p_fb.get("profilePicUrlHD") or p_fb.get("profilePicUrl") or p_fb.get("avatar_url") or (f"https://instagram.com/{h_fb}/profile_picture" if h_fb else ""),
+                    "country": p_fb.get("country") or target_country_fb,
+                    "city": p_fb.get("locationName") or p_fb.get("location") or "",
+                    "followers": followers_fb,
+                    "following": p_fb.get("following_count") if p_fb.get("following_count") is not None else p_fb.get("followsCount"),
+                    "posts_count": p_fb.get("posts_count") if p_fb.get("posts_count") is not None else p_fb.get("postsCount"),
+                    "avg_likes": round(likes_fb) if has_er_fb else None,
+                    "avg_comments": round(comments_fb) if has_er_fb else None,
+                    "avg_views": None,
+                    "engagement_rate": round(er_fb, 6) if has_er_fb else None,
+                    "audience_credibility": (20 if p_fb.get("is_business") else 0) + (20 if p_fb.get("is_verified") else 0),
+                    "audience_quality": None,
+                    "audience_gender_split": {},
+                    "audience_age_buckets": {},
+                    "match_score": round(geo_fb * 100, 2),
+                    "niche_relevance": round(real_niche_fb * 100, 2),
+                    "geo_relevance": round(geo_fb * 100, 1),
+                    "audience_relevance": None,
+                    "content_quality": None,
+                    "expected_reach": int(followers_fb * 0.7),
+                    "expected_engagement": int(followers_fb * er_fb) if has_er_fb else None,
+                    "roi_estimate": None,
+                    "rationale": (
+                        f"⚠️ REVISIÓN MANUAL: perfil enriquecido con datos reales "
+                        f"({followers_fb:,} seguidores{' · VE confirmado por señal dura' if hard_ve_fb else ''}) "
+                        f"que no pasó todos los filtros del run (geo={geo_fb:.2f}, gates de nicho/tier). "
+                        "Evalúalo tú — el pipeline no lo pudo calificar con confianza."
+                    ),
+                    "tier": tier_fb,
+                    "is_tienda": False,
+                    "discovery_query": p_fb.get("_discovery_query", ""),
+                    "status": "new",
+                    "raw_payload": {
+                        "fallback": True,
+                        "lens_score": round(geo_fb * 100, 2),
+                        "geo_score": geo_fb,
+                        "hard_ve_signal": hard_ve_fb,
+                        "tier": tier_fb,
+                    },
+                    "fetched_at": datetime.now(UTC),
+                })
+            if qualified:
+                logger.warning(
+                    "fallback_candidates_inserted",
+                    run_id=run_id,
+                    count=len(qualified),
+                    reason="zero_qualified_after_gates",
+                )
+                print(f"[SCORING] FALLBACK: 0 qualified → {len(qualified)} candidatos 'REVISIÓN MANUAL' insertados (nunca-0-visibles)", flush=True)
+                await _save_progress_message(
+                    run_id,
+                    f"⚠️ Ningún perfil pasó todos los filtros, pero te dejo {len(qualified)} candidatos en REVISIÓN MANUAL con datos reales para que evalúes.",
+                )
 
         target_n = 80
         to_analyze = _rerank_diversified(qualified, target_n)
